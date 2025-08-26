@@ -278,6 +278,11 @@ def rasterize_with_bvh_nb(
 # angle and direction helpers
 # ------------------------------
 
+def pixel_angular_distance(yaw0: float, pitch0: float, yaw1: float, pitch1: float) -> float:
+    dyaw = (yaw1 - yaw0 + math.pi) % (2.0 * math.pi) - math.pi
+    dpitch = pitch1 - pitch0
+    return math.hypot(dyaw, dpitch)
+
 def distance_to_block(position, ref):
     px, py, pz = position
     rx, ry, rz = ref
@@ -1221,6 +1226,28 @@ class BlockGeometryCache:
 # raster grid (ADB)
 # ------------------------------
 
+def yaw_pitch_to_index(yaw: float, pitch: float, adb) -> int:
+    yaw_n = (yaw + math.pi) % (2.0 * math.pi) - math.pi
+    u = (yaw_n + math.pi) / (2.0 * math.pi)   # 0..1
+    yaw_idx = int(math.floor(u * adb.yaw_bins)) % adb.yaw_bins
+
+    pitch_clamped = max(-0.5 * math.pi, min(0.5 * math.pi, pitch))
+    v = (pitch_clamped + 0.5 * math.pi) / math.pi  # 0..1
+    pitch_idx = int(math.floor(v * adb.pitch_bins))
+    if pitch_idx < 0:
+        pitch_idx = 0
+    elif pitch_idx >= adb.pitch_bins:
+        pitch_idx = adb.pitch_bins - 1
+
+    return pitch_idx * adb.yaw_bins + yaw_idx
+
+def index_to_angles(idx: int, adb) -> tuple[float, float]:
+    pitch_idx = idx // adb.yaw_bins
+    yaw_idx = idx % adb.yaw_bins
+    yaw = (yaw_idx + 0.5) / adb.yaw_bins * 2.0 * math.pi - math.pi
+    pitch = (pitch_idx + 0.5) / adb.pitch_bins * math.pi - 0.5 * math.pi
+    return yaw, pitch
+
 @nb.njit(cache=True, parallel=True, fastmath=True)
 def _rasterize_occluders_nb(
     px: float, py: float, pz: float,
@@ -1569,6 +1596,46 @@ def ray_triangles_min_t_nb_parallel(px, py, pz,
 # visibility clustering and aim
 # ------------------------------
 
+def find_nearest_visible_pixel(adb, ttarget: np.ndarray, target_id: int, center_idx: int, max_radius_px: int = 12) -> Optional[int]:
+    yaw_bins = adb.yaw_bins
+    pitch_bins = adb.pitch_bins
+
+    cy = center_idx // yaw_bins
+    cx = center_idx % yaw_bins
+
+    yaw_c, pitch_c = index_to_angles(center_idx, adb)
+
+    best_idx: Optional[int] = None
+    best_dist = float('inf')
+
+    for r in range(0, max_radius_px + 1):
+        any_found_this_ring = False
+        for dy in range(-r, r + 1):
+            ny = cy + dy
+            if ny < 0 or ny >= pitch_bins:
+                continue
+            for dx in range(-r, r + 1):
+                nx = cx + dx
+                nx = nx % yaw_bins
+                if abs(dx) != r and abs(dy) != r and r != 0:
+                    continue
+                idx = ny * yaw_bins + nx
+                if adb.top_occluder_idx[idx] != int(target_id):
+                    continue
+                if np.isnan(ttarget[idx]):
+                    continue
+                any_found_this_ring = True
+                yaw_i, pitch_i = index_to_angles(idx, adb)
+                dist = pixel_angular_distance(yaw_c, pitch_c, yaw_i, pitch_i)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_idx = idx
+        if best_idx is not None:
+            return best_idx
+        if any_found_this_ring and best_idx is None:
+            return None
+    return None
+
 def _find_connected_components(visible_mask_2d: np.ndarray) -> Tuple[np.ndarray, int]:
     H, W = visible_mask_2d.shape
     labels = np.zeros_like(visible_mask_2d, dtype=np.int32)
@@ -1913,9 +1980,25 @@ def scan_target(
     cx, cy, cz = centroid_world
     vx, vy, vz = cx - position[0], cy - position[1], cz - position[2]
     hyp = math.hypot(vx, vz)
-    yaw_rad = math.atan2(vz, vx)
-    pitch_rad = -math.atan2(vy, hyp)
-    yaw_deg, pitch_deg = to_minecraft_angles_degrees(yaw_rad, pitch_rad)
+    yaw_rad_centroid = math.atan2(vz, vx)
+    pitch_rad_centroid = -math.atan2(vy, hyp)
+
+    center_idx = yaw_pitch_to_index(yaw_rad_centroid, pitch_rad_centroid, adb)
+
+    if (adb.top_occluder_idx[center_idx] == int(tid)) and (not np.isnan(ttarget[center_idx])):
+        chosen_idx = center_idx
+    else:
+        chosen_idx = find_nearest_visible_pixel(adb, ttarget, tid, center_idx, max_radius_px=12)
+
+    if chosen_idx is None:
+        return None
+
+    t = ttarget[chosen_idx]
+    dx = adb.dx[chosen_idx]; dy = adb.dy[chosen_idx]; dz = adb.dz[chosen_idx]
+
+    yaw_rad_final = math.atan2(dz, dx)
+    pitch_rad_final = -math.atan2(dy, math.hypot(dx, dz))
+    yaw_deg, pitch_deg = to_minecraft_angles_degrees(yaw_rad_final, pitch_rad_final)
 
     return TargetInfo(
         best_candidate['target_pos'],
@@ -2067,9 +2150,25 @@ def scan_targets(
         cx, cy, cz = best_candidate['centroid_world']
         vx, vy, vz = cx - position[0], cy - position[1], cz - position[2]
         hyp = math.hypot(vx, vz)
-        yaw_rad = math.atan2(vz, vx)
-        pitch_rad = -math.atan2(vy, hyp)
-        yaw_deg, pitch_deg = to_minecraft_angles_degrees(yaw_rad, pitch_rad)
+        yaw_rad_centroid = math.atan2(vz, vx)
+        pitch_rad_centroid = -math.atan2(vy, hyp)
+
+        center_idx = yaw_pitch_to_index(yaw_rad_centroid, pitch_rad_centroid, adb)
+
+        if (adb.top_occluder_idx[center_idx] == int(tid)) and (not np.isnan(ttarget[center_idx])):
+            chosen_idx = center_idx
+        else:
+            chosen_idx = find_nearest_visible_pixel(adb, ttarget, tid, center_idx, max_radius_px=12)
+
+        if chosen_idx is None:
+            continue
+
+        t = ttarget[chosen_idx]
+        dx = adb.dx[chosen_idx]; dy = adb.dy[chosen_idx]; dz = adb.dz[chosen_idx]
+
+        yaw_rad_final = math.atan2(dz, dx)
+        pitch_rad_final = -math.atan2(dy, math.hypot(dx, dz))
+        yaw_deg, pitch_deg = to_minecraft_angles_degrees(yaw_rad_final, pitch_rad_final)
 
         return TargetInfo(
             best_candidate['target_pos'],

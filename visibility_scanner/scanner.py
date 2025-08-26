@@ -1226,28 +1226,6 @@ class BlockGeometryCache:
 # raster grid (ADB)
 # ------------------------------
 
-def yaw_pitch_to_index(yaw: float, pitch: float, adb) -> int:
-    yaw_n = (yaw + math.pi) % (2.0 * math.pi) - math.pi
-    u = (yaw_n + math.pi) / (2.0 * math.pi)   # 0..1
-    yaw_idx = int(math.floor(u * adb.yaw_bins)) % adb.yaw_bins
-
-    pitch_clamped = max(-0.5 * math.pi, min(0.5 * math.pi, pitch))
-    v = (pitch_clamped + 0.5 * math.pi) / math.pi  # 0..1
-    pitch_idx = int(math.floor(v * adb.pitch_bins))
-    if pitch_idx < 0:
-        pitch_idx = 0
-    elif pitch_idx >= adb.pitch_bins:
-        pitch_idx = adb.pitch_bins - 1
-
-    return pitch_idx * adb.yaw_bins + yaw_idx
-
-def index_to_angles(idx: int, adb) -> tuple[float, float]:
-    pitch_idx = idx // adb.yaw_bins
-    yaw_idx = idx % adb.yaw_bins
-    yaw = (yaw_idx + 0.5) / adb.yaw_bins * 2.0 * math.pi - math.pi
-    pitch = (pitch_idx + 0.5) / adb.pitch_bins * math.pi - 0.5 * math.pi
-    return yaw, pitch
-
 @nb.njit(cache=True, parallel=True, fastmath=True)
 def _rasterize_occluders_nb(
     px: float, py: float, pz: float,
@@ -1334,6 +1312,27 @@ class HighResADB:
         ip = idx // self.yaw_bins
         iy = idx % self.yaw_bins
         return iy, ip
+
+    def idx_from_yaw_pitch(self, yaw: float, pitch: float) -> int:
+        yaw_n = (yaw + math.pi) % (2.0 * math.pi) - math.pi
+        u = (yaw_n + math.pi) / (2.0 * math.pi)
+        yaw_idx = int(math.floor(u * self.yaw_bins)) % self.yaw_bins
+
+        pitch_clamped = max(-0.5 * math.pi, min(0.5 * math.pi, pitch))
+        v = (pitch_clamped + 0.5 * math.pi) / math.pi
+        pitch_idx = int(math.floor(v * self.pitch_bins))
+        if pitch_idx < 0:
+            pitch_idx = 0
+        elif pitch_idx >= self.pitch_bins:
+            pitch_idx = self.pitch_bins - 1
+        return pitch_idx * self.yaw_bins + yaw_idx
+
+    def yaw_pitch_from_idx(self, idx: int) -> Tuple[int, int]:
+        pitch_idx = idx // self.yaw_bins
+        yaw_idx = idx % self.yaw_bins
+        yaw = (yaw_idx + 0.5) / self.yaw_bins * 2.0 * math.pi - math.pi
+        pitch = (pitch_idx + 0.5) / self.pitch_bins * math.pi - 0.5 * math.pi
+        return yaw, pitch
 
     def rasterize_occluders(self, occluder_aabbs: List[AABB], position: Vec3,
                             occluder_ids: Optional[List[int]] = None,
@@ -1497,6 +1496,46 @@ class HighResADB:
             'pitch_bounds': (pitch_min, pitch_max),
             'solid_angle': solid_angle,
         }
+    
+    def find_nearest_visible_pixel(self, ttarget: np.ndarray, target_id: int, center_idx: int, max_radius_px: int = 12) -> Optional[int]:
+        yaw_bins = self.yaw_bins
+        pitch_bins = self.pitch_bins
+
+        cy = center_idx // yaw_bins
+        cx = center_idx % yaw_bins
+
+        yaw_c, pitch_c = self.yaw_pitch_from_idx(center_idx)
+
+        best_idx: Optional[int] = None
+        best_dist = float('inf')
+
+        for r in range(0, max_radius_px + 1):
+            any_found_this_ring = False
+            for dy in range(-r, r + 1):
+                ny = cy + dy
+                if ny < 0 or ny >= pitch_bins:
+                    continue
+                for dx in range(-r, r + 1):
+                    nx = cx + dx
+                    nx = nx % yaw_bins
+                    if abs(dx) != r and abs(dy) != r and r != 0:
+                        continue
+                    idx = ny * yaw_bins + nx
+                    if self.top_occluder_idx[idx] != int(target_id):
+                        continue
+                    if np.isnan(ttarget[idx]):
+                        continue
+                    any_found_this_ring = True
+                    yaw_i, pitch_i = self.yaw_pitch_from_idx(idx)
+                    dist = pixel_angular_distance(yaw_c, pitch_c, yaw_i, pitch_i)
+                    if dist < best_dist:
+                        best_dist = dist
+                        best_idx = idx
+            if best_idx is not None:
+                return best_idx
+            if any_found_this_ring and best_idx is None:
+                return None
+        return None
 
 
 # ------------------------------
@@ -1595,46 +1634,6 @@ def ray_triangles_min_t_nb_parallel(px, py, pz,
 # ------------------------------
 # visibility clustering and aim
 # ------------------------------
-
-def find_nearest_visible_pixel(adb, ttarget: np.ndarray, target_id: int, center_idx: int, max_radius_px: int = 12) -> Optional[int]:
-    yaw_bins = adb.yaw_bins
-    pitch_bins = adb.pitch_bins
-
-    cy = center_idx // yaw_bins
-    cx = center_idx % yaw_bins
-
-    yaw_c, pitch_c = index_to_angles(center_idx, adb)
-
-    best_idx: Optional[int] = None
-    best_dist = float('inf')
-
-    for r in range(0, max_radius_px + 1):
-        any_found_this_ring = False
-        for dy in range(-r, r + 1):
-            ny = cy + dy
-            if ny < 0 or ny >= pitch_bins:
-                continue
-            for dx in range(-r, r + 1):
-                nx = cx + dx
-                nx = nx % yaw_bins
-                if abs(dx) != r and abs(dy) != r and r != 0:
-                    continue
-                idx = ny * yaw_bins + nx
-                if adb.top_occluder_idx[idx] != int(target_id):
-                    continue
-                if np.isnan(ttarget[idx]):
-                    continue
-                any_found_this_ring = True
-                yaw_i, pitch_i = index_to_angles(idx, adb)
-                dist = pixel_angular_distance(yaw_c, pitch_c, yaw_i, pitch_i)
-                if dist < best_dist:
-                    best_dist = dist
-                    best_idx = idx
-        if best_idx is not None:
-            return best_idx
-        if any_found_this_ring and best_idx is None:
-            return None
-    return None
 
 def _find_connected_components(visible_mask_2d: np.ndarray) -> Tuple[np.ndarray, int]:
     H, W = visible_mask_2d.shape
@@ -1959,7 +1958,6 @@ def scan_target(
 
     weights = adb.sample_solid_angle[idxs]
     wsum = float(np.sum(weights))
-    #centroid_world = compute_visible_face_centroid_aim_with_clustering(adb, target_aabb, position)
     centroid_world = tuple(np.sum(hit_points * weights[:, None], axis=0) / wsum)
     centroid_uv = tuple(np.sum(uvs_arr * weights[:, None], axis=0) / wsum)
     solid_angle = float(np.sum(weights))
@@ -1983,12 +1981,12 @@ def scan_target(
     yaw_rad_centroid = math.atan2(vz, vx)
     pitch_rad_centroid = -math.atan2(vy, hyp)
 
-    center_idx = yaw_pitch_to_index(yaw_rad_centroid, pitch_rad_centroid, adb)
+    center_idx = adb.idx_from_yaw_pitch(yaw_rad_centroid, pitch_rad_centroid)
 
     if (adb.top_occluder_idx[center_idx] == int(tid)) and (not np.isnan(ttarget[center_idx])):
         chosen_idx = center_idx
     else:
-        chosen_idx = find_nearest_visible_pixel(adb, ttarget, tid, center_idx, max_radius_px=12)
+        chosen_idx = adb.find_nearest_visible_pixel(ttarget, tid, center_idx, max_radius_px=12)
 
     if chosen_idx is None:
         return None
@@ -2153,12 +2151,12 @@ def scan_targets(
         yaw_rad_centroid = math.atan2(vz, vx)
         pitch_rad_centroid = -math.atan2(vy, hyp)
 
-        center_idx = yaw_pitch_to_index(yaw_rad_centroid, pitch_rad_centroid, adb)
+        center_idx = adb.idx_from_yaw_pitch(yaw_rad_centroid, pitch_rad_centroid)
 
         if (adb.top_occluder_idx[center_idx] == int(tid)) and (not np.isnan(ttarget[center_idx])):
             chosen_idx = center_idx
         else:
-            chosen_idx = find_nearest_visible_pixel(adb, ttarget, tid, center_idx, max_radius_px=12)
+            chosen_idx = adb.find_nearest_visible_pixel(ttarget, tid, center_idx, max_radius_px=12)
 
         if chosen_idx is None:
             continue

@@ -74,7 +74,7 @@ def get_line(
         end_pt = (tbx + ox + 0.5, tby + oy + 0.5, tbz + oz + 0.5)
 
         voxels = _dda_ray_voxels(*start_pt, *end_pt)
-        voxels_exp = _expand_neighbors(voxels, radius=2)
+        voxels_exp = _expand_neighbors(voxels, radius=1)
 
         for v in voxels_exp:
             visited_set.add((v[0], v[1], v[2]))

@@ -1,11 +1,12 @@
-import visibility_scanner.scanner
-import visibility_scanner.world_scanners
+from visibility_scanner.scanner import scan_targets, scan_target
+from visibility_scanner.world_scanners import get_area, get_line
 import aim.player_aim
 
 import threading
 import time
 
 import minescript as m
+
 
 # ------------------------------
 # control handler
@@ -29,6 +30,7 @@ def listen_keys():
 
 threading.Thread(target=listen_keys, daemon=True).start()
 m.echo("Press 'o' to activate/exit.")
+
 
 # ------------------------------
 # params
@@ -54,9 +56,9 @@ while True:
         time.sleep(0.5)
 
     px, py, pz = m.player_position()
-    occluders = visibility_scanner.world_scanners.get_area(position=(px, py + 1.62, pz))
+    occluders = get_area(position=(px, py + 1.62, pz))
 
-    aim_result = visibility_scanner.scanner.scan_targets(
+    aim_result = scan_targets(
         position=(px, py + 1.62, pz), target_ids=target_ids, occluders=occluders, previous_target=previous_target
     )
 
@@ -71,3 +73,12 @@ while True:
         m.player_press_attack(False)
     else:
         time.sleep(0.5)
+
+'''
+# minimal usage example for scan_target()
+start = (10, -58.5, 20) # use central position, or the ground will occlude
+end = (10, -58.5, 10) # same here
+
+occluders = get_line(position=start, target=end)
+aim_result = scan_target(position=start, target=end, occluders=occluders)
+'''

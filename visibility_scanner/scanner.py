@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 from typing import Tuple, Optional, List, Dict, Any, FrozenSet, Mapping,  NamedTuple
 from functools import lru_cache
+from numba import types
+from numba.typed import Dict
 
 import numpy as np
 import numba as nb
@@ -125,7 +127,7 @@ def build_bvh(prims_min: np.ndarray, prims_max: np.ndarray, prim_ids: np.ndarray
     return (node_min, node_max, node_left_arr, node_right_arr,
             node_first_arr, node_count_arr, leaf_prim_indices_arr, postorder_arr)
 
-@nb.njit
+@nb.njit(fastmath=True)
 def bvh_refit_numba(node_min, node_max,
                     node_left, node_right,
                     node_first, node_count, leaf_prim_indices,
@@ -425,16 +427,27 @@ def face_and_uv_for_hitpoint(aabb: AABB, hx: float, hy: float, hz: float) -> Tup
 # ray helpers
 # ------------------------------
 
-@nb.njit
+@nb.njit(fastmath=True)
 def _dda_ray_voxels(px, py, pz, ex, ey, ez):
-    x, y, z = int(math.floor(px)), int(math.floor(py)), int(math.floor(pz))
-    exi, eyi, ezi = int(math.floor(ex)), int(math.floor(ey)), int(math.floor(ez))
+    x = int(math.floor(px))
+    y = int(math.floor(py))
+    z = int(math.floor(pz))
+
+    tx = int(math.floor(ex))
+    ty = int(math.floor(ey))
+    tz = int(math.floor(ez))
 
     dx = ex - px
     dy = ey - py
     dz = ez - pz
 
-    voxels = []
+    dist2 = dx*dx + dy*dy + dz*dz
+    if dist2 <= 1e-18:
+        out = np.empty((1, 3), dtype=np.int64)
+        out[0, 0] = x
+        out[0, 1] = y
+        out[0, 2] = z
+        return out
 
     step_x = 1 if dx > 0 else -1
     step_y = 1 if dy > 0 else -1
@@ -444,55 +457,134 @@ def _dda_ray_voxels(px, py, pz, ex, ey, ez):
     inv_dy = 1.0/dy if abs(dy) > EPS else INF
     inv_dz = 1.0/dz if abs(dz) > EPS else INF
 
-    tmax_x = ((x + (step_x > 0)) - px) * inv_dx
-    tmax_y = ((y + (step_y > 0)) - py) * inv_dy
-    tmax_z = ((z + (step_z > 0)) - pz) * inv_dz
+    if dx > 0:
+        tmax_x = ((x + 1.0) - px) * inv_dx
+    else:
+        tmax_x = (px - (x * 1.0)) * (-inv_dx)
+
+    if dy > 0:
+        tmax_y = ((y + 1.0) - py) * inv_dy
+    else:
+        tmax_y = (py - (y * 1.0)) * (-inv_dy)
+
+    if dz > 0:
+        tmax_z = ((z + 1.0) - pz) * inv_dz
+    else:
+        tmax_z = (pz - (z * 1.0)) * (-inv_dz)
 
     tdelta_x = abs(inv_dx)
     tdelta_y = abs(inv_dy)
     tdelta_z = abs(inv_dz)
 
-    voxels.append((x, y, z))
-    max_steps = 10000
+    max_est = int(math.ceil(math.sqrt(dist2) * 3.0)) + 16
+    buf = np.empty((max_est, 3), dtype=np.int64)
+    buf[0, 0] = x
+    buf[0, 1] = y
+    buf[0, 2] = z
+    count = 1
+
+    max_steps = int(math.ceil(math.sqrt(dist2) * 3.0)) + 10000
     steps = 0
 
-    while (x != exi) or (y != eyi) or (z != ezi):
-        if tmax_x <= tmax_y and tmax_x <= tmax_z:
+    while True:
+        if (x == tx) and (y == ty) and (z == tz):
+            break
+
+        if (tmax_x > 1.0) and (tmax_y > 1.0) and (tmax_z > 1.0):
+            if not ((x == tx) and (y == ty) and (z == tz)):
+                txi = tx
+                tyi = ty
+                tzi = tz
+                if count >= buf.shape[0]:
+                    new_buf = np.empty((buf.shape[0] * 2, 3), dtype=np.int64)
+                    for ii in range(buf.shape[0]):
+                        new_buf[ii, 0] = buf[ii, 0]
+                        new_buf[ii, 1] = buf[ii, 1]
+                        new_buf[ii, 2] = buf[ii, 2]
+                    buf = new_buf
+                buf[count, 0] = txi
+                buf[count, 1] = tyi
+                buf[count, 2] = tzi
+                count += 1
+            break
+
+        if (tmax_x <= tmax_y) and (tmax_x <= tmax_z):
             x += step_x
             tmax_x += tdelta_x
-        elif tmax_y <= tmax_x and tmax_y <= tmax_z:
+        elif (tmax_y <= tmax_x) and (tmax_y <= tmax_z):
             y += step_y
             tmax_y += tdelta_y
         else:
             z += step_z
             tmax_z += tdelta_z
 
-        voxels.append((x, y, z))
+        if count >= buf.shape[0]:
+            new_buf = np.empty((buf.shape[0] * 2, 3), dtype=np.int64)
+            for ii in range(buf.shape[0]):
+                new_buf[ii, 0] = buf[ii, 0]
+                new_buf[ii, 1] = buf[ii, 1]
+                new_buf[ii, 2] = buf[ii, 2]
+            buf = new_buf
+
+        buf[count, 0] = x
+        buf[count, 1] = y
+        buf[count, 2] = z
+        count += 1
+
         steps += 1
         if steps > max_steps:
+            if count >= buf.shape[0]:
+                new_buf = np.empty((buf.shape[0] * 2, 3), dtype=np.int64)
+                for ii in range(buf.shape[0]):
+                    new_buf[ii, 0] = buf[ii, 0]
+                    new_buf[ii, 1] = buf[ii, 1]
+                    new_buf[ii, 2] = buf[ii, 2]
+                buf = new_buf
+            buf[count, 0] = tx
+            buf[count, 1] = ty
+            buf[count, 2] = tz
+            count += 1
             break
 
-    return np.array(voxels, dtype=np.int64)
+    return buf[:count].copy()
 
-@nb.njit
-def _expand_neighbors(voxels, radius=1):
-    max_voxels = voxels.shape[0] * ((2*radius+1)**3)
-    result = np.empty((max_voxels, 3), dtype=np.int64)
-    count = 0
-    for i in range(voxels.shape[0]):
-        x0, y0, z0 = voxels[i]
-        for dx in range(-radius, radius+1):
-            for dy in range(-radius, radius+1):
-                for dz in range(-radius, radius+1):
-                    result[count, 0] = x0 + dx
-                    result[count, 1] = y0 + dy
-                    result[count, 2] = z0 + dz
-                    count += 1
-    if count == 0:
-        return np.empty((0,3), dtype=np.int64)
-    arr = result[:count]
-    arr = np.unique(arr, axis=0)
-    return arr
+@nb.njit(fastmath=True)
+def _expand_neighbors_into_dict_njit(voxels: np.ndarray, radius: int, d):
+    n = voxels.shape[0]
+    for i in range(n):
+        x0 = voxels[i, 0]
+        y0 = voxels[i, 1]
+        z0 = voxels[i, 2]
+        for dx in range(-radius, radius + 1):
+            for dy in range(-radius, radius + 1):
+                for dz in range(-radius, radius + 1):
+                    key = (x0 + dx, y0 + dy, z0 + dz)
+                    if key not in d:
+                        d[key] = 1
+
+
+def _expand_neighbors(voxels: np.ndarray, radius: int = 1) -> np.ndarray:
+    voxels = np.asarray(voxels, dtype=np.int64)
+    if voxels.ndim != 2 or voxels.shape[1] != 3:
+        raise ValueError("voxels must be an (n,3) int64 array")
+
+    key_type = types.UniTuple(types.int64, 3)
+    d = Dict.empty(key_type=key_type, value_type=types.int64)
+
+    _expand_neighbors_into_dict_njit(voxels, int(radius), d)
+
+    keys = list(d.keys())
+    out = np.empty((len(keys), 3), dtype=np.int64)
+    for i, k in enumerate(keys):
+        out[i, 0] = k[0]
+        out[i, 1] = k[1]
+        out[i, 2] = k[2]
+
+    if out.shape[0] > 1:
+        order = np.lexsort((out[:, 2], out[:, 1], out[:, 0]))
+        out = out[order]
+
+    return [(int(i[0]), int(i[1]), int(i[2])) for i in out]
 
 @nb.njit(parallel=True, fastmath=True)
 def ray_aabb_intersection_vec(px, py, pz,
@@ -1635,7 +1727,6 @@ def scan_target(
     target: Tuple[int, int, int],
     occluders: List[Tuple[BlockPos, str, str, Optional[Dict[str, Any]]]],
     adb_granularity: Tuple[int, int] = (256, 124),
-    previous_target: Tuple[int, int, int] = (0, 0, 0)
 ) -> Optional[TargetInfo]:
 
     if not occluders:
@@ -1767,7 +1858,7 @@ def scan_targets(
     target_ids: List[str],
     occluders: List[Tuple[BlockPos, str, str, Optional[Dict[str, Any]]]],
     adb_granularity: Tuple[int, int] = (256, 124),
-    previous_target: Tuple[int, int, int] = (0, 0, 0)
+    previous_target: Tuple[int, int, int] = (0, 0, 0),
 ) -> Optional[TargetInfo]:
 
     if not occluders:

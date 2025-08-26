@@ -28,7 +28,7 @@ AABB = Tuple[float, float, float, float, float, float]
 
 class TargetInfo(NamedTuple):
     world_pos: tuple[int, int, int]
-    centroid_world_pos: tuple[float, float, float]
+    optimal_position: tuple[float, float, float]
     target_angle: tuple[float, float]
     yaw_bounds: tuple[float, float]
     pitch_bounds: tuple[float, float]
@@ -1264,6 +1264,94 @@ def _rasterize_occluders_nb(
         depth[i] = best_t
         top_idx[i] = best_oid
 
+@nb.njit(cache=True, fastmath=True)
+def _find_nearest_visible_pixel_nb(yaw_arr: np.ndarray,
+                                   pitch_arr: np.ndarray,
+                                   top_idx_arr: np.ndarray,
+                                   ttarget: np.ndarray,
+                                   target_id: int,
+                                   yaw_bins: int,
+                                   pitch_bins: int,
+                                   center_idx: int,
+                                   max_radius_px: int) -> int:
+    cy = center_idx // yaw_bins
+    cx = center_idx % yaw_bins
+
+    yaw_c = yaw_arr[center_idx]
+    pitch_c = pitch_arr[center_idx]
+
+    best_idx = -1
+    best_dist = 1e300
+
+    two_pi = 2.0 * math.pi
+
+    for r in range(0, max_radius_px + 1):
+        any_found_this_ring = False
+        # iterate dy, dx in ring
+        for dy in range(-r, r + 1):
+            ny = cy + dy
+            if ny < 0 or ny >= pitch_bins:
+                continue
+            for dx in range(-r, r + 1):
+                if (r != 0) and (abs(dx) != r and abs(dy) != r):
+                    continue
+                nx = (cx + dx) % yaw_bins
+                idx = ny * yaw_bins + nx
+
+                if top_idx_arr[idx] != target_id:
+                    continue
+                t = ttarget[idx]
+                if math.isnan(t):
+                    continue
+
+                any_found_this_ring = True
+
+                yaw_i = yaw_arr[idx]
+                dyaw = yaw_i - yaw_c
+                if dyaw > math.pi:
+                    dyaw -= two_pi
+                elif dyaw < -math.pi:
+                    dyaw += two_pi
+
+                dpitch = pitch_arr[idx] - pitch_c
+
+                d = math.hypot(dyaw, dpitch)
+                if d < best_dist:
+                    best_dist = d
+                    best_idx = idx
+
+        if best_idx != -1:
+            return best_idx
+        if any_found_this_ring and best_idx == -1:
+            return -1
+
+    return -1
+
+@nb.njit(cache=True, fastmath=True)
+def idx_from_yaw_pitch_nb(yaw: float, pitch: float, yaw_bins: int, pitch_bins: int) -> int:
+    two_pi = 2.0 * math.pi
+    yaw_n = (yaw + math.pi) % two_pi - math.pi
+
+    u = (yaw_n + math.pi) / two_pi
+    yidx = int(math.floor(u * yaw_bins)) % yaw_bins
+
+    half_pi = 0.5 * math.pi
+    if pitch < -half_pi:
+        p_clamped = -half_pi
+    elif pitch > half_pi:
+        p_clamped = half_pi
+    else:
+        p_clamped = pitch
+
+    v = (p_clamped + half_pi) / (math.pi)
+    pidx = int(math.floor(v * pitch_bins))
+    if pidx < 0:
+        pidx = 0
+    elif pidx >= pitch_bins:
+        pidx = pitch_bins - 1
+
+    return pidx * yaw_bins + yidx
+
 class HighResADB:
     def __init__(self, yaw_bins: int = 512, pitch_bins: int = 256,
                  yaw_center: float = 0.0, yaw_span: float = 2.0 * math.pi,
@@ -1284,6 +1372,8 @@ class HighResADB:
         YA, PA = np.meshgrid(self.yaw_samples, self.pitch_samples, indexing='xy')
         YAf = YA.ravel().astype(np.float64)
         PAf = PA.ravel().astype(np.float64)
+        self.yaw_arr = np.ascontiguousarray(YAf)
+        self.pitch_arr = np.ascontiguousarray(PAf)
         self.dx, self.dy, self.dz = yaw_pitch_to_dir_vec(YAf, PAf)
         self.dx = np.ascontiguousarray(self.dx, dtype=np.float64)
         self.dy = np.ascontiguousarray(self.dy, dtype=np.float64)
@@ -1314,18 +1404,7 @@ class HighResADB:
         return iy, ip
 
     def idx_from_yaw_pitch(self, yaw: float, pitch: float) -> int:
-        yaw_n = (yaw + math.pi) % (2.0 * math.pi) - math.pi
-        u = (yaw_n + math.pi) / (2.0 * math.pi)
-        yaw_idx = int(math.floor(u * self.yaw_bins)) % self.yaw_bins
-
-        pitch_clamped = max(-0.5 * math.pi, min(0.5 * math.pi, pitch))
-        v = (pitch_clamped + 0.5 * math.pi) / math.pi
-        pitch_idx = int(math.floor(v * self.pitch_bins))
-        if pitch_idx < 0:
-            pitch_idx = 0
-        elif pitch_idx >= self.pitch_bins:
-            pitch_idx = self.pitch_bins - 1
-        return pitch_idx * self.yaw_bins + yaw_idx
+        return int(idx_from_yaw_pitch_nb(float(yaw), float(pitch), int(self.yaw_bins), int(self.pitch_bins)))
 
     def yaw_pitch_from_idx(self, idx: int) -> Tuple[int, int]:
         pitch_idx = idx // self.yaw_bins
@@ -1498,44 +1577,22 @@ class HighResADB:
         }
     
     def find_nearest_visible_pixel(self, ttarget: np.ndarray, target_id: int, center_idx: int, max_radius_px: int = 12) -> Optional[int]:
-        yaw_bins = self.yaw_bins
-        pitch_bins = self.pitch_bins
+        ttarget = np.ascontiguousarray(ttarget, dtype=np.float64)
 
-        cy = center_idx // yaw_bins
-        cx = center_idx % yaw_bins
-
-        yaw_c, pitch_c = self.yaw_pitch_from_idx(center_idx)
-
-        best_idx: Optional[int] = None
-        best_dist = float('inf')
-
-        for r in range(0, max_radius_px + 1):
-            any_found_this_ring = False
-            for dy in range(-r, r + 1):
-                ny = cy + dy
-                if ny < 0 or ny >= pitch_bins:
-                    continue
-                for dx in range(-r, r + 1):
-                    nx = cx + dx
-                    nx = nx % yaw_bins
-                    if abs(dx) != r and abs(dy) != r and r != 0:
-                        continue
-                    idx = ny * yaw_bins + nx
-                    if self.top_occluder_idx[idx] != int(target_id):
-                        continue
-                    if np.isnan(ttarget[idx]):
-                        continue
-                    any_found_this_ring = True
-                    yaw_i, pitch_i = self.yaw_pitch_from_idx(idx)
-                    dist = pixel_angular_distance(yaw_c, pitch_c, yaw_i, pitch_i)
-                    if dist < best_dist:
-                        best_dist = dist
-                        best_idx = idx
-            if best_idx is not None:
-                return best_idx
-            if any_found_this_ring and best_idx is None:
-                return None
-        return None
+        idx = _find_nearest_visible_pixel_nb(
+            self.yaw_arr,
+            self.pitch_arr,
+            np.ascontiguousarray(self.top_occluder_idx, dtype=np.int32),
+            ttarget,
+            int(target_id),
+            int(self.yaw_bins),
+            int(self.pitch_bins),
+            int(center_idx),
+            int(max_radius_px)
+        )
+        if idx == -1:
+            return None
+        return int(idx)
 
 
 # ------------------------------
@@ -2000,7 +2057,7 @@ def scan_target(
 
     return TargetInfo(
         best_candidate['target_pos'],
-        best_candidate['centroid_world'],
+        (dx, dy, dz),
         (yaw_deg, pitch_deg),
         best_candidate['yaw_bounds'],
         best_candidate['pitch_bounds']
@@ -2016,20 +2073,32 @@ def scan_targets(
 
     if not occluders:
         return None
+    
+    if previous_target is None:
+        previous_target = (0.0, 0.0, 0.0)
 
     pos_to_occluder_id: Dict[BlockPos, int] = {tuple(entry[0]): i for i, entry in enumerate(occluders)}
 
     target_set = set(target_ids)
     entries = []
-    pos_list = []
+    pos_pylist = []
+
     for (pos, base, short_type, meta) in occluders:
         if base in target_set:
             entries.append((pos, base, short_type, meta, pos_to_occluder_id[tuple(pos)]))
-            pos_list.append(pos)
+            pos_pylist.append(pos)
 
-    previous_target = np.asarray(previous_target, dtype=np.float64)
-    pos_list = np.asarray(pos_list, dtype=np.float64)
-    dists = distances_to_blocks_nb(previous_target, pos_list)
+    if not entries:
+        return None
+
+    pos_arr = np.asarray(pos_pylist, dtype=np.float64)
+    if pos_arr.ndim == 1:
+        pos_arr = pos_arr.reshape((1, 3))
+    pos_arr = np.ascontiguousarray(pos_arr, dtype=np.float64)
+
+    previous_target_arr = np.ascontiguousarray(np.asarray(previous_target, dtype=np.float64).reshape(3,), dtype=np.float64)
+
+    dists = distances_to_blocks_nb(previous_target_arr, pos_arr)
 
     targets: List[Tuple[BlockPos, str, str, Dict[str, Any], int, float]] = [
         (entries[i][0], entries[i][1], entries[i][2], entries[i][3], entries[i][4], float(dists[i]))
@@ -2161,7 +2230,6 @@ def scan_targets(
         if chosen_idx is None:
             continue
 
-        t = ttarget[chosen_idx]
         dx = adb.dx[chosen_idx]; dy = adb.dy[chosen_idx]; dz = adb.dz[chosen_idx]
 
         yaw_rad_final = math.atan2(dz, dx)
@@ -2170,7 +2238,7 @@ def scan_targets(
 
         return TargetInfo(
             best_candidate['target_pos'],
-            best_candidate['centroid_world'],
+            (dx, dy, dz),
             (yaw_deg, pitch_deg),
             best_candidate['yaw_bounds'],
             best_candidate['pitch_bounds']

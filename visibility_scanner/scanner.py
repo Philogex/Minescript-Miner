@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Tuple, Optional, List, Dict, Any, FrozenSet, Mapping,  NamedTuple
+from typing import Tuple, Optional, List, Dict, Any, FrozenSet, Mapping, NamedTuple, Sequence
 from functools import lru_cache
 from numba import types
 from numba.typed import Dict
@@ -127,7 +127,7 @@ def build_bvh(prims_min: np.ndarray, prims_max: np.ndarray, prim_ids: np.ndarray
     return (node_min, node_max, node_left_arr, node_right_arr,
             node_first_arr, node_count_arr, leaf_prim_indices_arr, postorder_arr)
 
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def bvh_refit_numba(node_min, node_max,
                     node_left, node_right,
                     node_first, node_count, leaf_prim_indices,
@@ -200,7 +200,7 @@ def bvh_refit_numba(node_min, node_max,
                 if node_max[r, 2] > node_max[node, 2]:
                     node_max[node, 2] = node_max[r, 2]
 
-@nb.njit(parallel=True, fastmath=True)
+@nb.njit(cache=True, parallel=True, fastmath=True)
 def rasterize_with_bvh_nb(
     px: float, py: float, pz: float,
     dx: np.ndarray, dy: np.ndarray, dz: np.ndarray,
@@ -278,34 +278,67 @@ def rasterize_with_bvh_nb(
 # angle and direction helpers
 # ------------------------------
 
-def distance_to_block(position: Tuple[float, float, float], ref: Tuple[float, float, float]) -> float:
+def distance_to_block(position, ref):
     px, py, pz = position
     rx, ry, rz = ref
-    dx = (px - rx)
-    dy = (py - ry)
-    dz = (pz - rz)
+    dx = px - rx
+    dy = py - ry
+    dz = pz - rz
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 
+@nb.njit(cache=True, fastmath=True)
+def distance_to_block_nb(position, ref):
+    px, py, pz = position
+    rx, ry, rz = ref
+    dx = px - rx
+    dy = py - ry
+    dz = pz - rz
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+
+def distances_to_blocks(previous_target: Tuple[float, float, float],
+                        positions: Sequence[Tuple[int, int, int]]) -> np.ndarray:
+    prev = np.asarray(previous_target, dtype=np.float64)
+    pos_arr = np.asarray(positions, dtype=np.float64)
+    diffs = pos_arr - prev[None, :]
+    return np.sqrt(np.sum(diffs * diffs, axis=1))
+
+@nb.njit(cache=True, fastmath=True)
+def distances_to_blocks_nb(prev: np.ndarray, pos_arr: np.ndarray) -> np.ndarray:
+    n = pos_arr.shape[0]
+    out = np.empty(n, dtype=np.float64)
+    for i in range(n):
+        dx = pos_arr[i, 0] - prev[0]
+        dy = pos_arr[i, 1] - prev[1]
+        dz = pos_arr[i, 2] - prev[2]
+        out[i] = math.sqrt(dx * dx + dy * dy + dz * dz)
+    return out
+
+@nb.njit(cache=True, fastmath=True)
 def normalize_angle_rad(a: float) -> float:
     return (a + math.pi) % (2 * math.pi) - math.pi
 
-@nb.njit(inline='always')
+@nb.njit(cache=True, inline='always')
 def normalize_angle_rad_nb(a: float) -> float:
     return (a + math.pi) % (2.0 * math.pi) - math.pi
 
+@nb.njit(cache=True, fastmath=True)
 def mc_angles_to_internal_radians(mc_yaw_deg: float, mc_pitch_deg: float) -> Tuple[float, float]:
     yaw_rad = math.radians(mc_yaw_deg + 90.0)
     pitch_rad = math.radians(mc_pitch_deg)
     return yaw_rad, pitch_rad
 
+@nb.njit(cache=True, fastmath=True)
 def to_minecraft_angles_degrees(yaw_rad: float, pitch_rad: float) -> Tuple[float, float]:
     yaw_deg = math.degrees(yaw_rad) - 90.0
     yaw_deg = ((yaw_deg + 180.0) % 360.0) - 180.0
     pitch_deg = math.degrees(pitch_rad)
-    pitch_deg = max(-90.0, min(90.0, pitch_deg))
+    if pitch_deg > 90.0:
+        pitch_deg = 90.0
+    elif pitch_deg < -90.0:
+        pitch_deg = -90.0
     return yaw_deg, pitch_deg
 
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def yaw_pitch_to_dir_scalar(yaw, pitch):
     cx = math.cos(yaw)
     sx = math.sin(yaw)
@@ -316,7 +349,7 @@ def yaw_pitch_to_dir_scalar(yaw, pitch):
     dz = sx * cp
     return dx, dy, dz
 
-@nb.njit(fastmath=True, parallel=True)
+@nb.njit(cache=True, fastmath=True, parallel=True)
 def yaw_pitch_to_dir_vec(yaw_arr, pitch_arr):
     n = yaw_arr.shape[0]
     dx = np.empty(n, dtype=np.float64)
@@ -334,23 +367,40 @@ def yaw_pitch_to_dir_vec(yaw_arr, pitch_arr):
         dz[i] = sy * cp
     return dx, dy, dz
 
+@nb.njit(cache=True, fastmath=True)
 def wrapped_interval_from_angles(angles: np.ndarray) -> Tuple[float, float]:
-    if angles.size == 0:
+    n = angles.size
+    if n == 0:
         return 0.0, 0.0
-    a = ((angles + np.pi) % (2 * np.pi)) - np.pi
-    a_sorted = np.sort(a)
-    gaps = np.diff(np.concatenate([a_sorted, a_sorted[:1] + 2 * math.pi]))
-    k = int(np.argmax(gaps))
-    amin = a_sorted[(k + 1) % a_sorted.size]
-    amax = amin + (2 * math.pi - gaps[k])
-    return normalize_angle_rad(float(amin)), float(amax)
 
+    a = ((angles + math.pi) % (2.0 * math.pi)) - math.pi
+    a_sorted = np.sort(a)
+
+    max_gap = -1.0
+    k = 0
+    for i in range(n - 1):
+        gap = a_sorted[i + 1] - a_sorted[i]
+        if gap > max_gap:
+            max_gap = gap
+            k = i
+    wrap_gap = (a_sorted[0] + 2.0 * math.pi) - a_sorted[n - 1]
+    if wrap_gap > max_gap:
+        max_gap = wrap_gap
+        k = n - 1
+
+    amin = a_sorted[(k + 1) % n]
+    amax = amin + (2.0 * math.pi - max_gap)
+
+    return normalize_angle_rad(amin), amax
+
+@nb.njit(cache=True, fastmath=True)
 def _interval_center_span(a: float, b: float) -> Tuple[float, float]:
     a_n = normalize_angle_rad(a)
     span = b - a
     center = normalize_angle_rad(a_n + 0.5 * span)
     return center, span
 
+@nb.njit(cache=True, fastmath=True)
 def yaw_intervals_overlap(a0: float, a1: float, b0: float, b1: float) -> bool:
     c1, s1 = _interval_center_span(a0, a1)
     c2, s2 = _interval_center_span(b0, b1)
@@ -369,30 +419,48 @@ def make_aabb_from_block(pos: BlockPos) -> AABB:
     bx, by, bz = pos
     return block_aabb(bx, by, bz)
 
-def aabb_corners(aabb: AABB) -> List[Tuple[float, float, float]]:
+@nb.njit(cache=True, fastmath=True)
+def aabb_corners_nb(aabb):
     xmin, xmax, ymin, ymax, zmin, zmax = aabb
-    return [(x, y, z) for x in (xmin, xmax) for y in (ymin, ymax) for z in (zmin, zmax)]
+    corners = np.empty((8, 3), dtype=np.float64)
+    corners[0] = (xmin, ymin, zmin)
+    corners[1] = (xmin, ymin, zmax)
+    corners[2] = (xmin, ymax, zmin)
+    corners[3] = (xmin, ymax, zmax)
+    corners[4] = (xmax, ymin, zmin)
+    corners[5] = (xmax, ymin, zmax)
+    corners[6] = (xmax, ymax, zmin)
+    corners[7] = (xmax, ymax, zmax)
+    return corners
 
-def angular_bounds_for_aabb(aabb: AABB, position: Vec3) -> Tuple[float, float, float, float]:
+@nb.njit(cache=True, fastmath=True)
+def angular_bounds_for_aabb_nb(aabb, position):
     px, py, pz = position
-    yaws: List[float] = []
-    pitches: List[float] = []
-    for cx, cy, cz in aabb_corners(aabb):
+    corners = aabb_corners_nb(aabb)
+    
+    yaw_min = INF
+    yaw_max = -INF
+    pitch_min = INF
+    pitch_max = -INF
+    
+    for i in range(8):
+        cx, cy, cz = corners[i]
         vx = cx - px
         vy = cy - py
         vz = cz - pz
-        yaw = math.atan2(vz, vx)
-        hyp = math.hypot(vx, vz)
-        pitch = -math.atan2(vy, hyp)
-        yaws.append(normalize_angle_rad(yaw))
-        pitches.append(pitch)
-
-    yaw_min, yaw_max = wrapped_interval_from_angles(np.array(yaws, dtype=np.float64))
-    pitch_min = min(pitches)
-    pitch_max = max(pitches)
+        yaw = np.arctan2(vz, vx)
+        hyp = np.hypot(vx, vz)
+        pitch = -np.arctan2(vy, hyp)
+        
+        yaw_min = min(yaw_min, yaw)
+        yaw_max = max(yaw_max, yaw)
+        pitch_min = min(pitch_min, pitch)
+        pitch_max = max(pitch_max, pitch)
+        
     return yaw_min, yaw_max, pitch_min, pitch_max
 
-def face_and_uv_for_hitpoint(aabb: AABB, hx: float, hy: float, hz: float) -> Tuple[int, Tuple[float, float]]:
+@nb.njit(cache=True, fastmath=True)
+def face_and_uv_for_hitpoint_nb(aabb, hx, hy, hz):
     xmin, xmax, ymin, ymax, zmin, zmax = aabb
     dxmin = abs(hx - xmin)
     dxmax = abs(hx - xmax)
@@ -400,7 +468,7 @@ def face_and_uv_for_hitpoint(aabb: AABB, hx: float, hy: float, hz: float) -> Tup
     dymax = abs(hy - ymax)
     dzmin = abs(hz - zmin)
     dzmax = abs(hz - zmax)
-    dists = np.array([dxmin, dxmax, dymin, dymax, dzmin, dzmax])
+    dists = np.array([dxmin, dxmax, dymin, dymax, dzmin, dzmax], dtype=np.float64)
     fid = int(np.argmin(dists))
     if fid == 0:
         u = (hz - zmin) / (zmax - zmin)
@@ -427,7 +495,7 @@ def face_and_uv_for_hitpoint(aabb: AABB, hx: float, hy: float, hz: float) -> Tup
 # ray helpers
 # ------------------------------
 
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def _dda_ray_voxels(px, py, pz, ex, ey, ez):
     x = int(math.floor(px))
     y = int(math.floor(py))
@@ -548,7 +616,7 @@ def _dda_ray_voxels(px, py, pz, ex, ey, ez):
 
     return buf[:count].copy()
 
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def _expand_neighbors_into_dict_njit(voxels: np.ndarray, radius: int, d):
     n = voxels.shape[0]
     for i in range(n):
@@ -586,7 +654,7 @@ def _expand_neighbors(voxels: np.ndarray, radius: int = 1) -> np.ndarray:
 
     return [(int(i[0]), int(i[1]), int(i[2])) for i in out]
 
-@nb.njit(parallel=True, fastmath=True)
+@nb.njit(cache=True, parallel=True, fastmath=True)
 def ray_aabb_intersection_vec(px, py, pz,
                                     dx, dy, dz,
                                     xmin, xmax, ymin, ymax, zmin, zmax):
@@ -660,7 +728,7 @@ def ray_aabb_intersection_vec(px, py, pz,
 
     return tmin_out, tmax_out
 
-@nb.njit(inline='always', fastmath=True)
+@nb.njit(cache=True, inline='always', fastmath=True)
 def _ray_aabb_intersect_single(px, py, pz, dx, dy, dz,
                                xmin, xmax, ymin, ymax, zmin, zmax) -> Tuple[float, float]:
     if abs(dx) > EPS:
@@ -729,7 +797,7 @@ def _ray_aabb_intersect_single(px, py, pz, dx, dy, dz,
 # solid angle helpers
 # ------------------------------
 
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def tri_solid_angle(r0x, r0y, r0z,
                                  r1x, r1y, r1z,
                                  r2x, r2y, r2z):
@@ -747,7 +815,7 @@ def tri_solid_angle(r0x, r0y, r0z,
 
     return 2.0 * math.atan2(det, denom)
 
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def quad_solid_angle(r00x, r00y, r00z,
                                   r01x, r01y, r01z,
                                   r11x, r11y, r11z,
@@ -760,7 +828,7 @@ def quad_solid_angle(r00x, r00y, r00z,
                                      r10x, r10y, r10z)
     return a + b
 
-@nb.njit(parallel=True, fastmath=True)
+@nb.njit(cache=True, parallel=True, fastmath=True)
 def compute_sample_solid_angles(yaw_min, yaw_step, pitch_min, pitch_step,
                                       yaw_bins, pitch_bins):
     total = yaw_bins * pitch_bins
@@ -809,7 +877,7 @@ def compute_sample_solid_angles(yaw_min, yaw_step, pitch_min, pitch_step,
 # geometry cache
 # ------------------------------
 
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def polygon_sphere_bounds_numba(verts: np.ndarray, px: float, py: float, pz: float) -> Tuple[float, float, float, float, float]:
     n = verts.shape[0]
     yaws = np.empty(n, dtype=np.float64)
@@ -1066,7 +1134,9 @@ class BlockGeometryCache:
         pitch_margin_deg: float = 0.4,
         pos_to_occluder_id: Optional[Dict[BlockPos, int]] = None,
     ):
-        tymin, tymax, tpmin, tpmax = angular_bounds_for_aabb(target_aabb, position)
+        target_aabb = np.array([target_aabb[0], target_aabb[1], target_aabb[2], target_aabb[3], target_aabb[4], target_aabb[5]], dtype=np.float64)
+        position = np.array([position[0], position[1], position[2]], dtype=np.float64)
+        tymin, tymax, tpmin, tpmax = angular_bounds_for_aabb_nb(target_aabb, position)
         yaw_margin = math.radians(yaw_margin_deg)
         pitch_margin = math.radians(pitch_margin_deg)
         tymin_m = normalize_angle_rad(tymin - yaw_margin)
@@ -1151,7 +1221,7 @@ class BlockGeometryCache:
 # raster grid (ADB)
 # ------------------------------
 
-@nb.njit(parallel=True, fastmath=True)
+@nb.njit(cache=True, parallel=True, fastmath=True)
 def _rasterize_occluders_nb(
     px: float, py: float, pz: float,
     dx: np.ndarray, dy: np.ndarray, dz: np.ndarray,
@@ -1375,7 +1445,7 @@ class HighResADB:
         face_ids: List[int] = []
         uvs_list: List[Tuple[float, float]] = []
         for (hx, hy, hz) in hit_points:
-            fid, (u, v) = face_and_uv_for_hitpoint(target_aabb, float(hx), float(hy), float(hz))
+            fid, (u, v) = face_and_uv_for_hitpoint_nb(target_aabb, float(hx), float(hy), float(hz))
             face_ids.append(fid)
             uvs_list.append((u, v))
 
@@ -1414,7 +1484,7 @@ def _triangulate_convex_polygon(verts: np.ndarray) -> List[np.ndarray]:
         tris.append(np.stack([verts[0], verts[i], verts[i + 1]], axis=0))
     return tris
 
-@nb.njit(fastmath=True)
+@nb.njit(cache=True, fastmath=True)
 def _ray_triangle_t_single(px, py, pz,
                            dx, dy, dz,
                            v0, v1, v2):
@@ -1454,7 +1524,7 @@ def _ray_triangle_t_single(px, py, pz,
         return t
     return math.inf
 
-@nb.njit(parallel=False, fastmath=True)
+@nb.njit(cache=True, parallel=False, fastmath=True)
 def ray_triangles_min_t_nb(px, py, pz,
                            dx_arr, dy_arr, dz_arr,
                            tris):
@@ -1475,7 +1545,7 @@ def ray_triangles_min_t_nb(px, py, pz,
         tmin[i] = best
     return tmin
 
-@nb.njit(parallel=True, fastmath=True)
+@nb.njit(cache=True, parallel=True, fastmath=True)
 def ray_triangles_min_t_nb_parallel(px, py, pz,
                                     dx_arr, dy_arr, dz_arr,
                                     tris):
@@ -1673,6 +1743,7 @@ def _parse_block_string(bs: str) -> Tuple[str, str, Dict[str, Any]]:
         simple = short
     return base, simple, meta
 
+
 # ------------------------------
 # candidate gathering in cone
 # ------------------------------
@@ -1809,7 +1880,7 @@ def scan_target(
     uvs_arr = np.empty((hits_n, 2), dtype=np.float64)
     for j in range(hits_n):
         hx, hy, hz = hit_points[j]
-        fid, (u, v) = face_and_uv_for_hitpoint(target_aabb, hx, hy, hz)
+        fid, (u, v) = face_and_uv_for_hitpoint_nb(target_aabb, hx, hy, hz)
         face_ids[j] = fid
         uvs_arr[j, 0] = u
         uvs_arr[j, 1] = v
@@ -1867,11 +1938,21 @@ def scan_targets(
     pos_to_occluder_id: Dict[BlockPos, int] = {tuple(entry[0]): i for i, entry in enumerate(occluders)}
 
     target_set = set(target_ids)
+    entries = []
+    pos_list = []
+    for (pos, base, short_type, meta) in occluders:
+        if base in target_set:
+            entries.append((pos, base, short_type, meta, pos_to_occluder_id[tuple(pos)]))
+            pos_list.append(pos)
+
+    pos_list = np.asarray(pos_list, dtype=np.float64)
+    dists = distances_to_blocks_nb(previous_target, pos_list)
+
     targets: List[Tuple[BlockPos, str, str, Dict[str, Any], int, float]] = [
-        (pos, base, short_type, meta, pos_to_occluder_id[tuple(pos)], distance_to_block(previous_target, pos))
-        for (pos, base, short_type, meta) in occluders
-        if base in target_set
+        (entries[i][0], entries[i][1], entries[i][2], entries[i][3], entries[i][4], float(dists[i]))
+        for i in range(len(entries))
     ]
+
     if not targets:
         return None
 
@@ -1944,7 +2025,7 @@ def scan_targets(
         uvs_arr = np.empty((hits_n, 2), dtype=np.float64)
         for j in range(hits_n):
             hx, hy, hz = hit_points[j]
-            fid, (u, v) = face_and_uv_for_hitpoint(target_aabb, hx, hy, hz)
+            fid, (u, v) = face_and_uv_for_hitpoint_nb(target_aabb, hx, hy, hz)
             face_ids[j] = fid
             uvs_arr[j, 0] = u
             uvs_arr[j, 1] = v

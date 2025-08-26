@@ -56,6 +56,7 @@ while True:
         time.sleep(0.5)
 
     px, py, pz = m.player_position()
+
     occluders = get_area(position=(px, py + 1.62, pz))
 
     aim_result = scan_targets(

@@ -1892,6 +1892,7 @@ def scan_target(
 
     weights = adb.sample_solid_angle[idxs]
     wsum = float(np.sum(weights))
+    #centroid_world = compute_visible_face_centroid_aim_with_clustering(adb, target_aabb, position)
     centroid_world = tuple(np.sum(hit_points * weights[:, None], axis=0) / wsum)
     centroid_uv = tuple(np.sum(uvs_arr * weights[:, None], axis=0) / wsum)
     solid_angle = float(np.sum(weights))
@@ -1929,7 +1930,7 @@ def scan_targets(
     target_ids: List[str],
     occluders: List[Tuple[BlockPos, str, str, Optional[Dict[str, Any]]]],
     adb_granularity: Tuple[int, int] = (256, 124),
-    previous_target: Tuple[int, int, int] = (0, 0, 0),
+    previous_target: Tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> Optional[TargetInfo]:
 
     if not occluders:
@@ -1945,6 +1946,7 @@ def scan_targets(
             entries.append((pos, base, short_type, meta, pos_to_occluder_id[tuple(pos)]))
             pos_list.append(pos)
 
+    previous_target = np.asarray(previous_target, dtype=np.float64)
     pos_list = np.asarray(pos_list, dtype=np.float64)
     dists = distances_to_blocks_nb(previous_target, pos_list)
 

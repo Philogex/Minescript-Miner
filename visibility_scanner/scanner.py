@@ -635,7 +635,6 @@ def _expand_neighbors_into_dict_njit(voxels: np.ndarray, radius: int, d):
                     if key not in d:
                         d[key] = 1
 
-
 def _expand_neighbors(voxels: np.ndarray, radius: int = 1) -> np.ndarray:
     voxels = np.asarray(voxels, dtype=np.int64)
     if voxels.ndim != 2 or voxels.shape[1] != 3:
@@ -658,6 +657,38 @@ def _expand_neighbors(voxels: np.ndarray, radius: int = 1) -> np.ndarray:
         out = out[order]
 
     return [(int(i[0]), int(i[1]), int(i[2])) for i in out]
+
+@nb.njit(cache=True, fastmath=True)
+def _positions_within_reach(px, py, pz, r, pitch_min, pitch_max):
+    ir = int(math.ceil(r))
+    sqr = (r - 0.5) * (r - 0.5)
+    max_count = (2*ir+1)**3
+    positions = np.empty((max_count, 3), dtype=np.int64)
+    count = 0
+    
+    fx, fy, fz = math.floor(px), math.floor(py), math.floor(pz)
+
+    for dx in range(-ir, ir+1):
+        for dy in range(-ir, ir+1):
+            for dz in range(-ir, ir+1):
+                if dx*dx + dy*dy + dz*dz <= sqr:
+                    x = fx + dx
+                    y = fy + dy
+                    z = fz + dz
+                    
+                    vx = (x + 0.5) - px
+                    vy = (y + 0.5) - py
+                    vz = (z + 0.5) - pz
+                    h = math.hypot(vx, vz)
+                    pitch_deg = math.degrees(math.atan2(-vy, h))
+                    
+                    if pitch_min <= pitch_deg <= pitch_max:
+                        positions[count, 0] = x
+                        positions[count, 1] = y
+                        positions[count, 2] = z
+                        count += 1
+    
+    return positions[:count]
 
 @nb.njit(cache=True, parallel=True, fastmath=True)
 def ray_aabb_intersection_vec(px, py, pz,
@@ -1287,7 +1318,6 @@ def _find_nearest_visible_pixel_nb(yaw_arr: np.ndarray,
 
     for r in range(0, max_radius_px + 1):
         any_found_this_ring = False
-        # iterate dy, dx in ring
         for dy in range(-r, r + 1):
             ny = cy + dy
             if ny < 0 or ny >= pitch_bins:

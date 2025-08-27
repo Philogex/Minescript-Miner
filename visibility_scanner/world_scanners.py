@@ -1,4 +1,4 @@
-from visibility_scanner.scanner import BlockPos, _chunk_list, _parse_block_string, _dda_ray_voxels, _expand_neighbors
+from visibility_scanner.scanner import BlockPos, _chunk_list, _parse_block_string, _dda_ray_voxels, _expand_neighbors, _positions_within_reach
 
 import math
 from typing import List, Optional, Tuple, Any, Dict
@@ -14,34 +14,18 @@ def get_area(position: Tuple[float, float, float],
     pitch_range: Tuple[float, float] = (-90.0, 90.0),
 ) -> List[Tuple[BlockPos, str, str, Optional[Dict[str, Any]]]]:
     px, py, pz = position
-    r = float(reach)
-    ir = int(math.ceil(r))
     pitch_min, pitch_max = pitch_range
-
-    positions: List[List[int]] = []
-    for dx in range(-ir, ir + 1):
-        for dy in range(-ir, ir + 1):
-            for dz in range(-ir, ir + 1):
-                if (dx * dx + dy * dy + dz * dz) <= (r + 1e-9 - 0.5) ** 2:
-                    x = int(math.floor(px)) + dx
-                    y = int(math.floor(py)) + dy
-                    z = int(math.floor(pz)) + dz
-                    
-                    vx = (x + 0.5) - px
-                    vy = (y + 0.5) - py
-                    vz = (z + 0.5) - pz
-                    h = math.hypot(vx, vz)
-                    pitch_deg = math.degrees(math.atan2(-vy, h))
-
-                    if pitch_min <= pitch_deg <= pitch_max:
-                        positions.append([x, y, z])
-
-    block_strings: List[str] = []
+    
+    pos_arr = _positions_within_reach(px, py, pz, float(reach),
+                                      float(pitch_min), float(pitch_max))
+    positions = pos_arr.tolist()  # back to Python list of lists
+    
+    block_strings = []
     for chunk in _chunk_list(positions, 1000):
         res = m.getblocklist(list(chunk))
         block_strings.extend(res)
 
-    out: List[Tuple[BlockPos, str, str, Optional[Dict[str, Any]]]] = []
+    out = []
     for pos, bs in zip(positions, block_strings):
         base, simple, meta = _parse_block_string(bs)
         out.append(((pos[0], pos[1], pos[2]), base, simple, meta))

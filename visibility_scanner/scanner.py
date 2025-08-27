@@ -28,7 +28,7 @@ AABB = Tuple[float, float, float, float, float, float]
 
 class TargetInfo(NamedTuple):
     world_pos: tuple[int, int, int]
-    optimal_position: tuple[float, float, float]
+    optimal_pos: tuple[float, float, float]
     target_angle: tuple[float, float]
     yaw_bounds: tuple[float, float]
     pitch_bounds: tuple[float, float]

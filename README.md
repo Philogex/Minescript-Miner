@@ -85,10 +85,10 @@ info = scan_targets(
 
 Both return a `TargetInfo` object, containing:
 
-* `target_pos` – target block position
-* `centroid_world` – weighted centroid of visible surface points
-* `(yaw, pitch)` – angles to aim at the target
-* `yaw_bounds` – bounding yaw angle of visibility cone
+* `target_pos` - target block position
+* `optimal_pos` - closest visible point to weighted centroid of visible surface points
+* `(yaw, pitch)` - angles to aim at the target
+* `yaw_bounds` - bounding yaw angle of visibility cone
 * `pitch_bounds` - bounding pitch angle of visibility cone
 
 ---

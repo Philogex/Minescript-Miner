@@ -64,7 +64,7 @@ while True:
     )
 
     if aim_result is not None:
-        previous_target = aim_result.optimal_position
+        previous_target = aim_result.optimal_pos
         x, y, z = aim_result.world_pos
         aim.player_aim.smooth_rotate_to(aim_result.target_angle[0], aim_result.target_angle[1], duration=0.3)
         prev_block = m.getblock(x, y, z)

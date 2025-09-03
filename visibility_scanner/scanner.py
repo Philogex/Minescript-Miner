@@ -22,9 +22,9 @@ BVH_THRESHOLD = 8192
 # types
 # ------------------------------
 
-Vec3 = Tuple[float, float, float]
+Vec3 = np.typing.NDArray[np.float64] # expected 3 floats
 BlockPos = Tuple[int, int, int]
-AABB = Tuple[float, float, float, float, float, float]
+AABB = np.typing.NDArray[np.float64] # expected 6 floats
 
 class TargetInfo(NamedTuple):
     world_pos: tuple[int, int, int]
@@ -202,8 +202,8 @@ def bvh_refit_numba(node_min, node_max,
 
 @nb.njit(cache=True, parallel=True, fastmath=True)
 def rasterize_with_bvh_nb(
-    px: float, py: float, pz: float,
-    dx: np.ndarray, dy: np.ndarray, dz: np.ndarray,
+    position: np.ndarray,
+    directions: np.ndarray,
     node_min: np.ndarray, node_max: np.ndarray,
     node_left: np.ndarray, node_right: np.ndarray,
     node_first: np.ndarray, node_count: np.ndarray,
@@ -212,28 +212,32 @@ def rasterize_with_bvh_nb(
     depth: np.ndarray, top_idx: np.ndarray,
     max_depth: float
 ):
-    nrays = dx.shape[0]
+    nrays = directions.shape[0]
     n_nodes = node_min.shape[0]
     STACK_SIZE = 128
     for i in nb.prange(nrays):
-        di = dx[i]; dj = dy[i]; dk = dz[i]
+        dir_vec = directions[i]
         best_t = depth[i]
         best_oid = top_idx[i]
         stack = np.empty(STACK_SIZE, dtype=np.int32)
         sp = 0
+
         if n_nodes == 0:
             depth[i] = best_t
             top_idx[i] = best_oid
             continue
+
         stack[sp] = 0
         sp += 1
         while sp > 0:
             sp -= 1
             node_idx = stack[sp]
-            tmin, tmax = _ray_aabb_intersect_single(px, py, pz, di, dj, dk,
-                                                    node_min[node_idx, 0], node_max[node_idx, 0],
-                                                    node_min[node_idx, 1], node_max[node_idx, 1],
-                                                    node_min[node_idx, 2], node_max[node_idx, 2])
+            tmin, tmax = _ray_aabb_intersect_single(
+                position, dir_vec,
+                node_min[node_idx, 0], node_max[node_idx, 0],
+                node_min[node_idx, 1], node_max[node_idx, 1],
+                node_min[node_idx, 2], node_max[node_idx, 2],
+            )
             if math.isnan(tmin):
                 continue
             t_entry = tmin if tmin >= 0.0 else 0.0
@@ -249,7 +253,7 @@ def rasterize_with_bvh_nb(
                 cnt = node_count[node_idx]
                 for p_i in range(first, first + cnt):
                     prim_idx = leaf_prim_indices[p_i]
-                    tmin_p, tmax_p = _ray_aabb_intersect_single(px, py, pz, di, dj, dk,
+                    tmin_p, tmax_p = _ray_aabb_intersect_single(position, dir_vec,
                                                 prim_min[prim_idx, 0], prim_max[prim_idx, 0],
                                                 prim_min[prim_idx, 1], prim_max[prim_idx, 1],
                                                 prim_min[prim_idx, 2], prim_max[prim_idx, 2])
@@ -417,10 +421,15 @@ def yaw_intervals_overlap(a0: float, a1: float, b0: float, b1: float) -> bool:
 # aabb and uv helpers
 # ------------------------------
 
-def block_aabb(bx: int, by: int, bz: int) -> AABB:
-    return (bx, bx + 1.0, by, by + 1.0, bz, bz + 1.0)
+def clamp(v, lo, hi): return max(lo, min(hi, v))
 
-def make_aabb_from_block(pos: BlockPos) -> AABB:
+def block_aabb(bx: int, by: int, bz: int) -> np.ndarray:
+    return np.array([bx, bx + 1.0,
+                     by, by + 1.0,
+                     bz, bz + 1.0],
+                    dtype=np.float64)
+
+def make_aabb_from_block(pos: tuple[int, int, int]) -> np.ndarray:
     bx, by, bz = pos
     return block_aabb(bx, by, bz)
 
@@ -765,11 +774,11 @@ def ray_aabb_intersection_vec(px, py, pz,
     return tmin_out, tmax_out
 
 @nb.njit(cache=True, inline='always', fastmath=True)
-def _ray_aabb_intersect_single(px, py, pz, dx, dy, dz,
+def _ray_aabb_intersect_single(position, direction,
                                xmin, xmax, ymin, ymax, zmin, zmax) -> Tuple[float, float]:
-    if abs(dx) > EPS:
-        tx1 = (xmin - px) / dx
-        tx2 = (xmax - px) / dx
+    if abs(direction[0]) > EPS:
+        tx1 = (xmin - position[0]) / direction[0]
+        tx2 = (xmax - position[0]) / direction[0]
         if tx1 <= tx2:
             tmin_x = tx1
             tmax_x = tx2
@@ -777,14 +786,14 @@ def _ray_aabb_intersect_single(px, py, pz, dx, dy, dz,
             tmin_x = tx2
             tmax_x = tx1
     else:
-        if px < xmin - EPS or px > xmax + EPS:
+        if position[0] < xmin - EPS or position[0] > xmax + EPS:
             return (np.nan, np.nan)
         tmin_x = -INF
         tmax_x = INF
 
-    if abs(dy) > EPS:
-        ty1 = (ymin - py) / dy
-        ty2 = (ymax - py) / dy
+    if abs(direction[1]) > EPS:
+        ty1 = (ymin - position[1]) / direction[1]
+        ty2 = (ymax - position[1]) / direction[1]
         if ty1 <= ty2:
             tmin_y = ty1
             tmax_y = ty2
@@ -792,14 +801,14 @@ def _ray_aabb_intersect_single(px, py, pz, dx, dy, dz,
             tmin_y = ty2
             tmax_y = ty1
     else:
-        if py < ymin - EPS or py > ymax + EPS:
+        if position[1] < ymin - EPS or position[2] > ymax + EPS:
             return (np.nan, np.nan)
         tmin_y = -INF
         tmax_y = INF
 
-    if abs(dz) > EPS:
-        tz1 = (zmin - pz) / dz
-        tz2 = (zmax - pz) / dz
+    if abs(direction[2]) > EPS:
+        tz1 = (zmin - position[2]) / direction[2]
+        tz2 = (zmax - position[2]) / direction[2]
         if tz1 <= tz2:
             tmin_z = tz1
             tmax_z = tz2
@@ -807,7 +816,7 @@ def _ray_aabb_intersect_single(px, py, pz, dx, dy, dz,
             tmin_z = tz2
             tmax_z = tz1
     else:
-        if pz < zmin - EPS or pz > zmax + EPS:
+        if position[2] < zmin - EPS or position[2] > zmax + EPS:
             return (np.nan, np.nan)
         tmin_z = -INF
         tmax_z = INF
@@ -832,6 +841,11 @@ def _ray_aabb_intersect_single(px, py, pz, dx, dy, dz,
 # ------------------------------
 # solid angle helpers
 # ------------------------------
+
+def rect_indices(iy0, iy1, ip0, ip1, yaw_bins):
+    iy = np.arange(iy0, iy1 + 1, dtype=np.int32)
+    ip = np.arange(ip0, ip1 + 1, dtype=np.int32)
+    return (ip[:, None] * yaw_bins + iy[None, :]).ravel()
 
 @nb.njit(cache=True, fastmath=True)
 def tri_solid_angle(r0x, r0y, r0z,
@@ -1160,6 +1174,11 @@ class BlockGeometryCache:
         px, py, pz = map(float, position)
         return polygon_sphere_bounds_numba(verts, px, py, pz)
     
+    def _rect_indices(self, iy0, iy1, ip0, ip1, yaw_bins):
+        iy = np.arange(iy0, iy1 + 1, dtype=np.int32)
+        ip = np.arange(ip0, ip1 + 1, dtype=np.int32)
+        return (ip[:, None] * yaw_bins + iy[None, :]).ravel()
+
     def analytic_refine_depth_in_target_cone(self,
         adb: HighResADB,
         position: Vec3,
@@ -1170,8 +1189,6 @@ class BlockGeometryCache:
         pitch_margin_deg: float = 0.4,
         pos_to_occluder_id: Optional[Dict[BlockPos, int]] = None,
     ):
-        target_aabb = np.array([target_aabb[0], target_aabb[1], target_aabb[2], target_aabb[3], target_aabb[4], target_aabb[5]], dtype=np.float64)
-        position = np.array([position[0], position[1], position[2]], dtype=np.float64)
         tymin, tymax, tpmin, tpmax = angular_bounds_for_aabb_nb(target_aabb, position)
         yaw_margin = math.radians(yaw_margin_deg)
         pitch_margin = math.radians(pitch_margin_deg)
@@ -1193,49 +1210,45 @@ class BlockGeometryCache:
                 if not yaw_intervals_overlap(yaw_min, yaw_max, tymin_m, tymax_m):
                     continue
                 tri_list = _triangulate_convex_polygon(verts)
-                if not tri_list:
+                if not tri_list.any():
                     continue
-                tris = np.stack(tri_list, axis=0).astype(np.float64)
+                tris = np.asarray(tri_list, copy=False)
                 cand_tri_arrays.append((tris, p.get('block', (None,))[0], p))
 
         if not cand_tri_arrays:
             return
 
-        iy_min_f = (normalize_angle_rad(tymin_m) - adb.yaw_min) / (adb.yaw_max - adb.yaw_min) * adb.yaw_bins
-        iy_max_f = (normalize_angle_rad(tymax_m) - adb.yaw_min) / (adb.yaw_max - adb.yaw_min) * adb.yaw_bins
+        yaw_span = (adb.yaw_max - adb.yaw_min)
+        pitch_span = (adb.pitch_max - adb.pitch_min)
+        iy_min_f = (normalize_angle_rad(tymin_m) - adb.yaw_min) / yaw_span * adb.yaw_bins
+        iy_max_f = (normalize_angle_rad(tymax_m) - adb.yaw_min) / yaw_span * adb.yaw_bins
         if (tymax_m - tymin_m) > math.pi * 1.5:
             iy_ranges = [(0, adb.yaw_bins - 1)]
         else:
-            a = iy_min_f
-            b = iy_max_f
+            a, b = iy_min_f, iy_max_f
             if b >= a:
-                iy_ranges = [(max(0, int(math.floor(a))), min(adb.yaw_bins - 1, int(math.ceil(b))))]
+                iy_ranges = [to_bins(a, b, adb.yaw_bins)]
             else:
-                iy_ranges = [
-                    (0, min(adb.yaw_bins - 1, int(math.ceil(b)))),
-                    (max(0, int(math.floor(a))), adb.yaw_bins - 1),
-                ]
+                i0a, i1a = to_bins(0, b, adb.yaw_bins)
+                i0b, i1b = to_bins(a, adb.yaw_bins - 1, adb.yaw_bins)
+                iy_ranges = [(i0a, i1a), (i0b, i1b)]
 
-        ip_min_f = (tpmin_m - adb.pitch_min) / (adb.pitch_max - adb.pitch_min) * adb.pitch_bins
-        ip_max_f = (tpmax_m - adb.pitch_min) / (adb.pitch_max - adb.pitch_min) * adb.pitch_bins
-        ip_min = max(0, int(math.floor(ip_min_f)))
-        ip_max = min(adb.pitch_bins - 1, int(math.ceil(ip_max_f)))
+        ip_min_f = (tpmin_m - adb.pitch_min) / pitch_span * adb.pitch_bins
+        ip_max_f = (tpmax_m - adb.pitch_min) / pitch_span * adb.pitch_bins
+        ip_min = clamp(int(math.floor(ip_min_f)), 0, adb.pitch_bins - 1)
+        ip_max = clamp(int(math.ceil (ip_max_f)), 0, adb.pitch_bins - 1)
 
-        idx_list: List[np.ndarray] = []
-        for (iy0, iy1) in iy_ranges:
-            iy_range = np.arange(iy0, iy1 + 1, dtype=np.int32)
-            ip_range = np.arange(ip_min, ip_max + 1, dtype=np.int32)
-            IY, IP = np.meshgrid(iy_range, ip_range, indexing='xy')
-            idx_list.append((IP * adb.yaw_bins + IY).ravel())
-        if not idx_list:
-            return
-        idxs = np.unique(np.concatenate(idx_list, axis=0))
-        if idxs.size == 0:
-            return
+        if len(iy_ranges) == 1:
+            idxs = rect_indices(iy_ranges[0][0], iy_ranges[0][1], ip_min, ip_max, adb.yaw_bins)
+        else:
+            idxs = np.concatenate([
+                rect_indices(iy_ranges[0][0], iy_ranges[0][1], ip_min, ip_max, adb.yaw_bins),
+                rect_indices(iy_ranges[1][0], iy_ranges[1][1], ip_min, ip_max, adb.yaw_bins),
+            ], axis=0)
 
-        dx = adb.dx[idxs].astype(np.float64)
-        dy = adb.dy[idxs].astype(np.float64)
-        dz = adb.dz[idxs].astype(np.float64)
+        dx = adb.dx[idxs]
+        dy = adb.dy[idxs]
+        dz = adb.dz[idxs]
         px, py, pz = map(float, position)
 
         for tris, block_pos, p in cand_tri_arrays:
@@ -1257,21 +1270,26 @@ class BlockGeometryCache:
 # raster grid (ADB)
 # ------------------------------
 
+def to_bins(a, b, n):
+    i0 = clamp(int(math.floor(a)), 0, n - 1)
+    i1 = clamp(int(math.ceil (b)), 0, n - 1)
+    return i0, i1
+
 @nb.njit(cache=True, parallel=True, fastmath=True)
 def _rasterize_occluders_nb(
-    px: float, py: float, pz: float,
-    dx: np.ndarray, dy: np.ndarray, dz: np.ndarray,
+    position: np.ndarray,
+    directions: np.ndarray,
     aabbs: np.ndarray,
     occluder_ids: np.ndarray,
     depth: np.ndarray,
     top_idx: np.ndarray,
     max_depth: float
 ) -> None:
-    nrays = dx.shape[0]
+    nrays = directions.shape[0]
     na = aabbs.shape[0]
 
     for i in nb.prange(nrays):
-        di = dx[i]; dj = dy[i]; dk = dz[i]
+        dir_vec = directions[i]
         best_t = depth[i]
         best_oid = top_idx[i]
         for j in range(na):
@@ -1279,7 +1297,7 @@ def _rasterize_occluders_nb(
             ymin = aabbs[j, 2]; ymax = aabbs[j, 3]
             zmin = aabbs[j, 4]; zmax = aabbs[j, 5]
 
-            tmin, tmax = _ray_aabb_intersect_single(px, py, pz, di, dj, dk,
+            tmin, tmax = _ray_aabb_intersect_single(position, dir_vec,
                                                     xmin, xmax, ymin, ymax, zmin, zmax)
             if math.isnan(tmin):
                 continue
@@ -1446,15 +1464,10 @@ class HighResADB:
     def rasterize_occluders(self, occluder_aabbs: List[AABB], position: Vec3,
                             occluder_ids: Optional[List[int]] = None,
                             max_depth: float = 200.0) -> None:
-        px, py, pz = map(float, position)
-        dx = np.ascontiguousarray(self.dx, dtype=np.float64)
-        dy = np.ascontiguousarray(self.dy, dtype=np.float64)
-        dz = np.ascontiguousarray(self.dz, dtype=np.float64)
 
         Na = len(occluder_aabbs)
         if Na == 0:
             return
-
 
         if len(occluder_aabbs) < BVH_THRESHOLD:
             aabbs_arr = np.empty((Na, 6), dtype=np.float64)
@@ -1476,8 +1489,9 @@ class HighResADB:
 
             depth_arr = np.ascontiguousarray(self.depth, dtype=np.float64)
             top_idx_arr = np.ascontiguousarray(self.top_occluder_idx, dtype=np.int32)
+            directions = np.ascontiguousarray(np.stack((self.dx, self.dy, self.dz), axis=1))
 
-            _rasterize_occluders_nb(px, py, pz, dx, dy, dz, aabbs_arr, oc_ids, depth_arr, top_idx_arr, float(max_depth))
+            _rasterize_occluders_nb(position, directions, aabbs_arr, oc_ids, depth_arr, top_idx_arr, float(max_depth))
 
             self.depth = depth_arr
             self.top_occluder_idx = top_idx_arr
@@ -1531,9 +1545,10 @@ class HighResADB:
 
             depth_arr = np.ascontiguousarray(self.depth, dtype=np.float64)
             top_idx_arr = np.ascontiguousarray(self.top_occluder_idx, dtype=np.int32)
+            directions = np.ascontiguousarray(np.stack((self.dx, self.dy, self.dz), axis=1))
 
-            rasterize_with_bvh_nb(px, py, pz,
-                                dx, dy, dz,
+            rasterize_with_bvh_nb(position,
+                                directions,
                                 self.bvh_node_min, self.bvh_node_max,
                                 self.bvh_left, self.bvh_right,
                                 self.bvh_first, self.bvh_count,
@@ -1629,12 +1644,19 @@ class HighResADB:
 # polygon helpers
 # ------------------------------
 
-def _triangulate_convex_polygon(verts: np.ndarray) -> List[np.ndarray]:
-    tris: List[np.ndarray] = []
-    if verts.shape[0] < 3:
-        return tris
-    for i in range(1, verts.shape[0] - 1):
-        tris.append(np.stack([verts[0], verts[i], verts[i + 1]], axis=0))
+def _triangulate_convex_polygon(verts: np.ndarray) -> np.ndarray:
+    n_verts = verts.shape[0]
+    if n_verts < 3:
+        return np.empty((0, 3, 3), dtype=np.float64)
+
+    n_tris = n_verts - 2
+    tris = np.empty((n_tris, 3, 3), dtype=np.float64)
+
+    for i in range(1, n_verts - 1):
+        tris[i - 1, 0, :] = verts[0]
+        tris[i - 1, 1, :] = verts[i]
+        tris[i - 1, 2, :] = verts[i + 1]
+
     return tris
 
 @nb.njit(cache=True, fastmath=True)
@@ -1974,15 +1996,19 @@ def scan_target(
     adb.reset_depth()
 
     n_occluders = sum(1 for pos, base, _, _ in occluders if base not in ('minecraft:air', 'minecraft:water'))
-    coarse_aabbs = [None] * n_occluders
+    coarse_aabbs = np.empty((n_occluders, 6), dtype=np.float64)
     coarse_ids = np.empty(n_occluders, dtype=np.int32)
+
     i = 0
     for pos, base, _, _ in occluders:
         if base in ('minecraft:air', 'minecraft:water'):
             continue
-        coarse_aabbs[i] = make_aabb_from_block(pos)
+        coarse_aabbs[i, :] = make_aabb_from_block(pos)
         coarse_ids[i] = pos_to_occluder_id[tuple(pos)]
         i += 1
+
+    position = np.ascontiguousarray(np.array(position, dtype=np.float64))
+
 
     adb.rasterize_occluders(coarse_aabbs, position, occluder_ids=coarse_ids, max_depth=float('inf'))
 
@@ -1994,7 +2020,7 @@ def scan_target(
         adb.top_occluder_idx[:] = idx_baseline
 
     restore_baseline()
-    target_aabb = make_aabb_from_block(tpos)
+    target_aabb = np.asarray(make_aabb_from_block(tpos))
 
     block_geom_cache.analytic_refine_depth_in_target_cone(
         adb=adb,
@@ -2138,19 +2164,22 @@ def scan_targets(
     if not targets:
         return None
 
+    position = np.ascontiguousarray(np.array(position, dtype=np.float64))
+
     block_geom_cache = get_blockcache()
 
     adb = get_adb(adb_granularity[0], adb_granularity[1])
     adb.reset_depth()
 
     n_occluders = sum(1 for pos, base, _, _ in occluders if base not in ('minecraft:air', 'minecraft:water'))
-    coarse_aabbs = [None] * n_occluders
+    coarse_aabbs = np.empty((n_occluders, 6), dtype=np.float64)
     coarse_ids = np.empty(n_occluders, dtype=np.int32)
+
     i = 0
     for pos, base, _, _ in occluders:
         if base in ('minecraft:air', 'minecraft:water'):
             continue
-        coarse_aabbs[i] = make_aabb_from_block(pos)
+        coarse_aabbs[i, :] = make_aabb_from_block(pos)
         coarse_ids[i] = pos_to_occluder_id[tuple(pos)]
         i += 1
 
@@ -2168,7 +2197,7 @@ def scan_targets(
 
     for tpos, tbase, tshort, tmeta, tid, dist in targets:
         restore_baseline()
-        target_aabb = make_aabb_from_block(tpos)
+        target_aabb = np.asarray(make_aabb_from_block(tpos))
 
         block_geom_cache.analytic_refine_depth_in_target_cone(
             adb=adb,

@@ -93,7 +93,7 @@ Both return a `TargetInfo` object, containing:
 
 ---
 
-## 📖 Example
+## Example
 
 See [`miner.py`](miner.py) for an example script with configurable options.
 

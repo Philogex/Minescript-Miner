@@ -15,7 +15,7 @@ import numba as nb
 
 EPS = 1e-12
 INF = 1e300
-BVH_THRESHOLD = 8192
+BVH_THRESHOLD = 2048
 
 
 # ------------------------------
@@ -361,9 +361,9 @@ def yaw_pitch_to_dir_scalar(yaw, pitch):
 @nb.njit(cache=True, fastmath=True, parallel=True)
 def yaw_pitch_to_dir_vec(yaw_arr, pitch_arr):
     n = yaw_arr.shape[0]
-    dx = np.empty(n, dtype=np.float64)
-    dy = np.empty(n, dtype=np.float64)
-    dz = np.empty(n, dtype=np.float64)
+    dx = np.empty(n, dtype=np.float32)
+    dy = np.empty(n, dtype=np.float32)
+    dz = np.empty(n, dtype=np.float32)
     for i in nb.prange(n):
         y = yaw_arr[i]
         p = pitch_arr[i]
@@ -371,9 +371,9 @@ def yaw_pitch_to_dir_vec(yaw_arr, pitch_arr):
         sy = math.sin(y)
         cp = math.cos(p)
         sp = math.sin(p)
-        dx[i] = cy * cp
-        dy[i] = -sp
-        dz[i] = sy * cp
+        dx[i] = np.float32(cy * cp)
+        dy[i] = np.float32(-sp)
+        dz[i] = np.float32(sy * cp)
     return dx, dy, dz
 
 @nb.njit(cache=True, fastmath=True)
@@ -503,6 +503,67 @@ def face_and_uv_for_hitpoint_nb(aabb, hx, hy, hz):
         u = (hx - xmin) / (xmax - xmin)
         v = (hy - ymin) / (ymax - ymin)
     return fid, (max(0.0, min(1.0, u)), max(0.0, min(1.0, v)))
+
+
+@nb.njit(cache=True, parallel=True, fastmath=True)
+def face_and_uv_for_points_vec(aabb, hx_arr, hy_arr, hz_arr):
+    xmin, xmax, ymin, ymax, zmin, zmax = aabb
+    n = hx_arr.shape[0]
+    face_ids = np.empty(n, dtype=np.int32)
+    uvs = np.empty((n, 2), dtype=np.float64)
+    for i in nb.prange(n):
+        hx = hx_arr[i]; hy = hy_arr[i]; hz = hz_arr[i]
+        dxmin = abs(hx - xmin)
+        dxmax = abs(hx - xmax)
+        dymin = abs(hy - ymin)
+        dymax = abs(hy - ymax)
+        dzmin = abs(hz - zmin)
+        dzmax = abs(hz - zmax)
+        fid = 0
+        mind = dxmin
+        if dxmax < mind:
+            mind = dxmax; fid = 1
+        if dymin < mind:
+            mind = dymin; fid = 2
+        if dymax < mind:
+            mind = dymax; fid = 3
+        if dzmin < mind:
+            mind = dzmin; fid = 4
+        if dzmax < mind:
+            mind = dzmax; fid = 5
+
+        if fid == 0:
+            u = (hz - zmin) / (zmax - zmin)
+            v = (hy - ymin) / (ymax - ymin)
+        elif fid == 1:
+            u = (zmax - hz) / (zmax - zmin)
+            v = (hy - ymin) / (ymax - ymin)
+        elif fid == 2:
+            u = (hx - xmin) / (xmax - xmin)
+            v = (zmax - hz) / (zmax - zmin)
+        elif fid == 3:
+            u = (hx - xmin) / (xmax - xmin)
+            v = (hz - zmin) / (zmax - zmin)
+        elif fid == 4:
+            u = (xmax - hx) / (xmax - xmin)
+            v = (hy - ymin) / (ymax - ymin)
+        else:
+            u = (hx - xmin) / (xmax - xmin)
+            v = (hy - ymin) / (ymax - ymin)
+
+        if u < 0.0:
+            u = 0.0
+        elif u > 1.0:
+            u = 1.0
+        if v < 0.0:
+            v = 0.0
+        elif v > 1.0:
+            v = 1.0
+
+        face_ids[i] = fid
+        uvs[i, 0] = u
+        uvs[i, 1] = v
+    return face_ids, uvs
 
 
 # ------------------------------
@@ -773,6 +834,182 @@ def ray_aabb_intersection_vec(px, py, pz,
 
     return tmin_out, tmax_out
 
+@nb.njit(cache=True, parallel=True, fastmath=True)
+def ray_axis_aligned_rect_min_t_vec(px, py, pz,
+                                    dx, dy, dz,
+                                    axis_id, k,
+                                    umin, umax, vmin, vmax):
+    n = dx.shape[0]
+    tmin_out = np.full(n, np.inf, dtype=np.float64)
+    if axis_id == 0:
+        for i in nb.prange(n):
+            di = dx[i]
+            if not (di > EPS or di < -EPS):
+                continue
+            t = (k - px) / di
+            if t < 0.0:
+                continue
+            uy = py + dy[i] * t
+            vz = pz + dz[i] * t
+            if (uy < umin - EPS) or (uy > umax + EPS):
+                continue
+            if (vz < vmin - EPS) or (vz > vmax + EPS):
+                continue
+            tmin_out[i] = t
+    elif axis_id == 1:
+        for i in nb.prange(n):
+            di = dy[i]
+            if not (di > EPS or di < -EPS):
+                continue
+            t = (k - py) / di
+            if t < 0.0:
+                continue
+            ux = px + dx[i] * t
+            vz = pz + dz[i] * t
+            if (ux < umin - EPS) or (ux > umax + EPS):
+                continue
+            if (vz < vmin - EPS) or (vz > vmax + EPS):
+                continue
+            tmin_out[i] = t
+    else:
+        for i in nb.prange(n):
+            di = dz[i]
+            if not (di > EPS or di < -EPS):
+                continue
+            t = (k - pz) / di
+            if t < 0.0:
+                continue
+            ux = px + dx[i] * t
+            vy = py + dy[i] * t
+            if (ux < umin - EPS) or (ux > umax + EPS):
+                continue
+            if (vy < vmin - EPS) or (vy > vmax + EPS):
+                continue
+            tmin_out[i] = t
+    return tmin_out
+
+@nb.njit(cache=True, parallel=True, fastmath=True)
+def ray_axis_aligned_rect_min_t_into(px, py, pz,
+                                     dx, dy, dz,
+                                     axis_id, k,
+                                     umin, umax, vmin, vmax,
+                                     out_t):
+    """Same as ray_axis_aligned_rect_min_t_vec but writes into preallocated out_t."""
+    n = dx.shape[0]
+    if axis_id == 0:
+        for i in nb.prange(n):
+            di = dx[i]
+            t = np.inf
+            if di > EPS or di < -EPS:
+                t = (k - px) / di
+                if t >= 0.0:
+                    uy = py + dy[i] * t
+                    vz = pz + dz[i] * t
+                    if (uy < umin - EPS) or (uy > umax + EPS) or (vz < vmin - EPS) or (vz > vmax + EPS):
+                        t = np.inf
+            out_t[i] = t
+    elif axis_id == 1:
+        for i in nb.prange(n):
+            di = dy[i]
+            t = np.inf
+            if di > EPS or di < -EPS:
+                t = (k - py) / di
+                if t >= 0.0:
+                    ux = px + dx[i] * t
+                    vz = pz + dz[i] * t
+                    if (ux < umin - EPS) or (ux > umax + EPS) or (vz < vmin - EPS) or (vz > vmax + EPS):
+                        t = np.inf
+            out_t[i] = t
+    else:
+        for i in nb.prange(n):
+            di = dz[i]
+            t = np.inf
+            if di > EPS or di < -EPS:
+                t = (k - pz) / di
+                if t >= 0.0:
+                    ux = px + dx[i] * t
+                    vy = py + dy[i] * t
+                    if (ux < umin - EPS) or (ux > umax + EPS) or (vy < vmin - EPS) or (vy > vmax + EPS):
+                        t = np.inf
+            out_t[i] = t
+
+
+@nb.njit(cache=True, parallel=True, fastmath=True)
+def update_depth_with_face_masked(px, py, pz,
+                                  dx, dy, dz,
+                                  yaw_bins, pitch_bins,
+                                  yaw_ints, pitch_ints,
+                                  axis_id, k,
+                                  umin, umax, vmin, vmax,
+                                  depth, top_idx,
+                                  occluder_id, write_top, max_depth):
+    n = dx.shape[0]
+    for idx in nb.prange(n):
+        ip = idx // yaw_bins
+        iy = idx - ip * yaw_bins
+
+        in_pitch = False
+        for r in range(pitch_ints.shape[0]):
+            a = pitch_ints[r, 0]
+            b = pitch_ints[r, 1]
+            if ip >= a and ip <= b:
+                in_pitch = True
+                break
+        if not in_pitch:
+            continue
+
+        in_yaw = False
+        for r in range(yaw_ints.shape[0]):
+            a = yaw_ints[r, 0]
+            b = yaw_ints[r, 1]
+            if iy >= a and iy <= b:
+                in_yaw = True
+                break
+        if not in_yaw:
+            continue
+
+        dxi = dx[idx]
+        dyi = dy[idx]
+        dzi = dz[idx]
+
+        if axis_id == 0:
+            di = dxi
+            if not (di > EPS or di < -EPS):
+                continue
+            t = (k - px) / di
+            if t < 0.0 or t > max_depth or t >= depth[idx]:
+                continue
+            uy = py + dyi * t
+            vz = pz + dzi * t
+            if (uy < umin - EPS) or (uy > umax + EPS) or (vz < vmin - EPS) or (vz > vmax + EPS):
+                continue
+        elif axis_id == 1:
+            di = dyi
+            if not (di > EPS or di < -EPS):
+                continue
+            t = (k - py) / di
+            if t < 0.0 or t > max_depth or t >= depth[idx]:
+                continue
+            ux = px + dxi * t
+            vz = pz + dzi * t
+            if (ux < umin - EPS) or (ux > umax + EPS) or (vz < vmin - EPS) or (vz > vmax + EPS):
+                continue
+        else:
+            di = dzi
+            if not (di > EPS or di < -EPS):
+                continue
+            t = (k - pz) / di
+            if t < 0.0 or t > max_depth or t >= depth[idx]:
+                continue
+            ux = px + dxi * t
+            vy = py + dyi * t
+            if (ux < umin - EPS) or (ux > umax + EPS) or (vy < vmin - EPS) or (vy > vmax + EPS):
+                continue
+
+        depth[idx] = t
+        if write_top:
+            top_idx[idx] = occluder_id
+
 @nb.njit(cache=True, inline='always', fastmath=True)
 def _ray_aabb_intersect_single(position, direction,
                                xmin, xmax, ymin, ymax, zmin, zmax) -> Tuple[float, float]:
@@ -975,6 +1212,65 @@ def polygon_sphere_bounds_numba(verts: np.ndarray, px: float, py: float, pz: flo
             pitch_max = pitches[i]
     return yaw_min, yaw_max, pitch_min, pitch_max, dmin
 
+@nb.njit(cache=True, fastmath=True)
+def face_axis_sphere_bounds_nb(axis_id: int, k: float,
+                               umin: float, umax: float, vmin: float, vmax: float,
+                               px: float, py: float, pz: float) -> Tuple[float, float, float, float, float]:
+    sx = 0.0
+    sy = 0.0
+    pitch_min = INF
+    pitch_max = -INF
+    dmin = INF
+    for iu in range(2):
+        u = umin if iu == 0 else umax
+        for iv in range(2):
+            v = vmin if iv == 0 else vmax
+            if axis_id == 0:
+                cx = k; cy = u; cz = v
+            elif axis_id == 1:
+                cx = u; cy = k; cz = v
+            else:
+                cx = u; cy = v; cz = k
+            vx = cx - px
+            vy = cy - py
+            vz = cz - pz
+            yaw = math.atan2(vz, vx)
+            hyp = math.hypot(vx, vz)
+            pitch = -math.atan2(vy, hyp)
+            c = math.cos(yaw); s = math.sin(yaw)
+            sx += c; sy += s
+            if pitch < pitch_min:
+                pitch_min = pitch
+            if pitch > pitch_max:
+                pitch_max = pitch
+            dist = math.sqrt(vx*vx + vy*vy + vz*vz)
+            if dist < dmin:
+                dmin = dist
+
+    center = math.atan2(sy, sx)
+    yaw_min_rel = INF
+    yaw_max_rel = -INF
+    for iu in range(2):
+        u = umin if iu == 0 else umax
+        for iv in range(2):
+            v = vmin if iv == 0 else vmax
+            if axis_id == 0:
+                cx = k; cy = u; cz = v
+            elif axis_id == 1:
+                cx = u; cy = k; cz = v
+            else:
+                cx = u; cy = v; cz = k
+            yaw = math.atan2(cz - pz, cx - px)
+            a = normalize_angle_rad_nb(yaw - center)
+            if a < yaw_min_rel:
+                yaw_min_rel = a
+            if a > yaw_max_rel:
+                yaw_max_rel = a
+
+    yaw_min = normalize_angle_rad_nb(yaw_min_rel + center)
+    yaw_max = normalize_angle_rad_nb(yaw_max_rel + center)
+    return yaw_min, yaw_max, pitch_min, pitch_max, dmin
+
 class BlockGeometryCache:
     def __init__(self):
         self._cache: Dict[Tuple[str, FrozenSet[Tuple[str, Any]]], List[Dict[str, Any]]] = {}
@@ -1000,12 +1296,36 @@ class BlockGeometryCache:
     def _box_faces(xmin, xmax, ymin, ymax, zmin, zmax) -> List[Dict[str, Any]]:
         q = BlockGeometryCache._quad
         return [
-            {'verts': q((xmax, ymin, zmin), (xmax, ymax, zmin), (xmax, ymax, zmax), (xmax, ymin, zmax)), 'opaque': True},
-            {'verts': q((xmin, ymin, zmax), (xmin, ymax, zmax), (xmin, ymax, zmin), (xmin, ymin, zmin)), 'opaque': True},
-            {'verts': q((xmin, ymax, zmin), (xmax, ymax, zmin), (xmax, ymax, zmax), (xmin, ymax, zmax)), 'opaque': True},
-            {'verts': q((xmin, ymin, zmax), (xmax, ymin, zmax), (xmax, ymin, zmin), (xmin, ymin, zmin)), 'opaque': True},
-            {'verts': q((xmin, ymin, zmax), (xmin, ymax, zmax), (xmax, ymax, zmax), (xmax, ymin, zmax)), 'opaque': True},
-            {'verts': q((xmax, ymin, zmin), (xmax, ymax, zmin), (xmin, ymax, zmin), (xmin, ymin, zmin)), 'opaque': True},
+            {
+                'verts': q((xmax, ymin, zmin), (xmax, ymax, zmin), (xmax, ymax, zmax), (xmax, ymin, zmax)),
+                'axis_desc': (0, float(xmax), float(ymin), float(ymax), float(zmin), float(zmax)),
+                'opaque': True
+            },
+            {
+                'verts': q((xmin, ymin, zmax), (xmin, ymax, zmax), (xmin, ymax, zmin), (xmin, ymin, zmin)),
+                'axis_desc': (0, float(xmin), float(ymin), float(ymax), float(zmin), float(zmax)),
+                'opaque': True
+            },
+            {
+                'verts': q((xmin, ymax, zmin), (xmax, ymax, zmin), (xmax, ymax, zmax), (xmin, ymax, zmax)),
+                'axis_desc': (1, float(ymax), float(xmin), float(xmax), float(zmin), float(zmax)),
+                'opaque': True
+            },
+            {
+                'verts': q((xmin, ymin, zmax), (xmax, ymin, zmax), (xmax, ymin, zmin), (xmin, ymin, zmin)),
+                'axis_desc': (1, float(ymin), float(xmin), float(xmax), float(zmin), float(zmax)),
+                'opaque': True
+            },
+            {
+                'verts': q((xmin, ymin, zmax), (xmin, ymax, zmax), (xmax, ymax, zmax), (xmax, ymin, zmax)),
+                'axis_desc': (2, float(zmax), float(xmin), float(xmax), float(ymin), float(ymax)),
+                'opaque': True
+            },
+            {
+                'verts': q((xmax, ymin, zmin), (xmax, ymax, zmin), (xmin, ymax, zmin), (xmin, ymin, zmin)),
+                'axis_desc': (2, float(zmin), float(xmin), float(xmax), float(ymin), float(ymax)),
+                'opaque': True
+            },
         ]
 
     def get_polygons_for_block(self, block_id: str, meta: Optional[Mapping[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -1097,12 +1417,20 @@ class BlockGeometryCache:
             v7 = (x0, ymax, zmax)
 
         q = self._quad
-        faces.extend([
-            {'verts': q(v0, v1, v2, v3), 'opaque': True},
-            {'verts': q(v4, v5, v6, v7), 'opaque': True},
-            {'verts': q(v0, v4, v7, v3), 'opaque': True},
-            {'verts': q(v1, v5, v6, v2), 'opaque': True},
-        ])
+        if dx >= dz:
+            faces.extend([
+                {'verts': q(v0, v1, v2, v3), 'axis_desc': (2, float(z0), float(xmin), float(xmax), float(ymin), float(ymax)), 'opaque': True},
+                {'verts': q(v4, v5, v6, v7), 'axis_desc': (2, float(z1), float(xmin), float(xmax), float(ymin), float(ymax)), 'opaque': True},
+                {'verts': q(v0, v4, v7, v3), 'axis_desc': (0, float(xmin), float(ymin), float(ymax), float(z0), float(z1)), 'opaque': True},
+                {'verts': q(v1, v5, v6, v2), 'axis_desc': (0, float(xmax), float(ymin), float(ymax), float(z0), float(z1)), 'opaque': True},
+            ])
+        else:
+            faces.extend([
+                {'verts': q(v0, v1, v2, v3), 'axis_desc': (2, float(zmin), float(x0), float(x1), float(ymin), float(ymax)), 'opaque': True},
+                {'verts': q(v4, v5, v6, v7), 'axis_desc': (2, float(zmax), float(x0), float(x1), float(ymin), float(ymax)), 'opaque': True},
+                {'verts': q(v0, v4, v7, v3), 'axis_desc': (0, float(x0), float(ymin), float(ymax), float(zmin), float(zmax)), 'opaque': True},
+                {'verts': q(v1, v5, v6, v2), 'axis_desc': (0, float(x1), float(ymin), float(ymax), float(zmin), float(zmax)), 'opaque': True},
+            ])
         return faces
 
     def _build_stair(self, meta: Mapping[str, Any]) -> List[Dict[str, Any]]:
@@ -1165,14 +1493,46 @@ class BlockGeometryCache:
         out = []
         base_off = np.array([bx, by, bz], dtype=np.float64)
         for p in base:
-            out.append({'verts': p['verts'] + base_off, 'opaque': p.get('opaque', True),
+            v = p['verts'] + base_off
+            ad = p.get('axis_desc', None)
+            if ad is not None:
+                axis_id, k, umin, umax, vmin, vmax = ad
+                if axis_id == 0:
+                    ad_w = (0, float(k + bx), float(umin + by), float(umax + by), float(vmin + bz), float(vmax + bz))
+                elif axis_id == 1:
+                    ad_w = (1, float(k + by), float(umin + bx), float(umax + bx), float(vmin + bz), float(vmax + bz))
+                else:
+                    ad_w = (2, float(k + bz), float(umin + bx), float(umax + bx), float(vmin + by), float(vmax + by))
+            else:
+                ad_w = None
+
+            out.append({'verts': v, 'opaque': p.get('opaque', True),
+                        'axis_desc': ad_w,
                         'block': (block_pos, block_type, meta)})
+        return out
+
+    def world_faces(self, block_pos: BlockPos, block_type: str, meta: Optional[Mapping[str, Any]] = None) -> List[Tuple[int, float, float, float, float, float]]:
+        bx, by, bz = block_pos
+        base = self.get_polygons_for_block(block_type, meta)
+        out: List[Tuple[int, float, float, float, float, float]] = []
+        for p in base:
+            ad = p.get('axis_desc', None)
+            if ad is None:
+                continue
+            axis_id, k, umin, umax, vmin, vmax = ad
+            if axis_id == 0:
+                out.append((0, float(k + bx), float(umin + by), float(umax + by), float(vmin + bz), float(vmax + bz)))
+            elif axis_id == 1:
+                out.append((1, float(k + by), float(umin + bx), float(umax + bx), float(vmin + bz), float(vmax + bz)))
+            else:
+                out.append((2, float(k + bz), float(umin + bx), float(umax + bx), float(vmin + by), float(vmax + by)))
         return out
 
     def polygon_sphere_bounds(self, verts_world, position):
         verts = np.ascontiguousarray(np.asarray(verts_world, dtype=np.float64), dtype=np.float64)
         px, py, pz = map(float, position)
         return polygon_sphere_bounds_numba(verts, px, py, pz)
+
     
     def _rect_indices(self, iy0, iy1, ip0, ip1, yaw_bins):
         iy = np.arange(iy0, iy1 + 1, dtype=np.int32)
@@ -1197,73 +1557,232 @@ class BlockGeometryCache:
         tpmin_m = tpmin - pitch_margin
         tpmax_m = tpmax + pitch_margin
 
-        cand_tri_arrays = []
+        px, py, pz = map(float, position)
+        yaw_span = (adb.yaw_max - adb.yaw_min)
+        pitch_span = (adb.pitch_max - adb.pitch_min)
+
+        ty_a = (normalize_angle_rad(tymin_m) - adb.yaw_min) / yaw_span * adb.yaw_bins
+        ty_b = (normalize_angle_rad(tymax_m) - adb.yaw_min) / yaw_span * adb.yaw_bins
+        if (tymax_m - tymin_m) > math.pi * 1.5:
+            targ_iy_ranges = [(0, adb.yaw_bins - 1)]
+        else:
+            if ty_b >= ty_a:
+                targ_iy_ranges = [to_bins(ty_a, ty_b, adb.yaw_bins)]
+            else:
+                i0a, i1a = to_bins(0, ty_b, adb.yaw_bins)
+                i0b, i1b = to_bins(ty_a, adb.yaw_bins - 1, adb.yaw_bins)
+                targ_iy_ranges = [(i0a, i1a), (i0b, i1b)]
+
+        ip_min_f = (tpmin_m - adb.pitch_min) / pitch_span * adb.pitch_bins
+        ip_max_f = (tpmax_m - adb.pitch_min) / pitch_span * adb.pitch_bins
+        targ_ip_min = clamp(int(math.floor(ip_min_f)), 0, adb.pitch_bins - 1)
+        targ_ip_max = clamp(int(math.ceil (ip_max_f)), 0, adb.pitch_bins - 1)
+
+        filtered_blocks: List[Tuple[BlockPos, str, str, Optional[Dict[str, Any]]]] = []
         for (pos, base, short_type, meta) in blocks:
-            polys = self.world_polygons(pos, base, meta)
-            for p in polys:
-                verts = p['verts']
-                yaw_min, yaw_max, pitch_min, pitch_max, dmin = self.polygon_sphere_bounds(verts, position)
+            block_aabb = make_aabb_from_block(pos)
+            bymin, bymax, bpmin, bpmax = angular_bounds_for_aabb_nb(block_aabb, position)
+            if (bpmax < tpmin_m) or (bpmin > tpmax_m):
+                continue
+            if not yaw_intervals_overlap(bymin, bymax, tymin_m, tymax_m):
+                continue
+            filtered_blocks.append((pos, base, short_type, meta))
+
+        y_mask = np.zeros(adb.yaw_bins, dtype=np.bool_)
+        p_mask = np.zeros(adb.pitch_bins, dtype=np.bool_)
+        any_candidates = False
+        for (pos, base, short_type, meta) in filtered_blocks:
+            faces = self.world_faces(pos, base, meta)
+            if not faces:
+                continue
+            for desc in faces:
+                axis_id, kf, umin, umax, vmin, vmax = desc
+                yaw_min, yaw_max, pitch_min, pitch_max, dmin = face_axis_sphere_bounds_nb(
+                    int(axis_id), float(kf), float(umin), float(umax), float(vmin), float(vmax),
+                    float(px), float(py), float(pz)
+                )
+                if dmin > max_depth:
+                    continue
+                fy_a = (normalize_angle_rad(yaw_min) - adb.yaw_min) / yaw_span * adb.yaw_bins
+                fy_b = (normalize_angle_rad(yaw_max) - adb.yaw_min) / yaw_span * adb.yaw_bins
+                if fy_b >= fy_a:
+                    face_iy_ranges = [to_bins(fy_a, fy_b, adb.yaw_bins)]
+                else:
+                    i0a, i1a = to_bins(0, fy_b, adb.yaw_bins)
+                    i0b, i1b = to_bins(fy_a, adb.yaw_bins - 1, adb.yaw_bins)
+                    face_iy_ranges = [(i0a, i1a), (i0b, i1b)]
+
+                fp_min_f = (pitch_min - adb.pitch_min) / pitch_span * adb.pitch_bins
+                fp_max_f = (pitch_max - adb.pitch_min) / pitch_span * adb.pitch_bins
+                fp0 = clamp(int(math.floor(fp_min_f)), 0, adb.pitch_bins - 1)
+                fp1 = clamp(int(math.ceil (fp_max_f)), 0, adb.pitch_bins - 1)
+
+                ip0 = max(fp0, targ_ip_min)
+                ip1 = min(fp1, targ_ip_max)
+                if ip1 < ip0:
+                    continue
+                yaw_overlap = False
+                for (ty0, ty1) in targ_iy_ranges:
+                    for (fy0, fy1) in face_iy_ranges:
+                        iy0 = max(ty0, fy0)
+                        iy1 = min(ty1, fy1)
+                        if iy1 >= iy0:
+                            y_mask[iy0:iy1+1] = True
+                            yaw_overlap = True
+                if not yaw_overlap:
+                    continue
+                p_mask[ip0:ip1+1] = True
+                any_candidates = True
+
+        if not any_candidates:
+            return
+
+        def _mask_to_intervals(mask: np.ndarray):
+            out = []
+            n = mask.shape[0]
+            i = 0
+            while i < n:
+                while i < n and not mask[i]:
+                    i += 1
+                if i >= n:
+                    break
+                j = i
+                while j + 1 < n and mask[j + 1]:
+                    j += 1
+                out.append((i, j))
+                i = j + 1
+            return out
+
+        iy_intervals = _mask_to_intervals(y_mask)
+        ip_intervals = _mask_to_intervals(p_mask)
+        if not iy_intervals or not ip_intervals:
+            return
+
+        iy_arr = np.ascontiguousarray(np.array(iy_intervals, dtype=np.int32))
+        ip_arr = np.ascontiguousarray(np.array(ip_intervals, dtype=np.int32))
+
+        idx_list = []
+        for (iy0, iy1) in iy_intervals:
+            for (ip0, ip1) in ip_intervals:
+                idx_list.append(rect_indices(iy0, iy1, ip0, ip1, adb.yaw_bins))
+        if len(idx_list) == 1:
+            idxs = idx_list[0]
+        else:
+            idxs = np.concatenate(idx_list, axis=0)
+
+        dx_sel = adb.dx[idxs]
+        dy_sel = adb.dy[idxs]
+        dz_sel = adb.dz[idxs]
+        cur_depth_sel = adb.depth[idxs]
+        total_bins_sel = int(cur_depth_sel.shape[0])
+        min_hit_fraction = 0.03
+        min_hits_required = max(1, int(math.ceil(min_hit_fraction * total_bins_sel)))
+
+        slice_threshold = max(1024, adb.N // 8)
+        use_slice = (idxs.shape[0] <= slice_threshold)
+        if use_slice:
+            tbuf_sel = adb._scratch_t[:idxs.shape[0]]
+
+        candidate_blocks: List[Tuple[BlockPos, str, str, Optional[Dict[str, Any]]]] = []
+        for (pos, base, short_type, meta) in filtered_blocks:
+            xmin, xmax, ymin, ymax, zmin, zmax = (float(v) for v in make_aabb_from_block(pos))
+            tmin_b, tmax_b = ray_aabb_intersection_vec(px, py, pz, dx_sel, dy_sel, dz_sel, xmin, xmax, ymin, ymax, zmin, zmax)
+            tblock = np.where(~np.isnan(tmin_b), np.where(tmin_b >= 0.0, tmin_b, tmax_b), np.nan)
+            mask_possible = (~np.isnan(tblock)) & (tblock <= cur_depth_sel + EPS)
+            if int(np.count_nonzero(mask_possible)) >= min_hits_required:
+                candidate_blocks.append((pos, base, short_type, meta))
+
+        if candidate_blocks:
+            candidate_blocks.sort(key=lambda e: (e[0][0] + 0.5 - px) * (e[0][0] + 0.5 - px) +
+                                              (e[0][1] + 0.5 - py) * (e[0][1] + 0.5 - py) +
+                                              (e[0][2] + 0.5 - pz) * (e[0][2] + 0.5 - pz))
+
+        has_dx_pos = np.any(dx_sel > 0.0)
+        has_dx_neg = np.any(dx_sel < 0.0)
+        has_dy_pos = np.any(dy_sel > 0.0)
+        has_dy_neg = np.any(dy_sel < 0.0)
+        has_dz_pos = np.any(dz_sel > 0.0)
+        has_dz_neg = np.any(dz_sel < 0.0)
+
+        for (pos, base, short_type, meta) in candidate_blocks:
+            faces = self.world_faces(pos, base, meta)
+            if not faces:
+                continue
+            block_pos = pos
+            for desc in faces:
+                axis_id, k, umin, umax, vmin, vmax = desc
+                if axis_id == 0:
+                    dk = k - px
+                    if (dk > 0.0 and not has_dx_pos) or (dk < 0.0 and not has_dx_neg):
+                        continue
+                elif axis_id == 1:
+                    dk = k - py
+                    if (dk > 0.0 and not has_dy_pos) or (dk < 0.0 and not has_dy_neg):
+                        continue
+                else:
+                    dk = k - pz
+                    if (dk > 0.0 and not has_dz_pos) or (dk < 0.0 and not has_dz_neg):
+                        continue
+                yaw_min, yaw_max, pitch_min, pitch_max, dmin = face_axis_sphere_bounds_nb(
+                    int(axis_id), float(k), float(umin), float(umax), float(vmin), float(vmax),
+                    float(px), float(py), float(pz)
+                )
                 if dmin > max_depth:
                     continue
                 if (pitch_max < tpmin_m) or (pitch_min > tpmax_m):
                     continue
-                if not yaw_intervals_overlap(yaw_min, yaw_max, tymin_m, tymax_m):
+                fy_a = (normalize_angle_rad(yaw_min) - adb.yaw_min) / yaw_span * adb.yaw_bins
+                fy_b = (normalize_angle_rad(yaw_max) - adb.yaw_min) / yaw_span * adb.yaw_bins
+                if fy_b >= fy_a:
+                    face_iy_ranges = [to_bins(fy_a, fy_b, adb.yaw_bins)]
+                else:
+                    i0a, i1a = to_bins(0, fy_b, adb.yaw_bins)
+                    i0b, i1b = to_bins(fy_a, adb.yaw_bins - 1, adb.yaw_bins)
+                    face_iy_ranges = [(i0a, i1a), (i0b, i1b)]
+                yaw_overlap = False
+                for (fy0, fy1) in face_iy_ranges:
+                    for (iy0, iy1) in iy_intervals:
+                        if min(fy1, iy1) >= max(fy0, iy0):
+                            yaw_overlap = True
+                            break
+                    if yaw_overlap:
+                        break
+                if not yaw_overlap:
                     continue
-                tri_list = _triangulate_convex_polygon(verts)
-                if not tri_list.any():
-                    continue
-                tris = np.asarray(tri_list, copy=False)
-                cand_tri_arrays.append((tris, p.get('block', (None,))[0], p))
 
-        if not cand_tri_arrays:
-            return
-
-        yaw_span = (adb.yaw_max - adb.yaw_min)
-        pitch_span = (adb.pitch_max - adb.pitch_min)
-        iy_min_f = (normalize_angle_rad(tymin_m) - adb.yaw_min) / yaw_span * adb.yaw_bins
-        iy_max_f = (normalize_angle_rad(tymax_m) - adb.yaw_min) / yaw_span * adb.yaw_bins
-        if (tymax_m - tymin_m) > math.pi * 1.5:
-            iy_ranges = [(0, adb.yaw_bins - 1)]
-        else:
-            a, b = iy_min_f, iy_max_f
-            if b >= a:
-                iy_ranges = [to_bins(a, b, adb.yaw_bins)]
-            else:
-                i0a, i1a = to_bins(0, b, adb.yaw_bins)
-                i0b, i1b = to_bins(a, adb.yaw_bins - 1, adb.yaw_bins)
-                iy_ranges = [(i0a, i1a), (i0b, i1b)]
-
-        ip_min_f = (tpmin_m - adb.pitch_min) / pitch_span * adb.pitch_bins
-        ip_max_f = (tpmax_m - adb.pitch_min) / pitch_span * adb.pitch_bins
-        ip_min = clamp(int(math.floor(ip_min_f)), 0, adb.pitch_bins - 1)
-        ip_max = clamp(int(math.ceil (ip_max_f)), 0, adb.pitch_bins - 1)
-
-        if len(iy_ranges) == 1:
-            idxs = rect_indices(iy_ranges[0][0], iy_ranges[0][1], ip_min, ip_max, adb.yaw_bins)
-        else:
-            idxs = np.concatenate([
-                rect_indices(iy_ranges[0][0], iy_ranges[0][1], ip_min, ip_max, adb.yaw_bins),
-                rect_indices(iy_ranges[1][0], iy_ranges[1][1], ip_min, ip_max, adb.yaw_bins),
-            ], axis=0)
-
-        dx = adb.dx[idxs]
-        dy = adb.dy[idxs]
-        dz = adb.dz[idxs]
-        px, py, pz = map(float, position)
-
-        for tris, block_pos, p in cand_tri_arrays:
-            tmin_poly = ray_triangles_min_t_nb_parallel(px, py, pz, dx, dy, dz, tris)
-            mask_hit = (tmin_poly < np.inf) & (tmin_poly >= 0.0) & (tmin_poly <= max_depth)
-            if not np.any(mask_hit):
-                continue
-            better = mask_hit & (tmin_poly < adb.depth[idxs])
-            if not np.any(better):
-                continue
-            adb.depth[idxs[better]] = tmin_poly[better]
-            if pos_to_occluder_id is not None and block_pos is not None:
-                oid = pos_to_occluder_id.get(block_pos, -1)
-                if oid >= 0:
-                    adb.top_occluder_idx[idxs[better]] = int(oid)
+                if use_slice:
+                    ray_axis_aligned_rect_min_t_into(px, py, pz,
+                                                     dx_sel, dy_sel, dz_sel,
+                                                     int(axis_id), float(k),
+                                                     float(umin), float(umax), float(vmin), float(vmax),
+                                                     tbuf_sel)
+                    mask_hit = (tbuf_sel < np.inf) & (tbuf_sel >= 0.0) & (tbuf_sel <= max_depth)
+                    if not np.any(mask_hit):
+                        continue
+                    better = mask_hit & (tbuf_sel < cur_depth_sel)
+                    if not np.any(better):
+                        continue
+                    adb.depth[idxs[better]] = tbuf_sel[better]
+                    if pos_to_occluder_id is not None and block_pos is not None:
+                        oid = pos_to_occluder_id.get(block_pos, -1)
+                        if oid is not None and oid >= 0:
+                            adb.top_occluder_idx[idxs[better]] = int(oid)
+                else:
+                    oid = -1
+                    write_top = False
+                    if pos_to_occluder_id is not None and block_pos is not None:
+                        oid = int(pos_to_occluder_id.get(block_pos, -1))
+                        write_top = (oid >= 0)
+                    update_depth_with_face_masked(
+                        float(px), float(py), float(pz),
+                        adb.dx, adb.dy, adb.dz,
+                        int(adb.yaw_bins), int(adb.pitch_bins),
+                        iy_arr, ip_arr,
+                        int(axis_id), float(k),
+                        float(umin), float(umax), float(vmin), float(vmax),
+                        adb.depth, adb.top_occluder_idx,
+                        int(oid), write_top, float(max_depth)
+                    )
 
 
 # ------------------------------
@@ -1418,14 +1937,14 @@ class HighResADB:
         self.pitch_samples = self.pitch_min + (np.arange(pitch_bins) + 0.5) * self.pitch_step
 
         YA, PA = np.meshgrid(self.yaw_samples, self.pitch_samples, indexing='xy')
-        YAf = YA.ravel().astype(np.float64)
-        PAf = PA.ravel().astype(np.float64)
-        self.yaw_arr = np.ascontiguousarray(YAf)
-        self.pitch_arr = np.ascontiguousarray(PAf)
+        YAf = YA.ravel().astype(np.float32)
+        PAf = PA.ravel().astype(np.float32)
+        self.yaw_arr = np.ascontiguousarray(YAf, dtype=np.float32)
+        self.pitch_arr = np.ascontiguousarray(PAf, dtype=np.float32)
         self.dx, self.dy, self.dz = yaw_pitch_to_dir_vec(YAf, PAf)
-        self.dx = np.ascontiguousarray(self.dx, dtype=np.float64)
-        self.dy = np.ascontiguousarray(self.dy, dtype=np.float64)
-        self.dz = np.ascontiguousarray(self.dz, dtype=np.float64)
+        self.dx = np.ascontiguousarray(self.dx, dtype=np.float32)
+        self.dy = np.ascontiguousarray(self.dy, dtype=np.float32)
+        self.dz = np.ascontiguousarray(self.dz, dtype=np.float32)
         self.N = self.dx.size
 
         self.depth = np.full(self.N, np.inf, dtype=np.float64)
@@ -1438,6 +1957,8 @@ class HighResADB:
             self.pitch_step,
             int(self.yaw_bins), 
             int(self.pitch_bins))
+
+        self._scratch_t = np.empty(self.N, dtype=np.float64)
 
     def reset_depth(self) -> None:
         self.depth.fill(np.inf)
@@ -1489,7 +2010,10 @@ class HighResADB:
 
             depth_arr = np.ascontiguousarray(self.depth, dtype=np.float64)
             top_idx_arr = np.ascontiguousarray(self.top_occluder_idx, dtype=np.int32)
-            directions = np.ascontiguousarray(np.stack((self.dx, self.dy, self.dz), axis=1))
+            directions = np.ascontiguousarray(
+                np.stack((self.dx.astype(np.float64), self.dy.astype(np.float64), self.dz.astype(np.float64)), axis=1),
+                dtype=np.float64
+            )
 
             _rasterize_occluders_nb(position, directions, aabbs_arr, oc_ids, depth_arr, top_idx_arr, float(max_depth))
 
@@ -1545,7 +2069,10 @@ class HighResADB:
 
             depth_arr = np.ascontiguousarray(self.depth, dtype=np.float64)
             top_idx_arr = np.ascontiguousarray(self.top_occluder_idx, dtype=np.int32)
-            directions = np.ascontiguousarray(np.stack((self.dx, self.dy, self.dz), axis=1))
+            directions = np.ascontiguousarray(
+                np.stack((self.dx.astype(np.float64), self.dy.astype(np.float64), self.dz.astype(np.float64)), axis=1),
+                dtype=np.float64
+            )
 
             rasterize_with_bvh_nb(position,
                                 directions,
@@ -1641,134 +2168,58 @@ class HighResADB:
 
 
 # ------------------------------
-# polygon helpers
-# ------------------------------
-
-def _triangulate_convex_polygon(verts: np.ndarray) -> np.ndarray:
-    n_verts = verts.shape[0]
-    if n_verts < 3:
-        return np.empty((0, 3, 3), dtype=np.float64)
-
-    n_tris = n_verts - 2
-    tris = np.empty((n_tris, 3, 3), dtype=np.float64)
-
-    for i in range(1, n_verts - 1):
-        tris[i - 1, 0, :] = verts[0]
-        tris[i - 1, 1, :] = verts[i]
-        tris[i - 1, 2, :] = verts[i + 1]
-
-    return tris
-
-@nb.njit(cache=True, fastmath=True)
-def _ray_triangle_t_single(px, py, pz,
-                           dx, dy, dz,
-                           v0, v1, v2):
-    e1x = v1[0] - v0[0]
-    e1y = v1[1] - v0[1]
-    e1z = v1[2] - v0[2]
-    e2x = v2[0] - v0[0]
-    e2y = v2[1] - v0[1]
-    e2z = v2[2] - v0[2]
-
-    px = dy * e2z - dz * e2y
-    py = dz * e2x - dx * e2z
-    pz = dx * e2y - dy * e2x
-    det = e1x * px + e1y * py + e1z * pz
-    if abs(det) <= EPS:
-        return math.inf
-    inv_det = 1.0 / det
-
-    tx = px - v0[0]
-    ty = py - v0[1]
-    tz = pz - v0[2]
-
-    u = (tx * px + ty * py + tz * pz) * inv_det
-    if u < -EPS or u > 1.0 + EPS:
-        return math.inf
-
-    qx = ty * e1z - tz * e1y
-    qy = tz * e1x - tx * e1z
-    qz = tx * e1y - ty * e1x
-
-    v = (dx * qx + dy * qy + dz * qz) * inv_det
-    if v < -EPS or (u + v) > 1.0 + EPS:
-        return math.inf
-
-    t = (e2x * qx + e2y * qy + e2z * qz) * inv_det
-    if t >= 0.0:
-        return t
-    return math.inf
-
-@nb.njit(cache=True, parallel=False, fastmath=True)
-def ray_triangles_min_t_nb(px, py, pz,
-                           dx_arr, dy_arr, dz_arr,
-                           tris):
-    n_rays = dx_arr.shape[0]
-    n_tris = tris.shape[0]
-    tmin = np.full(n_rays, np.inf, dtype=np.float64)
-
-    for i in range(n_rays):
-        dx = dx_arr[i]; dy = dy_arr[i]; dz = dz_arr[i]
-        best = math.inf
-        for j in range(n_tris):
-            v0 = tris[j, 0]
-            v1 = tris[j, 1]
-            v2 = tris[j, 2]
-            t = _ray_triangle_t_single(px, py, pz, dx, dy, dz, v0, v1, v2)
-            if t < best:
-                best = t
-        tmin[i] = best
-    return tmin
-
-@nb.njit(cache=True, parallel=True, fastmath=True)
-def ray_triangles_min_t_nb_parallel(px, py, pz,
-                                    dx_arr, dy_arr, dz_arr,
-                                    tris):
-    n_rays = dx_arr.shape[0]
-    tmin = np.full(n_rays, np.inf, dtype=np.float64)
-    for i in nb.prange(n_rays):
-        dx = dx_arr[i]; dy = dy_arr[i]; dz = dz_arr[i]
-        best = math.inf
-        for j in range(tris.shape[0]):
-            v0 = tris[j, 0]
-            v1 = tris[j, 1]
-            v2 = tris[j, 2]
-            t = _ray_triangle_t_single(px, py, pz, dx, dy, dz, v0, v1, v2)
-            if t < best:
-                best = t
-        tmin[i] = best
-    return tmin
-
-
-# ------------------------------
 # visibility clustering and aim
 # ------------------------------
 
-def _find_connected_components(visible_mask_2d: np.ndarray) -> Tuple[np.ndarray, int]:
-    H, W = visible_mask_2d.shape
-    labels = np.zeros_like(visible_mask_2d, dtype=np.int32)
+@nb.njit(cache=True, fastmath=True)
+def _find_connected_components_nb(visible_mask_2d: np.ndarray) -> Tuple[np.ndarray, int]:
+    H = visible_mask_2d.shape[0]
+    W = visible_mask_2d.shape[1]
+    labels = np.zeros((H, W), dtype=np.int32)
     current_label = 0
-    neigh = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    stack_r = np.empty(H * W, dtype=np.int32)
+    stack_c = np.empty(H * W, dtype=np.int32)
 
     for r in range(H):
         for c in range(W):
-            if not visible_mask_2d[r, c] or labels[r, c] != 0:
+            if (not visible_mask_2d[r, c]) or (labels[r, c] != 0):
                 continue
             current_label += 1
-            stack = [(r, c)]
+            sp = 0
+            stack_r[sp] = r
+            stack_c[sp] = c
+            sp += 1
             labels[r, c] = current_label
-            while stack:
-                rr, cc = stack.pop()
-                for dr, dc in neigh:
-                    nr = rr + dr
-                    nc = cc + dc
-                    if nr < 0 or nr >= H:
-                        continue
-                    nc_wrapped = (nc + W) % W
-                    if not visible_mask_2d[nr, nc_wrapped] or labels[nr, nc_wrapped] != 0:
-                        continue
-                    labels[nr, nc_wrapped] = current_label
-                    stack.append((nr, nc_wrapped))
+            while sp > 0:
+                sp -= 1
+                rr = stack_r[sp]
+                cc = stack_c[sp]
+                nr = rr - 1
+                if nr >= 0:
+                    nc = cc
+                    if visible_mask_2d[nr, nc] and labels[nr, nc] == 0:
+                        labels[nr, nc] = current_label
+                        stack_r[sp] = nr; stack_c[sp] = nc; sp += 1
+                nr = rr + 1
+                if nr < H:
+                    nc = cc
+                    if visible_mask_2d[nr, nc] and labels[nr, nc] == 0:
+                        labels[nr, nc] = current_label
+                        stack_r[sp] = nr; stack_c[sp] = nc; sp += 1
+                nr = rr
+                nc = cc - 1
+                if nc < 0:
+                    nc = W - 1
+                if visible_mask_2d[nr, nc] and labels[nr, nc] == 0:
+                    labels[nr, nc] = current_label
+                    stack_r[sp] = nr; stack_c[sp] = nc; sp += 1
+                nc = cc + 1
+                if nc >= W:
+                    nc = 0
+                if visible_mask_2d[nr, nc] and labels[nr, nc] == 0:
+                    labels[nr, nc] = current_label
+                    stack_r[sp] = nr; stack_c[sp] = nc; sp += 1
+
     return labels, current_label
 
 def compute_visible_face_centroid_aim_with_clustering(
@@ -1788,7 +2239,7 @@ def compute_visible_face_centroid_aim_with_clustering(
     H = adb.pitch_bins
     W = adb.yaw_bins
     full_mask_2d = visible_mask_flat.reshape((H, W)).copy()
-    labels_2d, n_components = _find_connected_components(full_mask_2d)
+    labels_2d, n_components = _find_connected_components_nb(full_mask_2d)
     if n_components == 0:
         return None
 
@@ -2055,14 +2506,10 @@ def scan_target(
     hits_z = position[2] + dzv * tvis
     hit_points = np.stack((hits_x, hits_y, hits_z), axis=1)
 
-    face_ids = np.empty(hits_n, dtype=np.int32)
-    uvs_arr = np.empty((hits_n, 2), dtype=np.float64)
-    for j in range(hits_n):
-        hx, hy, hz = hit_points[j]
-        fid, (u, v) = face_and_uv_for_hitpoint_nb(target_aabb, hx, hy, hz)
-        face_ids[j] = fid
-        uvs_arr[j, 0] = u
-        uvs_arr[j, 1] = v
+    face_ids, uvs_arr = face_and_uv_for_points_vec(target_aabb,
+                                                   hits_x.astype(np.float64),
+                                                   hits_y.astype(np.float64),
+                                                   hits_z.astype(np.float64))
 
     yaw_all = np.arctan2(adb.dz[idxs], adb.dx[idxs])
     pitch_all = -np.arctan2(adb.dy[idxs], np.hypot(adb.dx[idxs], adb.dz[idxs]))
@@ -2099,7 +2546,10 @@ def scan_target(
     if (adb.top_occluder_idx[center_idx] == int(tid)) and (not np.isnan(ttarget[center_idx])):
         chosen_idx = center_idx
     else:
-        chosen_idx = adb.find_nearest_visible_pixel(ttarget, tid, center_idx, max_radius_px=12)
+        chosen_idx = int(idxs[0]) if idxs.size > 0 else None
+
+    if chosen_idx is None:
+        return None
 
     if chosen_idx is None:
         return None
@@ -2232,14 +2682,10 @@ def scan_targets(
         hits_z = position[2] + dzv * tvis
         hit_points = np.stack((hits_x, hits_y, hits_z), axis=1)
 
-        face_ids = np.empty(hits_n, dtype=np.int32)
-        uvs_arr = np.empty((hits_n, 2), dtype=np.float64)
-        for j in range(hits_n):
-            hx, hy, hz = hit_points[j]
-            fid, (u, v) = face_and_uv_for_hitpoint_nb(target_aabb, hx, hy, hz)
-            face_ids[j] = fid
-            uvs_arr[j, 0] = u
-            uvs_arr[j, 1] = v
+        face_ids, uvs_arr = face_and_uv_for_points_vec(target_aabb,
+                                                   hits_x.astype(np.float64),
+                                                   hits_y.astype(np.float64),
+                                                   hits_z.astype(np.float64))
 
         yaw_all = np.arctan2(adb.dz[idxs], adb.dx[idxs])
         pitch_all = -np.arctan2(adb.dy[idxs], np.hypot(adb.dx[idxs], adb.dz[idxs]))
@@ -2284,10 +2730,10 @@ def scan_targets(
         if (adb.top_occluder_idx[center_idx] == int(tid)) and (not np.isnan(ttarget[center_idx])):
             chosen_idx = center_idx
         else:
-            chosen_idx = adb.find_nearest_visible_pixel(ttarget, tid, center_idx, max_radius_px=12)
+            chosen_idx = int(idxs[0]) if idxs.size > 0 else None
 
         if chosen_idx is None:
-            continue
+            return None
 
         dx = adb.dx[chosen_idx]; dy = adb.dy[chosen_idx]; dz = adb.dz[chosen_idx]
 

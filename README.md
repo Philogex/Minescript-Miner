@@ -28,6 +28,10 @@ Requirements:
 * [NumPy](https://numpy.org/)
 * [Numba](https://numba.pydata.org/)
 
+```bash
+pip install --force-reinstall numba==0.61.2 llvmlite==0.44.0
+```
+
 Clone:
 
 ```bash

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minescript-miner"
+version = "0.1.0"
+description = "Visibility scanning helpers for Minescript."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+
+[tool.cibuildwheel]
+build = "cp39-*"
+skip = "*-musllinux_*"
+test-command = "python -c \"import _minescript_miner_native as native; import minescript_miner; assert native.hello() == minescript_miner.hello() == 'hello from native extension'\""
+
+[tool.cibuildwheel.linux]
+archs = ["x86_64"]
+manylinux-x86_64-image = "manylinux_2_28"

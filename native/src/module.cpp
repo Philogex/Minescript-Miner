@@ -1,6 +1,8 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include "minescript_miner/shape_catalog.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -120,8 +122,8 @@ static std::string log_path() {
 static void log_scan_input(
     const double (&position)[3],
     const double (&orientation)[2],
-    const std::vector<std::int32_t> &type_ids,
-    const std::vector<std::int32_t> &state_ids,
+    int catalog_version,
+    const std::vector<std::int32_t> &shape_ids,
     int side,
     double direction_x,
     double direction_z
@@ -135,8 +137,8 @@ static void log_scan_input(
     const auto now_time = std::chrono::system_clock::to_time_t(now);
 
     std::size_t non_air_count = 0;
-    for (const std::int32_t type_id : type_ids) {
-        if (type_id != 0) {
+    for (const std::int32_t shape_id : shape_ids) {
+        if (!minescript_miner::is_empty_shape(shape_id)) {
             ++non_air_count;
         }
     }
@@ -157,9 +159,11 @@ static void log_scan_input(
     log << "  orientation_look_xyz_from_degrees: "
         << std::fixed << std::setprecision(6)
         << look_x << ", " << look_y << ", " << look_z << "\n";
-    log << "  block_count: " << type_ids.size() << "\n";
+    log << "  catalog_version: " << catalog_version << "\n";
+    log << "  native_catalog_version: " << minescript_miner::SHAPE_CATALOG_VERSION << "\n";
+    log << "  block_count: " << shape_ids.size() << "\n";
     log << "  cube_side: " << side << "\n";
-    log << "  non_air_count: " << non_air_count << "\n";
+    log << "  non_empty_count: " << non_air_count << "\n";
 
     if (side > 0) {
         const int half = side / 2;
@@ -170,20 +174,20 @@ static void log_scan_input(
         log << "  order: x fastest, then z, then y\n";
     }
 
-    log << "  first_type_ids:";
-    const std::size_t sample_count = std::min<std::size_t>(type_ids.size(), 64);
+    log << "  first_shape_ids:";
+    const std::size_t sample_count = std::min<std::size_t>(shape_ids.size(), 64);
     for (std::size_t i = 0; i < sample_count; ++i) {
-        log << ' ' << type_ids[i];
+        log << ' ' << shape_ids[i];
     }
-    if (sample_count < type_ids.size()) {
+    if (sample_count < shape_ids.size()) {
         log << " ...";
     }
     log << "\n";
-    log << "  first_state_ids:";
+    log << "  first_shape_names:";
     for (std::size_t i = 0; i < sample_count; ++i) {
-        log << ' ' << state_ids[i];
+        log << ' ' << minescript_miner::shape_id_name(shape_ids[i]);
     }
-    if (sample_count < state_ids.size()) {
+    if (sample_count < shape_ids.size()) {
         log << " ...";
     }
     log << "\n";
@@ -195,19 +199,29 @@ static void log_scan_input(
 static PyObject *scan_region_debug(PyObject *, PyObject *args) {
     PyObject *position_object = nullptr;
     PyObject *orientation_object = nullptr;
-    PyObject *type_ids_object = nullptr;
-    PyObject *state_ids_object = nullptr;
+    PyObject *shape_ids_object = nullptr;
+    int catalog_version = 0;
     int side = 0;
 
     if (!PyArg_ParseTuple(
             args,
-            "OOiOO:scan_region_debug",
+            "OOiiO:scan_region_debug",
             &position_object,
             &orientation_object,
+            &catalog_version,
             &side,
-            &type_ids_object,
-            &state_ids_object
+            &shape_ids_object
         )) {
+        return nullptr;
+    }
+
+    if (catalog_version != minescript_miner::SHAPE_CATALOG_VERSION) {
+        PyErr_Format(
+            PyExc_ValueError,
+            "unsupported shape catalog version: expected %d, got %d",
+            minescript_miner::SHAPE_CATALOG_VERSION,
+            catalog_version
+        );
         return nullptr;
     }
 
@@ -218,18 +232,14 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
 
     double position[3] = {0.0, 0.0, 0.0};
     double orientation[2] = {0.0, 0.0};
-    std::vector<std::int32_t> type_ids;
-    std::vector<std::int32_t> state_ids;
+    std::vector<std::int32_t> shape_ids;
     if (!parse_position(position_object, position)) {
         return nullptr;
     }
     if (!parse_orientation(orientation_object, orientation)) {
         return nullptr;
     }
-    if (!parse_int_ids(type_ids_object, type_ids, "type_ids")) {
-        return nullptr;
-    }
-    if (!parse_int_ids(state_ids_object, state_ids, "state_ids")) {
+    if (!parse_int_ids(shape_ids_object, shape_ids, "shape_ids")) {
         return nullptr;
     }
 
@@ -237,15 +247,14 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
         static_cast<std::size_t>(side) *
         static_cast<std::size_t>(side) *
         static_cast<std::size_t>(side);
-    if (type_ids.size() != expected_count || state_ids.size() != expected_count) {
+    if (shape_ids.size() != expected_count) {
         PyErr_Format(
             PyExc_ValueError,
-            "type_ids and state_ids must both contain side^3 entries "
-            "(side=%d, expected=%zu, got type_ids=%zu, state_ids=%zu)",
+            "shape_ids must contain side^3 entries "
+            "(side=%d, expected=%zu, got shape_ids=%zu)",
             side,
             expected_count,
-            type_ids.size(),
-            state_ids.size()
+            shape_ids.size()
         );
         return nullptr;
     }
@@ -263,8 +272,8 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
     double sum_z = 0.0;
     double weight_sum = 0.0;
 
-    for (std::size_t i = 0; i < type_ids.size(); ++i) {
-        if (type_ids[i] == 0) {
+    for (std::size_t i = 0; i < shape_ids.size(); ++i) {
+        if (minescript_miner::is_empty_shape(shape_ids[i])) {
             continue;
         }
 
@@ -290,7 +299,15 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
         }
     }
 
-    log_scan_input(position, orientation, type_ids, state_ids, side, direction_x, direction_z);
+    log_scan_input(
+        position,
+        orientation,
+        catalog_version,
+        shape_ids,
+        side,
+        direction_x,
+        direction_z
+    );
     return Py_BuildValue("(dd)", direction_x, direction_z);
 }
 
@@ -299,7 +316,7 @@ static PyMethodDef module_methods[] = {
     {"hello", reinterpret_cast<PyCFunction>(hello), METH_NOARGS,
      "Return a small greeting from the native extension."},
     {"scan_region_debug", reinterpret_cast<PyCFunction>(scan_region_debug), METH_VARARGS,
-     "Log position, orientation, side, type ids, and state ids; return a prototype normalized x/z direction."},
+     "Log position, orientation, shape catalog version, side, and shape ids; return a prototype normalized x/z direction."},
     {nullptr, nullptr, 0, nullptr},
 };
 

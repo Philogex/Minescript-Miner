@@ -1,4 +1,4 @@
-"""Block-state string to compact native ids."""
+"""Conservative block-state string to stable native shape-id mapping."""
 
 from __future__ import annotations
 
@@ -6,30 +6,31 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
 
-BlockStateKey = Tuple[Tuple[str, str], ...]
+CATALOG_VERSION = 1
 
-TRANSPARENT_BLOCKS = frozenset(
+DIRECTIONS = ("north", "east", "south", "west")
+HALVES = ("bottom", "top")
+STAIR_SHAPES = ("straight", "inner_left", "inner_right", "outer_left", "outer_right")
+
+EMPTY_BLOCKS = frozenset(
     {
         "minecraft:air",
         "minecraft:cave_air",
         "minecraft:void_air",
         "minecraft:water",
+        "minecraft:lava",
     }
 )
 
-DEFAULT_TARGET_BLOCKS = frozenset(
-    {
-        "minecraft:diamond_ore",
-        "minecraft:deepslate_diamond_ore",
-    }
-)
+BlockStateKey = Tuple[Tuple[str, str], ...]
+BlockShapeKey = Tuple[str, BlockStateKey]
 
 
 @dataclass(frozen=True)
 class EncodedBlockRegion:
+    catalog_version: int
     side: int
-    type_ids: List[int]
-    state_ids: List[int]
+    shape_ids: List[int]
 
 
 def parse_block_state(block_string: Optional[str]) -> Tuple[str, BlockStateKey]:
@@ -58,43 +59,127 @@ def parse_block_state(block_string: Optional[str]) -> Tuple[str, BlockStateKey]:
     return block_type.strip(), tuple(sorted(properties))
 
 
+def _register_shape(name: str) -> int:
+    shape_id = len(SHAPE_NAMES)
+    SHAPE_NAMES.append(name)
+    SHAPE_ID_BY_NAME[name] = shape_id
+    return shape_id
+
+
+def _state_key(*properties: Tuple[str, str]) -> BlockStateKey:
+    return tuple(sorted(properties))
+
+
+def _connection_state_key(mask: int) -> BlockStateKey:
+    return _state_key(
+        *(
+            (direction, "true" if (mask & (1 << bit)) else "false")
+            for bit, direction in enumerate(DIRECTIONS)
+        )
+    )
+
+
+def _connection_name(mask: int) -> str:
+    parts = [
+        direction
+        for bit, direction in enumerate(DIRECTIONS)
+        if mask & (1 << bit)
+    ]
+    return "_".join(parts) if parts else "none"
+
+
+SHAPE_NAMES: List[str] = []
+SHAPE_ID_BY_NAME: Dict[str, int] = {}
+SHAPE_ID_BY_BLOCK_STATE: Dict[BlockShapeKey, int] = {}
+
+SHAPE_EMPTY = _register_shape("empty")
+SHAPE_FULL_CUBE = _register_shape("full_cube")
+SHAPE_OAK_SLAB_BOTTOM = _register_shape("oak_slab_bottom")
+SHAPE_OAK_SLAB_TOP = _register_shape("oak_slab_top")
+
+SHAPE_ID_BY_BLOCK_STATE[("minecraft:oak_slab", _state_key(("type", "bottom")))] = (
+    SHAPE_OAK_SLAB_BOTTOM
+)
+SHAPE_ID_BY_BLOCK_STATE[("minecraft:oak_slab", _state_key(("type", "top")))] = (
+    SHAPE_OAK_SLAB_TOP
+)
+SHAPE_ID_BY_BLOCK_STATE[("minecraft:oak_slab", _state_key(("type", "double")))] = (
+    SHAPE_FULL_CUBE
+)
+
+for facing in DIRECTIONS:
+    for half in HALVES:
+        for stair_shape in STAIR_SHAPES:
+            shape_id = _register_shape(f"oak_stairs_{facing}_{half}_{stair_shape}")
+            SHAPE_ID_BY_BLOCK_STATE[
+                (
+                    "minecraft:oak_stairs",
+                    _state_key(
+                        ("facing", facing),
+                        ("half", half),
+                        ("shape", stair_shape),
+                    ),
+                )
+            ] = shape_id
+
+for mask in range(16):
+    shape_id = _register_shape(f"pane_{_connection_name(mask)}")
+    state_key = _connection_state_key(mask)
+    SHAPE_ID_BY_BLOCK_STATE[("minecraft:iron_bars", state_key)] = shape_id
+    SHAPE_ID_BY_BLOCK_STATE[("minecraft:glass_pane", state_key)] = shape_id
+
+for mask in range(16):
+    shape_id = _register_shape(f"oak_fence_{_connection_name(mask)}")
+    SHAPE_ID_BY_BLOCK_STATE[("minecraft:oak_fence", _connection_state_key(mask))] = (
+        shape_id
+    )
+
+SHAPE_COUNT = len(SHAPE_NAMES)
+
+RELEVANT_PROPERTIES: Dict[str, Tuple[str, ...]] = {
+    "minecraft:oak_slab": ("type",),
+    "minecraft:oak_stairs": ("facing", "half", "shape"),
+    "minecraft:iron_bars": DIRECTIONS,
+    "minecraft:glass_pane": DIRECTIONS,
+    "minecraft:oak_fence": DIRECTIONS,
+}
+
+
+def normalized_shape_key(block_type: str, state: BlockStateKey) -> Optional[BlockShapeKey]:
+    relevant = RELEVANT_PROPERTIES.get(block_type)
+    if relevant is None:
+        return None
+
+    properties = dict(state)
+    if any(key not in properties for key in relevant):
+        return None
+
+    return block_type, _state_key(*((key, properties[key]) for key in relevant))
+
+
 @dataclass
-class BlockIdCatalog:
-    type_to_id: Dict[str, int] = field(default_factory=lambda: {"minecraft:air": 0})
-    id_to_type: Dict[int, str] = field(default_factory=lambda: {0: "minecraft:air"})
-    state_to_id: Dict[BlockStateKey, int] = field(default_factory=lambda: {(): 0})
-    id_to_state: Dict[int, BlockStateKey] = field(default_factory=lambda: {0: ()})
-    transparent_blocks: frozenset[str] = TRANSPARENT_BLOCKS
+class BlockShapeCatalog:
+    catalog_version: int = CATALOG_VERSION
+    cache: Dict[Optional[str], int] = field(default_factory=dict)
 
-    def type_id(self, block_type: str) -> int:
-        if block_type in self.transparent_blocks:
-            block_type = "minecraft:air"
+    def shape_id(self, block_string: Optional[str]) -> int:
+        if block_string in self.cache:
+            return self.cache[block_string]
 
-        existing = self.type_to_id.get(block_type)
-        if existing is not None:
-            return existing
+        shape_id = self._shape_id_uncached(block_string)
+        self.cache[block_string] = shape_id
+        return shape_id
 
-        new_id = len(self.type_to_id)
-        self.type_to_id[block_type] = new_id
-        self.id_to_type[new_id] = block_type
-        return new_id
-
-    def state_id(self, state: BlockStateKey) -> int:
-        existing = self.state_to_id.get(state)
-        if existing is not None:
-            return existing
-
-        new_id = len(self.state_to_id)
-        self.state_to_id[state] = new_id
-        self.id_to_state[new_id] = state
-        return new_id
-
-    def encode_block(self, block_string: Optional[str]) -> Tuple[int, int]:
+    def _shape_id_uncached(self, block_string: Optional[str]) -> int:
         block_type, state = parse_block_state(block_string)
-        type_id = self.type_id(block_type)
-        if type_id == 0:
-            return 0, 0
-        return type_id, self.state_id(state)
+        if block_type in EMPTY_BLOCKS:
+            return SHAPE_EMPTY
+
+        key = normalized_shape_key(block_type, state)
+        if key is None:
+            return SHAPE_FULL_CUBE
+
+        return SHAPE_ID_BY_BLOCK_STATE.get(key, SHAPE_FULL_CUBE)
 
     def encode_region(
         self,
@@ -108,14 +193,11 @@ class BlockIdCatalog:
                 f"got {len(block_strings)}"
             )
 
-        type_ids: List[int] = []
-        state_ids: List[int] = []
-        for block_string in block_strings:
-            type_id, state_id = self.encode_block(block_string)
-            type_ids.append(type_id)
-            state_ids.append(state_id)
-
-        return EncodedBlockRegion(side=side, type_ids=type_ids, state_ids=state_ids)
+        return EncodedBlockRegion(
+            catalog_version=self.catalog_version,
+            side=side,
+            shape_ids=[self.shape_id(block_string) for block_string in block_strings],
+        )
 
 
-DEFAULT_CATALOG = BlockIdCatalog()
+DEFAULT_CATALOG = BlockShapeCatalog()

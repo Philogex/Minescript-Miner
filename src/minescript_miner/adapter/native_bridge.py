@@ -6,7 +6,7 @@ from typing import Optional, Sequence, Tuple
 
 import _minescript_miner_native as native
 
-from .block_ids import BlockIdCatalog, DEFAULT_CATALOG
+from .block_ids import BlockShapeCatalog, DEFAULT_CATALOG
 
 
 ScanPosition = Tuple[float, float, float]
@@ -19,7 +19,7 @@ def scan_region_debug(
     side: int,
     block_strings: Sequence[Optional[str]],
     *,
-    catalog: BlockIdCatalog = DEFAULT_CATALOG,
+    catalog: BlockShapeCatalog = DEFAULT_CATALOG,
 ) -> Tuple[float, float]:
     """Encode raw block strings and run the native transfer/logging prototype."""
 
@@ -27,8 +27,8 @@ def scan_region_debug(
     x, z = native.scan_region_debug(
         position,
         orientation,
+        encoded.catalog_version,
         encoded.side,
-        encoded.type_ids,
-        encoded.state_ids,
+        encoded.shape_ids,
     )
     return float(x), float(z)

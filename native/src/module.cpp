@@ -74,13 +74,17 @@ static bool parse_orientation(PyObject *orientation, double (&out)[2]) {
     return true;
 }
 
-static bool parse_block_ids(PyObject *block_ids, std::vector<std::int32_t> &out) {
-    if (!PySequence_Check(block_ids)) {
-        PyErr_SetString(PyExc_TypeError, "block_ids must be a sequence of integers");
+static bool parse_int_ids(
+    PyObject *ids,
+    std::vector<std::int32_t> &out,
+    const char *name
+) {
+    if (!PySequence_Check(ids)) {
+        PyErr_Format(PyExc_TypeError, "%s must be a sequence of integers", name);
         return false;
     }
 
-    const Py_ssize_t size = PySequence_Size(block_ids);
+    const Py_ssize_t size = PySequence_Size(ids);
     if (size < 0) {
         return false;
     }
@@ -89,33 +93,20 @@ static bool parse_block_ids(PyObject *block_ids, std::vector<std::int32_t> &out)
     out.reserve(static_cast<std::size_t>(size));
 
     for (Py_ssize_t i = 0; i < size; ++i) {
-        PyObject *item = PySequence_GetItem(block_ids, i);
+        PyObject *item = PySequence_GetItem(ids, i);
         if (item == nullptr) {
             return false;
         }
         const long value = PyLong_AsLong(item);
         Py_DECREF(item);
         if (PyErr_Occurred()) {
-            PyErr_SetString(PyExc_TypeError, "block_ids values must be integers");
+            PyErr_Format(PyExc_TypeError, "%s values must be integers", name);
             return false;
         }
         out.push_back(static_cast<std::int32_t>(value));
     }
 
     return true;
-}
-
-static int infer_cube_side(std::size_t block_count) {
-    if (block_count == 0) {
-        return 0;
-    }
-
-    const double root = std::cbrt(static_cast<double>(block_count));
-    const int side = static_cast<int>(std::llround(root));
-    if (side > 0 && static_cast<std::size_t>(side) * side * side == block_count) {
-        return side;
-    }
-    return 0;
 }
 
 static std::string log_path() {
@@ -129,7 +120,8 @@ static std::string log_path() {
 static void log_scan_input(
     const double (&position)[3],
     const double (&orientation)[2],
-    const std::vector<std::int32_t> &block_ids,
+    const std::vector<std::int32_t> &type_ids,
+    const std::vector<std::int32_t> &state_ids,
     int side,
     double direction_x,
     double direction_z
@@ -143,8 +135,8 @@ static void log_scan_input(
     const auto now_time = std::chrono::system_clock::to_time_t(now);
 
     std::size_t non_air_count = 0;
-    for (const std::int32_t block_id : block_ids) {
-        if (block_id != 0) {
+    for (const std::int32_t type_id : type_ids) {
+        if (type_id != 0) {
             ++non_air_count;
         }
     }
@@ -165,8 +157,8 @@ static void log_scan_input(
     log << "  orientation_look_xyz_from_degrees: "
         << std::fixed << std::setprecision(6)
         << look_x << ", " << look_y << ", " << look_z << "\n";
-    log << "  block_count: " << block_ids.size() << "\n";
-    log << "  inferred_cube_side: " << side << "\n";
+    log << "  block_count: " << type_ids.size() << "\n";
+    log << "  cube_side: " << side << "\n";
     log << "  non_air_count: " << non_air_count << "\n";
 
     if (side > 0) {
@@ -178,12 +170,20 @@ static void log_scan_input(
         log << "  order: x fastest, then z, then y\n";
     }
 
-    log << "  first_block_ids:";
-    const std::size_t sample_count = std::min<std::size_t>(block_ids.size(), 64);
+    log << "  first_type_ids:";
+    const std::size_t sample_count = std::min<std::size_t>(type_ids.size(), 64);
     for (std::size_t i = 0; i < sample_count; ++i) {
-        log << ' ' << block_ids[i];
+        log << ' ' << type_ids[i];
     }
-    if (sample_count < block_ids.size()) {
+    if (sample_count < type_ids.size()) {
+        log << " ...";
+    }
+    log << "\n";
+    log << "  first_state_ids:";
+    for (std::size_t i = 0; i < sample_count; ++i) {
+        log << ' ' << state_ids[i];
+    }
+    if (sample_count < state_ids.size()) {
         log << " ...";
     }
     log << "\n";
@@ -195,79 +195,102 @@ static void log_scan_input(
 static PyObject *scan_region_debug(PyObject *, PyObject *args) {
     PyObject *position_object = nullptr;
     PyObject *orientation_object = nullptr;
-    PyObject *block_ids_object = nullptr;
+    PyObject *type_ids_object = nullptr;
+    PyObject *state_ids_object = nullptr;
+    int side = 0;
 
-    const Py_ssize_t argc = PyTuple_Size(args);
-    if (argc == 2) {
-        if (!PyArg_ParseTuple(args, "OO:scan_region_debug", &position_object, &block_ids_object)) {
-            return nullptr;
-        }
-    } else if (argc == 3) {
-        if (!PyArg_ParseTuple(args, "OOO:scan_region_debug", &position_object, &orientation_object, &block_ids_object)) {
-            return nullptr;
-        }
-    } else {
-        PyErr_SetString(PyExc_TypeError, "scan_region_debug expects (position, block_ids) or (position, orientation, block_ids)");
+    if (!PyArg_ParseTuple(
+            args,
+            "OOiOO:scan_region_debug",
+            &position_object,
+            &orientation_object,
+            &side,
+            &type_ids_object,
+            &state_ids_object
+        )) {
+        return nullptr;
+    }
+
+    if (side <= 0) {
+        PyErr_SetString(PyExc_ValueError, "side must be a positive integer");
         return nullptr;
     }
 
     double position[3] = {0.0, 0.0, 0.0};
     double orientation[2] = {0.0, 0.0};
-    std::vector<std::int32_t> block_ids;
+    std::vector<std::int32_t> type_ids;
+    std::vector<std::int32_t> state_ids;
     if (!parse_position(position_object, position)) {
         return nullptr;
     }
-    if (orientation_object != nullptr && !parse_orientation(orientation_object, orientation)) {
+    if (!parse_orientation(orientation_object, orientation)) {
         return nullptr;
     }
-    if (!parse_block_ids(block_ids_object, block_ids)) {
+    if (!parse_int_ids(type_ids_object, type_ids, "type_ids")) {
+        return nullptr;
+    }
+    if (!parse_int_ids(state_ids_object, state_ids, "state_ids")) {
         return nullptr;
     }
 
-    const int side = infer_cube_side(block_ids.size());
+    const std::size_t expected_count =
+        static_cast<std::size_t>(side) *
+        static_cast<std::size_t>(side) *
+        static_cast<std::size_t>(side);
+    if (type_ids.size() != expected_count || state_ids.size() != expected_count) {
+        PyErr_Format(
+            PyExc_ValueError,
+            "type_ids and state_ids must both contain side^3 entries "
+            "(side=%d, expected=%zu, got type_ids=%zu, state_ids=%zu)",
+            side,
+            expected_count,
+            type_ids.size(),
+            state_ids.size()
+        );
+        return nullptr;
+    }
+
     double direction_x = 0.0;
     double direction_z = 0.0;
 
-    if (side > 0) {
-        const int half = side / 2;
-        const int min_x = static_cast<int>(std::floor(position[0])) - half;
-        const int min_y = static_cast<int>(std::floor(position[1])) - half;
-        const int min_z = static_cast<int>(std::floor(position[2])) - half;
+    const int half = side / 2;
+    const int min_x = static_cast<int>(std::floor(position[0])) - half;
+    const int min_y = static_cast<int>(std::floor(position[1])) - half;
+    const int min_z = static_cast<int>(std::floor(position[2])) - half;
 
-        double sum_x = 0.0;
-        double sum_y = 0.0;
-        double sum_z = 0.0;
-        double weight_sum = 0.0;
+    double sum_x = 0.0;
+    double sum_y = 0.0;
+    double sum_z = 0.0;
+    double weight_sum = 0.0;
 
-        for (std::size_t i = 0; i < block_ids.size(); ++i) {
-            if (block_ids[i] == 0) {
-                continue;
-            }
-
-            const int x_index = static_cast<int>(i % side);
-            const int z_index = static_cast<int>((i / side) % side);
-            const int y_index = static_cast<int>(i / (side * side));
-
-            sum_x += static_cast<double>(min_x + x_index) + 0.5;
-            sum_y += static_cast<double>(min_y + y_index) + 0.5;
-            sum_z += static_cast<double>(min_z + z_index) + 0.5;
-            weight_sum += 1.0;
+    for (std::size_t i = 0; i < type_ids.size(); ++i) {
+        if (type_ids[i] == 0) {
+            continue;
         }
 
-        if (weight_sum > 0.0) {
-            const double target_x = sum_x / weight_sum;
-            const double target_z = sum_z / weight_sum;
-            const double dx = target_x - position[0];
-            const double dz = target_z - position[2];
-            const double length = std::hypot(dx, dz);
-            if (length > 1.0e-12) {
-                direction_x = dx / length;
-                direction_z = dz / length;
-            }
+        const int x_index = static_cast<int>(i % static_cast<std::size_t>(side));
+        const int z_index = static_cast<int>((i / static_cast<std::size_t>(side)) % static_cast<std::size_t>(side));
+        const int y_index = static_cast<int>(i / (static_cast<std::size_t>(side) * static_cast<std::size_t>(side)));
+
+        sum_x += static_cast<double>(min_x + x_index) + 0.5;
+        sum_y += static_cast<double>(min_y + y_index) + 0.5;
+        sum_z += static_cast<double>(min_z + z_index) + 0.5;
+        weight_sum += 1.0;
+    }
+
+    if (weight_sum > 0.0) {
+        const double target_x = sum_x / weight_sum;
+        const double target_z = sum_z / weight_sum;
+        const double dx = target_x - position[0];
+        const double dz = target_z - position[2];
+        const double length = std::hypot(dx, dz);
+        if (length > 1.0e-12) {
+            direction_x = dx / length;
+            direction_z = dz / length;
         }
     }
 
-    log_scan_input(position, orientation, block_ids, side, direction_x, direction_z);
+    log_scan_input(position, orientation, type_ids, state_ids, side, direction_x, direction_z);
     return Py_BuildValue("(dd)", direction_x, direction_z);
 }
 
@@ -276,7 +299,7 @@ static PyMethodDef module_methods[] = {
     {"hello", reinterpret_cast<PyCFunction>(hello), METH_NOARGS,
      "Return a small greeting from the native extension."},
     {"scan_region_debug", reinterpret_cast<PyCFunction>(scan_region_debug), METH_VARARGS,
-     "Log position, orientation, and a fixed-cube integer block region; return a prototype normalized x/z direction."},
+     "Log position, orientation, side, type ids, and state ids; return a prototype normalized x/z direction."},
     {nullptr, nullptr, 0, nullptr},
 };
 

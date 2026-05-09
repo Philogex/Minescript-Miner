@@ -5,5 +5,5 @@ def hello() -> str:
     return native.hello()
 
 
-def scan_region_debug(position, orientation, block_ids):
-    return native.scan_region_debug(position, orientation, block_ids)
+def scan_region_debug(position, orientation, side, type_ids, state_ids):
+    return native.scan_region_debug(position, orientation, side, type_ids, state_ids)

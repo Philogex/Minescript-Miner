@@ -60,7 +60,9 @@ class NativeWheelTest(unittest.TestCase):
                         "import _minescript_miner_native as native; "
                         "import minescript_miner; "
                         "print(native.hello()); "
-                        "print(minescript_miner.hello())"
+                        "print(minescript_miner.hello()); "
+                        "print(native.scan_region_debug((0.5, 64.5, 0.5), (90.0, 10.0), [0] * 27)); "
+                        "print(minescript_miner.scan_region_debug((0.5, 64.5, 0.5), (90.0, 10.0), [0] * 27))"
                     ),
                 ],
                 check=True,
@@ -69,7 +71,12 @@ class NativeWheelTest(unittest.TestCase):
             )
 
             self.assertEqual(
-                "hello from native extension\nhello from native extension",
+                (
+                    "hello from native extension\n"
+                    "hello from native extension\n"
+                    "(0.0, 0.0)\n"
+                    "(0.0, 0.0)"
+                ),
                 result.stdout.strip(),
             )
 

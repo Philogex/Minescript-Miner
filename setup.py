@@ -32,7 +32,7 @@ setup(
     ext_modules=[native_extension],
     package_dir={"minescript_miner": "src/minescript_miner"},
     packages=[
-        *find_namespace_packages(where=".", include=["aim*", "visibility_scanner*"]),
+        *find_namespace_packages(where=".", include=["aim*"]),
         *find_namespace_packages(where="src", include=["minescript_miner*"]),
     ],
     py_modules=["miner"],

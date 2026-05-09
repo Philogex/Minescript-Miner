@@ -10,11 +10,11 @@ for path in (PROJECT_DIR, SRC_DIR):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from minescript_miner.minescript_adapter import scan_region_debug
+from minescript_miner.minescript.io import scan_current_region_debug
 
 px, py, pz = m.player_position()
 yaw, pitch = m.player_orientation()
 
 m.echo(f"python orientation yaw/pitch: {yaw}, {pitch}")
-direction = scan_region_debug((px, py + 1.62, pz), (yaw, pitch))
+direction = scan_current_region_debug((px, py + 1.62, pz), (yaw, pitch))
 m.echo(f"native direction: {direction}")

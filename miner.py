@@ -1,5 +1,5 @@
-from visibility_scanner.scanner import scan_targets, scan_target
-from visibility_scanner.world_scanners import get_area, get_line
+from minescript_miner.visibility_scanner.scanner import scan_targets
+from minescript_miner.minescript.world import get_area
 import aim.player_aim
 
 import threading
@@ -74,12 +74,3 @@ while True:
         m.player_press_attack(False)
     else:
         time.sleep(0.5)
-
-'''
-# minimal usage example for scan_target()
-start = (10, -58.5, 20) # use central position, or the ground will occlude
-end = (10, -58.5, 10) # same here
-
-occluders = get_line(position=start, target=end)
-aim_result = scan_target(position=start, target=end, occluders=occluders)
-'''

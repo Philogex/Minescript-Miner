@@ -243,6 +243,7 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
         return nullptr;
     }
 
+    // following does not have to be here yet
     const std::size_t expected_count =
         static_cast<std::size_t>(side) *
         static_cast<std::size_t>(side) *

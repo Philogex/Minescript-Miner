@@ -25,7 +25,7 @@ static std::string connection_mask_name(int mask) {
     return name.empty() ? "none" : name;
 }
 
-static const std::vector<std::string> &shape_names() {
+const std::vector<std::string> &shape_names() {
     static const std::vector<std::string> names = [] {
         static constexpr const char *directions[] = {"north", "east", "south", "west"};
         static constexpr const char *halves[] = {"bottom", "top"};

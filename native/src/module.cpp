@@ -20,6 +20,36 @@ static PyObject *hello(PyObject *, PyObject *) {
     return PyUnicode_FromString("hello from native extension");
 }
 
+static PyObject *shape_catalog_debug(PyObject *, PyObject *) {
+    PyObject *shape_names = PyList_New(0);
+    if (shape_names == nullptr) {
+        return nullptr;
+    }
+
+    for (const std::string &shape_name : minescript_miner::shape_names()) {
+        PyObject *python_name = PyUnicode_FromString(shape_name.c_str());
+        if (python_name == nullptr) {
+            Py_DECREF(shape_names);
+            return nullptr;
+        }
+        if (PyList_Append(shape_names, python_name) < 0) {
+            Py_DECREF(python_name);
+            Py_DECREF(shape_names);
+            return nullptr;
+        }
+        Py_DECREF(python_name);
+    }
+
+    PyObject *debug = Py_BuildValue(
+        "{s:i,s:N}",
+        "version",
+        minescript_miner::SHAPE_CATALOG_VERSION,
+        "shape_names",
+        shape_names
+    );
+    return debug;
+}
+
 static bool parse_position(PyObject *position, double (&out)[3]) {
     if (!PySequence_Check(position)) {
         PyErr_SetString(PyExc_TypeError, "position must be a sequence of 3 floats");
@@ -243,7 +273,6 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
         return nullptr;
     }
 
-    // following does not have to be here yet
     const std::size_t expected_count =
         static_cast<std::size_t>(side) *
         static_cast<std::size_t>(side) *
@@ -260,45 +289,8 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
         return nullptr;
     }
 
-    double direction_x = 0.0;
-    double direction_z = 0.0;
-
-    const int half = side / 2;
-    const int min_x = static_cast<int>(std::floor(position[0])) - half;
-    const int min_y = static_cast<int>(std::floor(position[1])) - half;
-    const int min_z = static_cast<int>(std::floor(position[2])) - half;
-
-    double sum_x = 0.0;
-    double sum_y = 0.0;
-    double sum_z = 0.0;
-    double weight_sum = 0.0;
-
-    for (std::size_t i = 0; i < shape_ids.size(); ++i) {
-        if (minescript_miner::is_empty_shape(shape_ids[i])) {
-            continue;
-        }
-
-        const int x_index = static_cast<int>(i % static_cast<std::size_t>(side));
-        const int z_index = static_cast<int>((i / static_cast<std::size_t>(side)) % static_cast<std::size_t>(side));
-        const int y_index = static_cast<int>(i / (static_cast<std::size_t>(side) * static_cast<std::size_t>(side)));
-
-        sum_x += static_cast<double>(min_x + x_index) + 0.5;
-        sum_y += static_cast<double>(min_y + y_index) + 0.5;
-        sum_z += static_cast<double>(min_z + z_index) + 0.5;
-        weight_sum += 1.0;
-    }
-
-    if (weight_sum > 0.0) {
-        const double target_x = sum_x / weight_sum;
-        const double target_z = sum_z / weight_sum;
-        const double dx = target_x - position[0];
-        const double dz = target_z - position[2];
-        const double length = std::hypot(dx, dz);
-        if (length > 1.0e-12) {
-            direction_x = dx / length;
-            direction_z = dz / length;
-        }
-    }
+    const double direction_x = 0.0;
+    const double direction_z = 0.0;
 
     log_scan_input(
         position,
@@ -316,6 +308,8 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
 static PyMethodDef module_methods[] = {
     {"hello", reinterpret_cast<PyCFunction>(hello), METH_NOARGS,
      "Return a small greeting from the native extension."},
+    {"shape_catalog_debug", reinterpret_cast<PyCFunction>(shape_catalog_debug), METH_NOARGS,
+     "Return the native shape catalog version and shape names for parity checks."},
     {"scan_region_debug", reinterpret_cast<PyCFunction>(scan_region_debug), METH_VARARGS,
      "Log position, orientation, shape catalog version, side, and shape ids; return a prototype normalized x/z direction."},
     {nullptr, nullptr, 0, nullptr},

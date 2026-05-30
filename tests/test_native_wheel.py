@@ -61,6 +61,7 @@ class NativeWheelTest(unittest.TestCase):
                         "import minescript_miner; "
                         "print(native.hello()); "
                         "print(minescript_miner.hello()); "
+                        "print(minescript_miner.shape_catalog_debug()['version']); "
                         "print(native.scan_region_debug((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, [0] * 27)); "
                         "print(minescript_miner.scan_region_debug((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, [0] * 27))"
                     ),
@@ -78,6 +79,7 @@ class NativeWheelTest(unittest.TestCase):
                 (
                     "hello from native extension\n"
                     "hello from native extension\n"
+                    "1\n"
                     "(0.0, 0.0)\n"
                     "(0.0, 0.0)"
                 ),

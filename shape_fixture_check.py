@@ -29,7 +29,7 @@ from minescript_miner.adapter.block_ids import (
     SHAPE_NAMES,
     STAIR_SHAPES,
 )
-from shape_catalog_check import assert_shape_catalog_parity
+from geometry_catalog_check import assert_geometry_catalog_parity
 
 
 BlockPos = Tuple[int, int, int]
@@ -296,7 +296,7 @@ def default_base_position() -> BlockPos:
 
 
 def main() -> None:
-    catalog = assert_shape_catalog_parity()
+    catalog = assert_geometry_catalog_parity()
     fixtures = build_shape_fixtures()
     assert_fixture_coverage(fixtures)
 

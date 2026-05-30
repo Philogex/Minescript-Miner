@@ -1,4 +1,4 @@
-"""Assert Python/native shape catalog parity.
+"""Assert Python/native geometry catalog parity.
 
 This script can be run both from a normal Python shell and in-game through
 Minescript. In-game it prints a short success/failure message to chat.
@@ -31,14 +31,14 @@ def _echo(message: str) -> None:
         m.echo(message)
 
 
-def assert_shape_catalog_parity() -> Dict[str, Any]:
-    debug = native.shape_catalog_debug()
+def assert_geometry_catalog_parity() -> Dict[str, Any]:
+    debug = native.geometry_catalog_debug()
     native_version = int(debug["version"])
     native_names: List[str] = list(debug["shape_names"])
 
     if native_version != CATALOG_VERSION:
         raise AssertionError(
-            f"Shape catalog version mismatch: python={CATALOG_VERSION}, "
+            f"Geometry catalog version mismatch: python={CATALOG_VERSION}, "
             f"native={native_version}"
         )
 
@@ -49,12 +49,12 @@ def assert_shape_catalog_parity() -> Dict[str, Any]:
             native_name = native_names[shape_id]
             if python_name != native_name:
                 raise AssertionError(
-                    f"Shape catalog mismatch at id={shape_id}: "
+                    f"Geometry catalog mismatch at id={shape_id}: "
                     f"python={python_name!r}, native={native_name!r}"
                 )
 
         raise AssertionError(
-            f"Shape catalog length mismatch: python={len(SHAPE_NAMES)}, "
+            f"Geometry catalog length mismatch: python={len(SHAPE_NAMES)}, "
             f"native={len(native_names)}"
         )
 
@@ -66,13 +66,13 @@ def assert_shape_catalog_parity() -> Dict[str, Any]:
 
 def main() -> None:
     try:
-        result = assert_shape_catalog_parity()
+        result = assert_geometry_catalog_parity()
     except Exception as exc:
-        _echo(f"Shape catalog FAIL: {exc}")
+        _echo(f"Geometry catalog FAIL: {exc}")
         raise
 
     _echo(
-        "Shape catalog OK: "
+        "Geometry catalog OK: "
         f"version {result['version']}, {result['shape_count']} shapes"
     )
 

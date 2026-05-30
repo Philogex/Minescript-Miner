@@ -10,9 +10,9 @@ native_sources = [
     native_source_dir / "block_state.cpp",
     native_source_dir / "branch_bound.cpp",
     native_source_dir / "bvh.cpp",
+    native_source_dir / "geometry_catalog.cpp",
     native_source_dir / "numerics.cpp",
     native_source_dir / "rect.cpp",
-    native_source_dir / "shape_catalog.cpp",
     native_source_dir / "vec.cpp",
     native_source_dir / "visibility.cpp",
 ]

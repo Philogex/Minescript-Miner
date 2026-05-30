@@ -1,7 +1,7 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-#include "minescript_miner/shape_catalog.hpp"
+#include "minescript_miner/geometry_catalog.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -20,32 +20,89 @@ static PyObject *hello(PyObject *, PyObject *) {
     return PyUnicode_FromString("hello from native extension");
 }
 
-static PyObject *shape_catalog_debug(PyObject *, PyObject *) {
+static PyObject *geometry_catalog_debug(PyObject *, PyObject *) {
     PyObject *shape_names = PyList_New(0);
     if (shape_names == nullptr) {
         return nullptr;
     }
 
-    for (const std::string &shape_name : minescript_miner::shape_names()) {
-        PyObject *python_name = PyUnicode_FromString(shape_name.c_str());
+    PyObject *box_counts = PyList_New(0);
+    if (box_counts == nullptr) {
+        Py_DECREF(shape_names);
+        return nullptr;
+    }
+
+    PyObject *face_counts = PyList_New(0);
+    if (face_counts == nullptr) {
+        Py_DECREF(box_counts);
+        Py_DECREF(shape_names);
+        return nullptr;
+    }
+
+    const minescript_miner::GeometryCatalog &catalog = minescript_miner::geometry_catalog();
+    for (std::size_t i = 0; i < catalog.shapes.size(); ++i) {
+        PyObject *python_name = PyUnicode_FromString(catalog.shape_names[i].c_str());
         if (python_name == nullptr) {
+            Py_DECREF(face_counts);
+            Py_DECREF(box_counts);
             Py_DECREF(shape_names);
             return nullptr;
         }
         if (PyList_Append(shape_names, python_name) < 0) {
             Py_DECREF(python_name);
+            Py_DECREF(face_counts);
+            Py_DECREF(box_counts);
             Py_DECREF(shape_names);
             return nullptr;
         }
         Py_DECREF(python_name);
+
+        const minescript_miner::ShapeGeometry &geometry = catalog.shapes[i];
+        PyObject *box_count = PyLong_FromSize_t(geometry.box_count);
+        if (box_count == nullptr) {
+            Py_DECREF(face_counts);
+            Py_DECREF(box_counts);
+            Py_DECREF(shape_names);
+            return nullptr;
+        }
+        if (PyList_Append(box_counts, box_count) < 0) {
+            Py_DECREF(box_count);
+            Py_DECREF(face_counts);
+            Py_DECREF(box_counts);
+            Py_DECREF(shape_names);
+            return nullptr;
+        }
+        Py_DECREF(box_count);
+
+        PyObject *face_count = PyLong_FromSize_t(geometry.face_count);
+        if (face_count == nullptr) {
+            Py_DECREF(face_counts);
+            Py_DECREF(box_counts);
+            Py_DECREF(shape_names);
+            return nullptr;
+        }
+        if (PyList_Append(face_counts, face_count) < 0) {
+            Py_DECREF(face_count);
+            Py_DECREF(face_counts);
+            Py_DECREF(box_counts);
+            Py_DECREF(shape_names);
+            return nullptr;
+        }
+        Py_DECREF(face_count);
     }
 
     PyObject *debug = Py_BuildValue(
-        "{s:i,s:N}",
+        "{s:i,s:i,s:N,s:N,s:N}",
         "version",
-        minescript_miner::SHAPE_CATALOG_VERSION,
+        minescript_miner::GEOMETRY_CATALOG_VERSION,
+        "shape_count",
+        minescript_miner::geometry_catalog_shape_count(),
         "shape_names",
-        shape_names
+        shape_names,
+        "box_counts",
+        box_counts,
+        "face_counts",
+        face_counts
     );
     return debug;
 }
@@ -189,8 +246,8 @@ static void log_scan_input(
     log << "  orientation_look_xyz_from_degrees: "
         << std::fixed << std::setprecision(6)
         << look_x << ", " << look_y << ", " << look_z << "\n";
-    log << "  catalog_version: " << catalog_version << "\n";
-    log << "  native_catalog_version: " << minescript_miner::SHAPE_CATALOG_VERSION << "\n";
+    log << "  geometry_catalog_version: " << catalog_version << "\n";
+    log << "  native_geometry_catalog_version: " << minescript_miner::GEOMETRY_CATALOG_VERSION << "\n";
     log << "  block_count: " << shape_ids.size() << "\n";
     log << "  cube_side: " << side << "\n";
     log << "  non_empty_count: " << non_air_count << "\n";
@@ -245,11 +302,11 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
         return nullptr;
     }
 
-    if (catalog_version != minescript_miner::SHAPE_CATALOG_VERSION) {
+    if (catalog_version != minescript_miner::GEOMETRY_CATALOG_VERSION) {
         PyErr_Format(
             PyExc_ValueError,
-            "unsupported shape catalog version: expected %d, got %d",
-            minescript_miner::SHAPE_CATALOG_VERSION,
+            "unsupported geometry catalog version: expected %d, got %d",
+            minescript_miner::GEOMETRY_CATALOG_VERSION,
             catalog_version
         );
         return nullptr;
@@ -308,8 +365,8 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
 static PyMethodDef module_methods[] = {
     {"hello", reinterpret_cast<PyCFunction>(hello), METH_NOARGS,
      "Return a small greeting from the native extension."},
-    {"shape_catalog_debug", reinterpret_cast<PyCFunction>(shape_catalog_debug), METH_NOARGS,
-     "Return the native shape catalog version and shape names for parity checks."},
+    {"geometry_catalog_debug", reinterpret_cast<PyCFunction>(geometry_catalog_debug), METH_NOARGS,
+     "Return the native geometry catalog version, shape names, and geometry counts for parity checks."},
     {"scan_region_debug", reinterpret_cast<PyCFunction>(scan_region_debug), METH_VARARGS,
      "Log position, orientation, shape catalog version, side, and shape ids; return a prototype normalized x/z direction."},
     {nullptr, nullptr, 0, nullptr},

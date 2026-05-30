@@ -11,11 +11,11 @@ for path in (PROJECT_DIR, SRC_DIR):
         sys.path.insert(0, path)
 
 from minescript_miner.minescript.io import scan_current_region_debug
-from shape_catalog_check import assert_shape_catalog_parity
+from geometry_catalog_check import assert_geometry_catalog_parity
 
-catalog = assert_shape_catalog_parity()
+catalog = assert_geometry_catalog_parity()
 m.echo(
-    "Shape catalog OK: "
+    "Geometry catalog OK: "
     f"version {catalog['version']}, {catalog['shape_count']} shapes"
 )
 

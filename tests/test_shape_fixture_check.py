@@ -7,7 +7,7 @@ sys.modules.setdefault("minescript", types.SimpleNamespace())
 
 import shape_fixture_check
 import shape_fixture_overlay
-from minescript_miner.adapter.block_ids import SHAPE_NAMES
+from minescript_miner.adapter.shape_catalog import SHAPE_NAMES
 
 
 class ShapeFixtureCheckTest(unittest.TestCase):

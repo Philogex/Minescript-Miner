@@ -6,7 +6,7 @@ from typing import Optional, Sequence, Tuple
 
 import _minescript_miner_native as native
 
-from .block_ids import BlockShapeCatalog, DEFAULT_CATALOG
+from .shape_catalog import BlockShapeCatalog, DEFAULT_CATALOG
 
 
 ScanPosition = Tuple[float, float, float]

@@ -1,6 +1,6 @@
 import unittest
 
-from minescript_miner.adapter.block_ids import (
+from minescript_miner.adapter.shape_catalog import (
     CATALOG_VERSION,
     DEFAULT_CATALOG,
     SHAPE_ID_BY_NAME,

@@ -19,7 +19,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 
 import minescript as m
 
-from minescript_miner.adapter.block_ids import (
+from minescript_miner.adapter.shape_catalog import (
     DEFAULT_CATALOG,
     DIRECTIONS,
     HALVES,

@@ -1,4 +1,4 @@
-from .block_ids import (
+from .shape_catalog import (
     CATALOG_VERSION,
     DEFAULT_CATALOG,
     EMPTY_BLOCKS,

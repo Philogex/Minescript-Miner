@@ -17,7 +17,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
 
 import minescript as m
 
-from minescript_miner.adapter.block_ids import DEFAULT_CATALOG, SHAPE_NAMES
+from minescript_miner.adapter.shape_catalog import DEFAULT_CATALOG, SHAPE_NAMES
 from shape_fixture_check import (
     BlockPos,
     build_fixture_area,

@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Tuple
 
 from minescript_miner.adapter.native_bridge import Orientation, ScanPosition, scan_region_debug
-from minescript_miner.minescript.world import read_region_blocks
+from minescript_miner.minescript.world import fixed_cube_bounds, get_area
 
 
 def scan_current_region_debug(
@@ -17,7 +17,8 @@ def scan_current_region_debug(
     orientation: Orientation,
     reach: float = 4.8,
 ) -> Tuple[float, float]:
-    min_pos, max_pos, block_strings = read_region_blocks(position, reach)
+    min_pos, max_pos = fixed_cube_bounds(position, reach)
+    block_strings = tuple(block_string for _pos, block_string in get_area(position, reach))
     side = max_pos[0] - min_pos[0] + 1
     if (
         max_pos[1] - min_pos[1] + 1 != side

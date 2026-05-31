@@ -6,6 +6,7 @@ import minescript as m
 
 BlockPos = Tuple[int, int, int]
 BlockSample = Tuple[BlockPos, Optional[str]]
+AIR_BLOCK = "minecraft:air"
 
 
 def fixed_cube_bounds(
@@ -40,6 +41,21 @@ def read_region_blocks(
 
     region = m.get_block_region(min_pos, max_pos)
     return region.min_pos, region.max_pos, tuple(region.blocks)
+
+
+def cube_block_index(pos: BlockPos, min_pos: BlockPos, side: int) -> int:
+    x, y, z = pos
+    min_x, min_y, min_z = min_pos
+    return (x - min_x) + (z - min_z) * side + (y - min_y) * side * side
+
+
+def cube_positions(min_pos: BlockPos, max_pos: BlockPos) -> List[BlockPos]:
+    return [
+        (x, y, z)
+        for y in range(min_pos[1], max_pos[1] + 1)
+        for z in range(min_pos[2], max_pos[2] + 1)
+        for x in range(min_pos[0], max_pos[0] + 1)
+    ]
 
 
 def positions_within_reach(
@@ -108,10 +124,21 @@ def get_area(
     position: Tuple[float, float, float],
     reach: float = 4.8,
     pitch_range: Tuple[float, float] = (-90.0, 90.0),
+    *,
+    await_region: bool = True,
 ) -> List[BlockSample]:
+    min_pos, max_pos = fixed_cube_bounds(position, reach)
+    if await_region:
+        m.await_loaded_region(min_pos[0], min_pos[2], max_pos[0], max_pos[2])
+
     positions = positions_within_reach(position, reach, pitch_range)
     block_strings = read_blocks_region_prune(positions)
-    return [
-        ((pos[0], pos[1], pos[2]), block_string)
+    reachable_blocks = {
+        (pos[0], pos[1], pos[2]): (block_string or AIR_BLOCK)
         for pos, block_string in zip(positions, block_strings)
+    }
+
+    return [
+        (pos, reachable_blocks.get(pos, AIR_BLOCK))
+        for pos in cube_positions(min_pos, max_pos)
     ]

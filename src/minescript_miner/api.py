@@ -9,11 +9,11 @@ def geometry_catalog_debug():
     return native.geometry_catalog_debug()
 
 
-def scan_region_debug(position, orientation, catalog_version, side, shape_ids):
+def scan_region_debug(position, orientation, shape_catalog_version, side, shape_ids):
     return native.scan_region_debug(
         position,
         orientation,
-        catalog_version,
+        shape_catalog_version,
         side,
         shape_ids,
     )

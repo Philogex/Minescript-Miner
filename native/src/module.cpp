@@ -92,9 +92,13 @@ static PyObject *geometry_catalog_debug(PyObject *, PyObject *) {
     }
 
     PyObject *debug = Py_BuildValue(
-        "{s:i,s:i,s:N,s:N,s:N}",
+        "{s:i,s:i,s:i,s:i,s:N,s:N,s:N}",
         "version",
         minescript_miner::GEOMETRY_CATALOG_VERSION,
+        "geometry_catalog_version",
+        minescript_miner::GEOMETRY_CATALOG_VERSION,
+        "shape_catalog_version",
+        minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION,
         "shape_count",
         minescript_miner::geometry_catalog_shape_count(),
         "shape_names",
@@ -209,7 +213,7 @@ static std::string log_path() {
 static void log_scan_input(
     const double (&position)[3],
     const double (&orientation)[2],
-    int catalog_version,
+    int shape_catalog_version,
     const std::vector<std::int32_t> &shape_ids,
     int side,
     double direction_x,
@@ -246,7 +250,8 @@ static void log_scan_input(
     log << "  orientation_look_xyz_from_degrees: "
         << std::fixed << std::setprecision(6)
         << look_x << ", " << look_y << ", " << look_z << "\n";
-    log << "  geometry_catalog_version: " << catalog_version << "\n";
+    log << "  shape_catalog_version: " << shape_catalog_version << "\n";
+    log << "  native_shape_catalog_version: " << minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION << "\n";
     log << "  native_geometry_catalog_version: " << minescript_miner::GEOMETRY_CATALOG_VERSION << "\n";
     log << "  block_count: " << shape_ids.size() << "\n";
     log << "  cube_side: " << side << "\n";
@@ -287,7 +292,7 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
     PyObject *position_object = nullptr;
     PyObject *orientation_object = nullptr;
     PyObject *shape_ids_object = nullptr;
-    int catalog_version = 0;
+    int shape_catalog_version = 0;
     int side = 0;
 
     if (!PyArg_ParseTuple(
@@ -295,19 +300,19 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
             "OOiiO:scan_region_debug",
             &position_object,
             &orientation_object,
-            &catalog_version,
+            &shape_catalog_version,
             &side,
             &shape_ids_object
         )) {
         return nullptr;
     }
 
-    if (catalog_version != minescript_miner::GEOMETRY_CATALOG_VERSION) {
+    if (shape_catalog_version != minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION) {
         PyErr_Format(
             PyExc_ValueError,
-            "unsupported geometry catalog version: expected %d, got %d",
-            minescript_miner::GEOMETRY_CATALOG_VERSION,
-            catalog_version
+            "unsupported shape catalog version: expected %d, got %d",
+            minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION,
+            shape_catalog_version
         );
         return nullptr;
     }
@@ -352,7 +357,7 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
     log_scan_input(
         position,
         orientation,
-        catalog_version,
+        shape_catalog_version,
         shape_ids,
         side,
         direction_x,

@@ -19,7 +19,7 @@ for path in (PROJECT_ROOT, SRC_ROOT):
         sys.path.insert(0, path_text)
 
 import _minescript_miner_native as native
-from minescript_miner.adapter.shape_catalog import CATALOG_VERSION, SHAPE_NAMES
+from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION, SHAPE_NAMES
 
 
 def _echo(message: str) -> None:
@@ -33,12 +33,12 @@ def _echo(message: str) -> None:
 
 def assert_geometry_catalog_parity() -> Dict[str, Any]:
     debug = native.geometry_catalog_debug()
-    native_version = int(debug["version"])
+    native_version = int(debug["shape_catalog_version"])
     native_names: List[str] = list(debug["shape_names"])
 
-    if native_version != CATALOG_VERSION:
+    if native_version != SHAPE_CATALOG_VERSION:
         raise AssertionError(
-            f"Geometry catalog version mismatch: python={CATALOG_VERSION}, "
+            f"Shape catalog version mismatch: python={SHAPE_CATALOG_VERSION}, "
             f"native={native_version}"
         )
 
@@ -59,7 +59,7 @@ def assert_geometry_catalog_parity() -> Dict[str, Any]:
         )
 
     return {
-        "version": CATALOG_VERSION,
+        "version": SHAPE_CATALOG_VERSION,
         "shape_count": len(SHAPE_NAMES),
     }
 

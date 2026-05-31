@@ -1,8 +1,8 @@
 import unittest
 
 from minescript_miner.adapter.shape_catalog import (
-    CATALOG_VERSION,
     DEFAULT_CATALOG,
+    SHAPE_CATALOG_VERSION,
     SHAPE_ID_BY_NAME,
     SHAPE_NAMES,
 )
@@ -13,7 +13,7 @@ class GeometryCatalogTest(unittest.TestCase):
     def test_geometry_catalog_matches_python_block_mapping(self):
         debug = geometry_catalog_debug()
 
-        self.assertEqual(CATALOG_VERSION, debug["version"])
+        self.assertEqual(SHAPE_CATALOG_VERSION, debug["shape_catalog_version"])
         self.assertEqual(SHAPE_NAMES, debug["shape_names"])
         self.assertEqual(len(SHAPE_NAMES), debug["shape_count"])
         self.assertEqual(len(SHAPE_NAMES), len(debug["box_counts"]))

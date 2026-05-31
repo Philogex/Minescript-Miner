@@ -27,7 +27,7 @@ def scan_region_debug(
     x, z = native.scan_region_debug(
         position,
         orientation,
-        encoded.catalog_version,
+        encoded.shape_catalog_version,
         encoded.side,
         encoded.shape_ids,
     )

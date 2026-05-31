@@ -1,4 +1,5 @@
 from .shape_catalog import (
+    BLOCK_SHAPE_MAPPING_VERSION,
     CATALOG_VERSION,
     DEFAULT_CATALOG,
     EMPTY_BLOCKS,
@@ -9,6 +10,7 @@ from .shape_catalog import (
     SHAPE_ID_BY_BLOCK_STATE,
     SHAPE_ID_BY_NAME,
     SHAPE_NAMES,
+    SHAPE_CATALOG_VERSION,
     SHAPE_SLAB_BOTTOM,
     SHAPE_SLAB_TOP,
     BlockShapeCatalog,
@@ -20,6 +22,7 @@ from .native_bridge import scan_region_debug
 
 __all__ = [
     "BlockShapeCatalog",
+    "BLOCK_SHAPE_MAPPING_VERSION",
     "CATALOG_VERSION",
     "DEFAULT_CATALOG",
     "EMPTY_BLOCKS",
@@ -31,6 +34,7 @@ __all__ = [
     "SHAPE_ID_BY_BLOCK_STATE",
     "SHAPE_ID_BY_NAME",
     "SHAPE_NAMES",
+    "SHAPE_CATALOG_VERSION",
     "SHAPE_SLAB_BOTTOM",
     "SHAPE_SLAB_TOP",
     "normalized_shape_key",

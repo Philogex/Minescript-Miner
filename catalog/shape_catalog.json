@@ -1,0 +1,61 @@
+{
+  "shape_catalog_version": 1,
+  "block_shape_mapping_version": 1,
+  "geometry_catalog_version": 1,
+  "directions": ["north", "east", "south", "west"],
+  "halves": ["bottom", "top"],
+  "stair_shapes": ["straight", "inner_left", "inner_right", "outer_left", "outer_right"],
+  "empty_blocks": [
+    "minecraft:air",
+    "minecraft:cave_air",
+    "minecraft:void_air",
+    "minecraft:water",
+    "minecraft:lava"
+  ],
+  "shapes": [
+    {"name": "empty", "kind": "empty"},
+    {"name": "full_cube", "boxes": [[0, 0, 0, 16, 16, 16]]},
+    {"name": "slab_bottom", "boxes": [[0, 0, 0, 16, 8, 16]]},
+    {"name": "slab_top", "boxes": [[0, 8, 0, 16, 16, 16]]},
+    {
+      "family": "stairs",
+      "template": "stairs_{facing}_{half}_{shape}"
+    },
+    {
+      "family": "connection",
+      "template": "pane_{connection}",
+      "center": [7, 9]
+    },
+    {
+      "family": "connection",
+      "template": "fence_{connection}",
+      "center": [6, 10]
+    }
+  ],
+  "block_mappings": [
+    {
+      "block": "minecraft:oak_slab",
+      "properties": ["type"],
+      "states": [
+        {"properties": {"type": "bottom"}, "shape": "slab_bottom"},
+        {"properties": {"type": "top"}, "shape": "slab_top"},
+        {"properties": {"type": "double"}, "shape": "full_cube"}
+      ]
+    },
+    {
+      "block": "minecraft:oak_stairs",
+      "properties": ["facing", "half", "shape"],
+      "shape_template": "stairs_{facing}_{half}_{shape}"
+    },
+    {
+      "blocks": ["minecraft:iron_bars", "minecraft:glass_pane"],
+      "properties": ["north", "east", "south", "west"],
+      "connection_template": "pane_{connection}"
+    },
+    {
+      "block": "minecraft:oak_fence",
+      "properties": ["north", "east", "south", "west"],
+      "connection_template": "fence_{connection}"
+    }
+  ]
+}

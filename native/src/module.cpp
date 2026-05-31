@@ -41,7 +41,7 @@ static PyObject *geometry_catalog_debug(PyObject *, PyObject *) {
 
     const minescript_miner::GeometryCatalog &catalog = minescript_miner::geometry_catalog();
     for (std::size_t i = 0; i < catalog.shapes.size(); ++i) {
-        PyObject *python_name = PyUnicode_FromString(catalog.shape_names[i].c_str());
+        PyObject *python_name = PyUnicode_FromString(catalog.shape_names[i]);
         if (python_name == nullptr) {
             Py_DECREF(face_counts);
             Py_DECREF(box_counts);

@@ -1,31 +1,154 @@
 #include "minescript_miner/geometry_catalog.hpp"
 
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstddef>
-#include <stdexcept>
-#include <string>
-#include <utility>
-#include <vector>
+#include <cstdint>
 
 namespace minescript_miner {
 
 namespace {
 
-constexpr double EPS = 1.0e-9;
-
-struct GeneratedShape {
-    std::string name;
-    std::vector<Aabb> boxes;
-    std::vector<RectFace> faces;
+constexpr std::array<const char *, GEOMETRY_SHAPE_COUNT> SHAPE_NAME_TABLE = {
+    "empty",
+    "full_cube",
+    "slab_bottom",
+    "slab_top",
+    "stairs_north_bottom_straight",
+    "stairs_north_bottom_inner_left",
+    "stairs_north_bottom_inner_right",
+    "stairs_north_bottom_outer_left",
+    "stairs_north_bottom_outer_right",
+    "stairs_north_top_straight",
+    "stairs_north_top_inner_left",
+    "stairs_north_top_inner_right",
+    "stairs_north_top_outer_left",
+    "stairs_north_top_outer_right",
+    "stairs_east_bottom_straight",
+    "stairs_east_bottom_inner_left",
+    "stairs_east_bottom_inner_right",
+    "stairs_east_bottom_outer_left",
+    "stairs_east_bottom_outer_right",
+    "stairs_east_top_straight",
+    "stairs_east_top_inner_left",
+    "stairs_east_top_inner_right",
+    "stairs_east_top_outer_left",
+    "stairs_east_top_outer_right",
+    "stairs_south_bottom_straight",
+    "stairs_south_bottom_inner_left",
+    "stairs_south_bottom_inner_right",
+    "stairs_south_bottom_outer_left",
+    "stairs_south_bottom_outer_right",
+    "stairs_south_top_straight",
+    "stairs_south_top_inner_left",
+    "stairs_south_top_inner_right",
+    "stairs_south_top_outer_left",
+    "stairs_south_top_outer_right",
+    "stairs_west_bottom_straight",
+    "stairs_west_bottom_inner_left",
+    "stairs_west_bottom_inner_right",
+    "stairs_west_bottom_outer_left",
+    "stairs_west_bottom_outer_right",
+    "stairs_west_top_straight",
+    "stairs_west_top_inner_left",
+    "stairs_west_top_inner_right",
+    "stairs_west_top_outer_left",
+    "stairs_west_top_outer_right",
+    "pane_none",
+    "pane_north",
+    "pane_east",
+    "pane_north_east",
+    "pane_south",
+    "pane_north_south",
+    "pane_east_south",
+    "pane_north_east_south",
+    "pane_west",
+    "pane_north_west",
+    "pane_east_west",
+    "pane_north_east_west",
+    "pane_south_west",
+    "pane_north_south_west",
+    "pane_east_south_west",
+    "pane_north_east_south_west",
+    "fence_none",
+    "fence_north",
+    "fence_east",
+    "fence_north_east",
+    "fence_south",
+    "fence_north_south",
+    "fence_east_south",
+    "fence_north_east_south",
+    "fence_west",
+    "fence_north_west",
+    "fence_east_west",
+    "fence_north_east_west",
+    "fence_south_west",
+    "fence_north_south_west",
+    "fence_east_south_west",
+    "fence_north_east_south_west",
 };
 
-Aabb box(double min_x, double min_y, double min_z, double max_x, double max_y, double max_z) {
+enum Direction : std::uint8_t {
+    NORTH = 0,
+    EAST = 1,
+    SOUTH = 2,
+    WEST = 3,
+};
+
+enum StairShape : std::uint8_t {
+    STRAIGHT = 0,
+    INNER_LEFT = 1,
+    INNER_RIGHT = 2,
+    OUTER_LEFT = 3,
+    OUTER_RIGHT = 4,
+};
+
+struct Range16 {
+    std::uint8_t min;
+    std::uint8_t max;
+};
+
+struct AxisPair {
+    PlaneAxis first;
+    PlaneAxis second;
+};
+
+struct BoxList {
+    std::array<Aabb16, 5> boxes{};
+    std::uint8_t count = 0;
+};
+
+struct SplitList {
+    std::array<std::uint8_t, 12> values{};
+    std::uint8_t count = 0;
+};
+
+struct CatalogBuilder {
+    GeometryCatalog catalog{};
+    std::uint16_t shape_count = 0;
+    std::uint16_t box_count = 0;
+    std::uint16_t face_count = 0;
+};
+
+constexpr Aabb16 box(
+    std::uint8_t min_x,
+    std::uint8_t min_y,
+    std::uint8_t min_z,
+    std::uint8_t max_x,
+    std::uint8_t max_y,
+    std::uint8_t max_z
+) {
     return {min_x, min_y, min_z, max_x, max_y, max_z};
 }
 
-double axis_min(const Aabb &b, PlaneAxis axis) {
+constexpr std::uint8_t min_u8(std::uint8_t a, std::uint8_t b) {
+    return a < b ? a : b;
+}
+
+constexpr std::uint8_t max_u8(std::uint8_t a, std::uint8_t b) {
+    return a > b ? a : b;
+}
+
+constexpr std::uint8_t axis_min(const Aabb16 &b, PlaneAxis axis) {
     switch (axis) {
         case PlaneAxis::X:
             return b.min_x;
@@ -34,10 +157,10 @@ double axis_min(const Aabb &b, PlaneAxis axis) {
         case PlaneAxis::Z:
             return b.min_z;
     }
-    return 0.0;
+    return 0;
 }
 
-double axis_max(const Aabb &b, PlaneAxis axis) {
+constexpr std::uint8_t axis_max(const Aabb16 &b, PlaneAxis axis) {
     switch (axis) {
         case PlaneAxis::X:
             return b.max_x;
@@ -46,20 +169,10 @@ double axis_max(const Aabb &b, PlaneAxis axis) {
         case PlaneAxis::Z:
             return b.max_z;
     }
-    return 0.0;
+    return 0;
 }
 
-bool contains_point(const Aabb &b, const std::array<double, 3> &point) {
-    return point[0] > b.min_x + EPS && point[0] < b.max_x - EPS &&
-           point[1] > b.min_y + EPS && point[1] < b.max_y - EPS &&
-           point[2] > b.min_z + EPS && point[2] < b.max_z - EPS;
-}
-
-bool overlaps_1d(double a_min, double a_max, double b_min, double b_max) {
-    return a_min < b_max - EPS && b_min < a_max - EPS;
-}
-
-std::array<PlaneAxis, 2> uv_axes(PlaneAxis axis) {
+constexpr AxisPair uv_axes(PlaneAxis axis) {
     switch (axis) {
         case PlaneAxis::X:
             return {PlaneAxis::Y, PlaneAxis::Z};
@@ -71,61 +184,97 @@ std::array<PlaneAxis, 2> uv_axes(PlaneAxis axis) {
     return {PlaneAxis::X, PlaneAxis::Y};
 }
 
-std::array<double, 3> point_on_face(const RectFace &face, double u, double v, double offset) {
-    std::array<double, 3> point = {0.0, 0.0, 0.0};
-    const auto axes = uv_axes(face.axis);
-    point[static_cast<std::size_t>(face.axis)] = face.coord + offset;
-    point[static_cast<std::size_t>(axes[0])] = u;
-    point[static_cast<std::size_t>(axes[1])] = v;
-    return point;
+constexpr bool overlaps_1d(std::uint8_t a_min, std::uint8_t a_max, std::uint8_t b_min, std::uint8_t b_max) {
+    return a_min < b_max && b_min < a_max;
 }
 
-void add_split(std::vector<double> &values, double value, double min_value, double max_value) {
-    if (value > min_value + EPS && value < max_value - EPS) {
-        values.push_back(value);
+constexpr void add_box(BoxList &shape, Aabb16 b) {
+    shape.boxes[shape.count] = b;
+    ++shape.count;
+}
+
+constexpr void add_split(SplitList &splits, std::uint8_t value, std::uint8_t min_value, std::uint8_t max_value) {
+    if (value > min_value && value < max_value) {
+        splits.values[splits.count] = value;
+        ++splits.count;
     }
 }
 
-std::vector<double> sorted_unique(std::vector<double> values) {
-    std::sort(values.begin(), values.end());
-    values.erase(
-        std::unique(
-            values.begin(),
-            values.end(),
-            [](double a, double b) {
-                return std::abs(a - b) <= EPS;
-            }
-        ),
-        values.end()
-    );
-    return values;
+constexpr void sort_unique(SplitList &splits) {
+    for (std::uint8_t i = 1; i < splits.count; ++i) {
+        const std::uint8_t value = splits.values[i];
+        std::uint8_t j = i;
+        while (j > 0 && splits.values[j - 1] > value) {
+            splits.values[j] = splits.values[j - 1];
+            --j;
+        }
+        splits.values[j] = value;
+    }
+
+    std::uint8_t write_index = 0;
+    for (std::uint8_t read_index = 0; read_index < splits.count; ++read_index) {
+        if (write_index == 0 || splits.values[read_index] != splits.values[write_index - 1]) {
+            splits.values[write_index] = splits.values[read_index];
+            ++write_index;
+        }
+    }
+    splits.count = write_index;
 }
 
-bool outside_occupied(const RectFace &face, double u, double v, const std::vector<Aabb> &boxes) {
-    const double offset = static_cast<double>(face.normal_sign) * 1.0e-7;
-    const auto point = point_on_face(face, u, v, offset);
-    for (const Aabb &b : boxes) {
-        if (contains_point(b, point)) {
+constexpr bool midpoint_inside(std::uint8_t min_value, std::uint8_t max_value, std::uint16_t midpoint_times_2) {
+    return static_cast<std::uint16_t>(min_value) * 2 < midpoint_times_2 &&
+           midpoint_times_2 < static_cast<std::uint16_t>(max_value) * 2;
+}
+
+constexpr bool outside_occupied(
+    const RectFace16 &face,
+    std::uint16_t u_midpoint_times_2,
+    std::uint16_t v_midpoint_times_2,
+    const BoxList &shape
+) {
+    const AxisPair axes = uv_axes(face.axis);
+    for (std::uint8_t i = 0; i < shape.count; ++i) {
+        const Aabb16 &b = shape.boxes[i];
+        const bool crosses_face =
+            face.normal_sign > 0
+                ? axis_min(b, face.axis) <= face.coord && axis_max(b, face.axis) > face.coord
+                : axis_min(b, face.axis) < face.coord && axis_max(b, face.axis) >= face.coord;
+        if (!crosses_face) {
+            continue;
+        }
+
+        if (midpoint_inside(axis_min(b, axes.first), axis_max(b, axes.first), u_midpoint_times_2) &&
+            midpoint_inside(axis_min(b, axes.second), axis_max(b, axes.second), v_midpoint_times_2)) {
             return true;
         }
     }
     return false;
 }
 
-void add_face_cells(const RectFace &face, const std::vector<Aabb> &boxes, std::vector<RectFace> &faces) {
-    const auto axes = uv_axes(face.axis);
-    std::vector<double> u_splits = {face.u_min, face.u_max};
-    std::vector<double> v_splits = {face.v_min, face.v_max};
+constexpr void add_face(CatalogBuilder &builder, RectFace16 face) {
+    builder.catalog.faces[builder.face_count] = face;
+    ++builder.face_count;
+}
 
-    for (const Aabb &b : boxes) {
-        if (axis_min(b, face.axis) > face.coord + EPS || axis_max(b, face.axis) < face.coord - EPS) {
+constexpr void add_face_cells(CatalogBuilder &builder, const RectFace16 &face, const BoxList &shape) {
+    const AxisPair axes = uv_axes(face.axis);
+    SplitList u_splits{};
+    SplitList v_splits{};
+    u_splits.values[u_splits.count++] = face.u_min;
+    u_splits.values[u_splits.count++] = face.u_max;
+    v_splits.values[v_splits.count++] = face.v_min;
+    v_splits.values[v_splits.count++] = face.v_max;
+
+    for (std::uint8_t i = 0; i < shape.count; ++i) {
+        const Aabb16 &b = shape.boxes[i];
+        if (axis_min(b, face.axis) > face.coord || axis_max(b, face.axis) < face.coord) {
             continue;
         }
 
-        const double box_u_min = axis_min(b, axes[0]);
-        const double box_u_max = axis_max(b, axes[0]);
-        const double box_v_min = axis_min(b, axes[1]);
-        const double box_v_max = axis_max(b, axes[1]);
+        const std::uint8_t box_u_min = axis_min(b, axes.first);
+        const std::uint8_t box_u_max = axis_max(b, axes.first);
+        const std::uint8_t box_v_min = axis_min(b, axes.second);
+        const std::uint8_t box_v_max = axis_max(b, axes.second);
         if (!overlaps_1d(face.u_min, face.u_max, box_u_min, box_u_max) ||
             !overlaps_1d(face.v_min, face.v_max, box_v_min, box_v_max)) {
             continue;
@@ -137,209 +286,199 @@ void add_face_cells(const RectFace &face, const std::vector<Aabb> &boxes, std::v
         add_split(v_splits, box_v_max, face.v_min, face.v_max);
     }
 
-    u_splits = sorted_unique(std::move(u_splits));
-    v_splits = sorted_unique(std::move(v_splits));
+    sort_unique(u_splits);
+    sort_unique(v_splits);
 
-    for (std::size_t u_index = 0; u_index + 1 < u_splits.size(); ++u_index) {
-        for (std::size_t v_index = 0; v_index + 1 < v_splits.size(); ++v_index) {
-            const double u_min = u_splits[u_index];
-            const double u_max = u_splits[u_index + 1];
-            const double v_min = v_splits[v_index];
-            const double v_max = v_splits[v_index + 1];
-            if (u_max <= u_min + EPS || v_max <= v_min + EPS) {
+    for (std::uint8_t u_index = 0; u_index + 1 < u_splits.count; ++u_index) {
+        for (std::uint8_t v_index = 0; v_index + 1 < v_splits.count; ++v_index) {
+            const std::uint8_t u_min = u_splits.values[u_index];
+            const std::uint8_t u_max = u_splits.values[u_index + 1];
+            const std::uint8_t v_min = v_splits.values[v_index];
+            const std::uint8_t v_max = v_splits.values[v_index + 1];
+            if (u_max <= u_min || v_max <= v_min) {
                 continue;
             }
 
-            const double u_mid = (u_min + u_max) * 0.5;
-            const double v_mid = (v_min + v_max) * 0.5;
-            if (outside_occupied(face, u_mid, v_mid, boxes)) {
+            const std::uint16_t u_midpoint_times_2 = static_cast<std::uint16_t>(u_min) + u_max;
+            const std::uint16_t v_midpoint_times_2 = static_cast<std::uint16_t>(v_min) + v_max;
+            if (outside_occupied(face, u_midpoint_times_2, v_midpoint_times_2, shape)) {
                 continue;
             }
 
-            faces.push_back({face.axis, face.coord, u_min, u_max, v_min, v_max, face.normal_sign});
+            add_face(builder, {face.axis, face.coord, u_min, u_max, v_min, v_max, face.normal_sign});
         }
     }
 }
 
-void add_box_faces(const Aabb &b, const std::vector<Aabb> &boxes, std::vector<RectFace> &faces) {
-    add_face_cells({PlaneAxis::X, b.min_x, b.min_y, b.max_y, b.min_z, b.max_z, -1}, boxes, faces);
-    add_face_cells({PlaneAxis::X, b.max_x, b.min_y, b.max_y, b.min_z, b.max_z, 1}, boxes, faces);
-    add_face_cells({PlaneAxis::Y, b.min_y, b.min_x, b.max_x, b.min_z, b.max_z, -1}, boxes, faces);
-    add_face_cells({PlaneAxis::Y, b.max_y, b.min_x, b.max_x, b.min_z, b.max_z, 1}, boxes, faces);
-    add_face_cells({PlaneAxis::Z, b.min_z, b.min_x, b.max_x, b.min_y, b.max_y, -1}, boxes, faces);
-    add_face_cells({PlaneAxis::Z, b.max_z, b.min_x, b.max_x, b.min_y, b.max_y, 1}, boxes, faces);
+constexpr void add_box_faces(CatalogBuilder &builder, const Aabb16 &b, const BoxList &shape) {
+    add_face_cells(builder, {PlaneAxis::X, b.min_x, b.min_y, b.max_y, b.min_z, b.max_z, -1}, shape);
+    add_face_cells(builder, {PlaneAxis::X, b.max_x, b.min_y, b.max_y, b.min_z, b.max_z, 1}, shape);
+    add_face_cells(builder, {PlaneAxis::Y, b.min_y, b.min_x, b.max_x, b.min_z, b.max_z, -1}, shape);
+    add_face_cells(builder, {PlaneAxis::Y, b.max_y, b.min_x, b.max_x, b.min_z, b.max_z, 1}, shape);
+    add_face_cells(builder, {PlaneAxis::Z, b.min_z, b.min_x, b.max_x, b.min_y, b.max_y, -1}, shape);
+    add_face_cells(builder, {PlaneAxis::Z, b.max_z, b.min_x, b.max_x, b.min_y, b.max_y, 1}, shape);
 }
 
-GeneratedShape shape_from_boxes(std::string name, std::vector<Aabb> boxes) {
-    std::vector<RectFace> faces;
-    for (const Aabb &b : boxes) {
-        add_box_faces(b, boxes, faces);
+constexpr void add_shape(CatalogBuilder &builder, const BoxList &shape) {
+    const std::uint16_t box_offset = builder.box_count;
+    const std::uint16_t face_offset = builder.face_count;
+
+    for (std::uint8_t i = 0; i < shape.count; ++i) {
+        builder.catalog.boxes[builder.box_count] = shape.boxes[i];
+        ++builder.box_count;
     }
-    return {std::move(name), std::move(boxes), std::move(faces)};
+    for (std::uint8_t i = 0; i < shape.count; ++i) {
+        add_box_faces(builder, shape.boxes[i], shape);
+    }
+
+    builder.catalog.shapes[builder.shape_count] = {
+        box_offset,
+        shape.count,
+        face_offset,
+        static_cast<std::uint8_t>(builder.face_count - face_offset),
+    };
+    ++builder.shape_count;
 }
 
-std::string connection_mask_name(int mask) {
-    static constexpr const char *directions[] = {"north", "east", "south", "west"};
-
-    std::string name;
-    for (int bit = 0; bit < 4; ++bit) {
-        if ((mask & (1 << bit)) == 0) {
-            continue;
-        }
-        if (!name.empty()) {
-            name += "_";
-        }
-        name += directions[bit];
+constexpr Range16 half_bounds_1d(Direction direction, bool front, bool x_axis) {
+    switch (direction) {
+        case NORTH:
+            return x_axis ? Range16{0, 16} : (front ? Range16{0, 8} : Range16{8, 16});
+        case SOUTH:
+            return x_axis ? Range16{0, 16} : (front ? Range16{8, 16} : Range16{0, 8});
+        case EAST:
+            return x_axis ? (front ? Range16{8, 16} : Range16{0, 8}) : Range16{0, 16};
+        case WEST:
+            return x_axis ? (front ? Range16{0, 8} : Range16{8, 16}) : Range16{0, 16};
     }
-    return name.empty() ? "none" : name;
+    return {0, 16};
 }
 
-std::pair<double, double> half_bounds_1d(const std::string &direction, bool front, bool x_axis) {
-    if (direction == "north") {
-        return x_axis ? std::pair{0.0, 1.0} : (front ? std::pair{0.0, 0.5} : std::pair{0.5, 1.0});
+constexpr Direction lateral_direction(Direction direction, bool left) {
+    if (left) {
+        switch (direction) {
+            case NORTH:
+                return WEST;
+            case EAST:
+                return NORTH;
+            case SOUTH:
+                return EAST;
+            case WEST:
+                return SOUTH;
+        }
     }
-    if (direction == "south") {
-        return x_axis ? std::pair{0.0, 1.0} : (front ? std::pair{0.5, 1.0} : std::pair{0.0, 0.5});
+
+    switch (direction) {
+        case NORTH:
+            return EAST;
+        case EAST:
+            return SOUTH;
+        case SOUTH:
+            return WEST;
+        case WEST:
+            return NORTH;
     }
-    if (direction == "east") {
-        return x_axis ? (front ? std::pair{0.5, 1.0} : std::pair{0.0, 0.5}) : std::pair{0.0, 1.0};
-    }
-    if (direction == "west") {
-        return x_axis ? (front ? std::pair{0.0, 0.5} : std::pair{0.5, 1.0}) : std::pair{0.0, 1.0};
-    }
-    throw std::logic_error("unknown stair direction");
+    return NORTH;
 }
 
-std::string lateral_direction(const std::string &direction, const std::string &side) {
-    if (side == "left") {
-        if (direction == "north") {
-            return "west";
-        }
-        if (direction == "east") {
-            return "north";
-        }
-        if (direction == "south") {
-            return "east";
-        }
-        if (direction == "west") {
-            return "south";
-        }
-    } else {
-        if (direction == "north") {
-            return "east";
-        }
-        if (direction == "east") {
-            return "south";
-        }
-        if (direction == "south") {
-            return "west";
-        }
-        if (direction == "west") {
-            return "north";
-        }
-    }
-    throw std::logic_error("unknown stair direction/side");
-}
-
-Aabb stair_quadrant(const std::string &direction, const std::string &side, bool front, double y_min, double y_max) {
-    const auto front_x = half_bounds_1d(direction, front, true);
-    const auto front_z = half_bounds_1d(direction, front, false);
-    const std::string lateral = lateral_direction(direction, side);
-    const auto lateral_x = half_bounds_1d(lateral, true, true);
-    const auto lateral_z = half_bounds_1d(lateral, true, false);
+constexpr Aabb16 stair_quadrant(Direction direction, bool left, bool front, std::uint8_t y_min, std::uint8_t y_max) {
+    const Range16 front_x = half_bounds_1d(direction, front, true);
+    const Range16 front_z = half_bounds_1d(direction, front, false);
+    const Direction lateral = lateral_direction(direction, left);
+    const Range16 lateral_x = half_bounds_1d(lateral, true, true);
+    const Range16 lateral_z = half_bounds_1d(lateral, true, false);
     return box(
-        std::max(front_x.first, lateral_x.first),
+        max_u8(front_x.min, lateral_x.min),
         y_min,
-        std::max(front_z.first, lateral_z.first),
-        std::min(front_x.second, lateral_x.second),
+        max_u8(front_z.min, lateral_z.min),
+        min_u8(front_x.max, lateral_x.max),
         y_max,
-        std::min(front_z.second, lateral_z.second)
+        min_u8(front_z.max, lateral_z.max)
     );
 }
 
-std::vector<Aabb> stair_boxes(const std::string &direction, const std::string &half, const std::string &stair_shape) {
-    std::vector<Aabb> boxes;
-    double y_min = 0.5;
-    double y_max = 1.0;
-    if (half == "bottom") {
-        boxes.push_back(box(0.0, 0.0, 0.0, 1.0, 0.5, 1.0));
+constexpr BoxList stair_boxes(Direction direction, bool top, StairShape stair_shape) {
+    BoxList shape{};
+    std::uint8_t y_min = 8;
+    std::uint8_t y_max = 16;
+    if (top) {
+        add_box(shape, box(0, 8, 0, 16, 16, 16));
+        y_min = 0;
+        y_max = 8;
     } else {
-        boxes.push_back(box(0.0, 0.5, 0.0, 1.0, 1.0, 1.0));
-        y_min = 0.0;
-        y_max = 0.5;
+        add_box(shape, box(0, 0, 0, 16, 8, 16));
     }
 
-    if (stair_shape == "straight") {
-        boxes.push_back(stair_quadrant(direction, "left", true, y_min, y_max));
-        boxes.push_back(stair_quadrant(direction, "right", true, y_min, y_max));
-    } else if (stair_shape == "outer_left") {
-        boxes.push_back(stair_quadrant(direction, "left", true, y_min, y_max));
-    } else if (stair_shape == "outer_right") {
-        boxes.push_back(stair_quadrant(direction, "right", true, y_min, y_max));
-    } else if (stair_shape == "inner_left") {
-        boxes.push_back(stair_quadrant(direction, "left", true, y_min, y_max));
-        boxes.push_back(stair_quadrant(direction, "right", true, y_min, y_max));
-        boxes.push_back(stair_quadrant(direction, "left", false, y_min, y_max));
-    } else if (stair_shape == "inner_right") {
-        boxes.push_back(stair_quadrant(direction, "left", true, y_min, y_max));
-        boxes.push_back(stair_quadrant(direction, "right", true, y_min, y_max));
-        boxes.push_back(stair_quadrant(direction, "right", false, y_min, y_max));
-    } else {
-        throw std::logic_error("unknown stair shape");
+    switch (stair_shape) {
+        case STRAIGHT:
+            add_box(shape, stair_quadrant(direction, true, true, y_min, y_max));
+            add_box(shape, stair_quadrant(direction, false, true, y_min, y_max));
+            break;
+        case INNER_LEFT:
+            add_box(shape, stair_quadrant(direction, true, true, y_min, y_max));
+            add_box(shape, stair_quadrant(direction, false, true, y_min, y_max));
+            add_box(shape, stair_quadrant(direction, true, false, y_min, y_max));
+            break;
+        case INNER_RIGHT:
+            add_box(shape, stair_quadrant(direction, true, true, y_min, y_max));
+            add_box(shape, stair_quadrant(direction, false, true, y_min, y_max));
+            add_box(shape, stair_quadrant(direction, false, false, y_min, y_max));
+            break;
+        case OUTER_LEFT:
+            add_box(shape, stair_quadrant(direction, true, true, y_min, y_max));
+            break;
+        case OUTER_RIGHT:
+            add_box(shape, stair_quadrant(direction, false, true, y_min, y_max));
+            break;
     }
-    return boxes;
+    return shape;
 }
 
-std::vector<Aabb> connection_boxes(int mask, double post_width, double arm_width) {
-    const double half_post = post_width * 0.5;
-    const double half_arm = arm_width * 0.5;
-    const double center_min = 0.5 - half_post;
-    const double center_max = 0.5 + half_post;
-    const double arm_min = 0.5 - half_arm;
-    const double arm_max = 0.5 + half_arm;
-
-    std::vector<Aabb> boxes = {
-        box(center_min, 0.0, center_min, center_max, 1.0, center_max),
-    };
+constexpr BoxList connection_boxes(int mask, std::uint8_t center_min, std::uint8_t center_max) {
+    BoxList shape{};
+    add_box(shape, box(center_min, 0, center_min, center_max, 16, center_max));
     if ((mask & 1) != 0) {
-        boxes.push_back(box(arm_min, 0.0, 0.0, arm_max, 1.0, center_min));
+        add_box(shape, box(center_min, 0, 0, center_max, 16, center_min));
     }
     if ((mask & 2) != 0) {
-        boxes.push_back(box(center_max, 0.0, arm_min, 1.0, 1.0, arm_max));
+        add_box(shape, box(center_max, 0, center_min, 16, 16, center_max));
     }
     if ((mask & 4) != 0) {
-        boxes.push_back(box(arm_min, 0.0, center_max, arm_max, 1.0, 1.0));
+        add_box(shape, box(center_min, 0, center_max, center_max, 16, 16));
     }
     if ((mask & 8) != 0) {
-        boxes.push_back(box(0.0, 0.0, arm_min, center_min, 1.0, arm_max));
+        add_box(shape, box(0, 0, center_min, center_min, 16, center_max));
     }
-    return boxes;
+    return shape;
 }
 
-std::vector<GeneratedShape> generate_shapes() {
-    static constexpr const char *directions[] = {"north", "east", "south", "west"};
-    static constexpr const char *halves[] = {"bottom", "top"};
-    static constexpr const char *stair_shapes[] = {
-        "straight",
-        "inner_left",
-        "inner_right",
-        "outer_left",
-        "outer_right",
-    };
+constexpr GeometryCatalog build_geometry_catalog() {
+    CatalogBuilder builder{};
+    builder.catalog.shape_names = SHAPE_NAME_TABLE;
 
-    std::vector<GeneratedShape> generated;
-    generated.push_back(shape_from_boxes("empty", {}));
-    generated.push_back(shape_from_boxes("full_cube", {box(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)}));
-    generated.push_back(shape_from_boxes("slab_bottom", {box(0.0, 0.0, 0.0, 1.0, 0.5, 1.0)}));
-    generated.push_back(shape_from_boxes("slab_top", {box(0.0, 0.5, 0.0, 1.0, 1.0, 1.0)}));
+    add_shape(builder, BoxList{});
 
-    for (const char *direction : directions) {
-        for (const char *half : halves) {
-            for (const char *stair_shape : stair_shapes) {
-                generated.push_back(
-                    shape_from_boxes(
-                        std::string("stairs_") + direction + "_" + half + "_" + stair_shape,
-                        stair_boxes(direction, half, stair_shape)
+    BoxList full_cube{};
+    add_box(full_cube, box(0, 0, 0, 16, 16, 16));
+    add_shape(builder, full_cube);
+
+    BoxList slab_bottom{};
+    add_box(slab_bottom, box(0, 0, 0, 16, 8, 16));
+    add_shape(builder, slab_bottom);
+
+    BoxList slab_top{};
+    add_box(slab_top, box(0, 8, 0, 16, 16, 16));
+    add_shape(builder, slab_top);
+
+    for (std::uint8_t direction = 0; direction < 4; ++direction) {
+        for (std::uint8_t half = 0; half < 2; ++half) {
+            for (std::uint8_t stair_shape = 0; stair_shape < 5; ++stair_shape) {
+                add_shape(
+                    builder,
+                    stair_boxes(
+                        static_cast<Direction>(direction),
+                        half == 1,
+                        static_cast<StairShape>(stair_shape)
                     )
                 );
             }
@@ -347,74 +486,67 @@ std::vector<GeneratedShape> generate_shapes() {
     }
 
     for (int mask = 0; mask < 16; ++mask) {
-        generated.push_back(
-            shape_from_boxes("pane_" + connection_mask_name(mask), connection_boxes(mask, 2.0 / 16.0, 2.0 / 16.0))
-        );
+        add_shape(builder, connection_boxes(mask, 7, 9));
     }
 
     for (int mask = 0; mask < 16; ++mask) {
-        generated.push_back(
-            shape_from_boxes("fence_" + connection_mask_name(mask), connection_boxes(mask, 4.0 / 16.0, 4.0 / 16.0))
-        );
+        add_shape(builder, connection_boxes(mask, 6, 10));
     }
 
-    return generated;
+    return builder.catalog;
 }
 
-GeometryCatalog build_geometry_catalog() {
-    GeometryCatalog catalog;
-    const std::vector<GeneratedShape> generated = generate_shapes();
-    catalog.shape_names.reserve(generated.size());
-    catalog.shapes.reserve(generated.size());
+constexpr GeometryCatalog CATALOG = build_geometry_catalog();
 
-    for (const GeneratedShape &shape : generated) {
-        const auto box_offset = static_cast<std::uint32_t>(catalog.boxes.size());
-        const auto face_offset = static_cast<std::uint32_t>(catalog.faces.size());
-        const auto box_count = static_cast<std::uint32_t>(shape.boxes.size());
-        const auto face_count = static_cast<std::uint32_t>(shape.faces.size());
-
-        catalog.shape_names.push_back(shape.name);
-        catalog.shapes.push_back({box_offset, box_count, face_offset, face_count});
-        catalog.boxes.insert(catalog.boxes.end(), shape.boxes.begin(), shape.boxes.end());
-        catalog.faces.insert(catalog.faces.end(), shape.faces.begin(), shape.faces.end());
+constexpr std::uint32_t used_box_count() {
+    std::uint32_t total = 0;
+    for (const ShapeGeometry &shape : CATALOG.shapes) {
+        total += shape.box_count;
     }
-
-    return catalog;
+    return total;
 }
+
+constexpr std::uint32_t used_face_count() {
+    std::uint32_t total = 0;
+    for (const ShapeGeometry &shape : CATALOG.shapes) {
+        total += shape.face_count;
+    }
+    return total;
+}
+
+static_assert(used_box_count() == GEOMETRY_BOX_COUNT, "geometry box count changed");
+static_assert(used_face_count() == GEOMETRY_FACE_COUNT, "geometry face count changed");
 
 }  // namespace
 
 const GeometryCatalog &geometry_catalog() {
-    static const GeometryCatalog catalog = build_geometry_catalog();
-    return catalog;
+    return CATALOG;
 }
 
 const ShapeGeometry &geometry_for_shape(std::int32_t shape_id) {
-    const GeometryCatalog &catalog = geometry_catalog();
-    if (shape_id < 0 || static_cast<std::size_t>(shape_id) >= catalog.shapes.size()) {
-        return catalog.shapes[static_cast<std::size_t>(SHAPE_FULL_CUBE)];
+    if (shape_id < 0 || static_cast<std::size_t>(shape_id) >= CATALOG.shapes.size()) {
+        return CATALOG.shapes[static_cast<std::size_t>(SHAPE_FULL_CUBE)];
     }
-    return catalog.shapes[static_cast<std::size_t>(shape_id)];
+    return CATALOG.shapes[static_cast<std::size_t>(shape_id)];
 }
 
 std::int32_t geometry_catalog_shape_count() {
-    return static_cast<std::int32_t>(geometry_catalog().shapes.size());
+    return static_cast<std::int32_t>(CATALOG.shapes.size());
 }
 
-const std::vector<std::string> &shape_names() {
-    return geometry_catalog().shape_names;
+const std::array<const char *, GEOMETRY_SHAPE_COUNT> &shape_names() {
+    return CATALOG.shape_names;
 }
 
-std::string shape_id_name(std::int32_t shape_id) {
-    const auto &names = shape_names();
-    if (shape_id < 0 || static_cast<std::size_t>(shape_id) >= names.size()) {
+const char *shape_id_name(std::int32_t shape_id) {
+    if (shape_id < 0 || static_cast<std::size_t>(shape_id) >= CATALOG.shape_names.size()) {
         return "unknown_shape";
     }
-    return names[static_cast<std::size_t>(shape_id)];
+    return CATALOG.shape_names[static_cast<std::size_t>(shape_id)];
 }
 
 std::int32_t shape_count() {
-    return static_cast<std::int32_t>(shape_names().size());
+    return static_cast<std::int32_t>(CATALOG.shape_names.size());
 }
 
 }

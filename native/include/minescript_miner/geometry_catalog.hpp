@@ -1,12 +1,15 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
-#include <string>
-#include <vector>
 
 namespace minescript_miner {
 
 inline constexpr int GEOMETRY_CATALOG_VERSION = 1;
+inline constexpr std::size_t GEOMETRY_SHAPE_COUNT = 76;
+inline constexpr std::size_t GEOMETRY_BOX_COUNT = 219;
+inline constexpr std::size_t GEOMETRY_FACE_COUNT = 1066;
 
 inline constexpr std::int32_t SHAPE_EMPTY = 0;
 inline constexpr std::int32_t SHAPE_FULL_CUBE = 1;
@@ -19,46 +22,46 @@ enum class PlaneAxis : std::int32_t {
     Z = 2,
 };
 
-struct Aabb {
-    double min_x;
-    double min_y;
-    double min_z;
-    double max_x;
-    double max_y;
-    double max_z;
+struct Aabb16 {
+    std::uint8_t min_x;
+    std::uint8_t min_y;
+    std::uint8_t min_z;
+    std::uint8_t max_x;
+    std::uint8_t max_y;
+    std::uint8_t max_z;
 };
 
-struct RectFace {
+struct RectFace16 {
     PlaneAxis axis;
-    double coord;
-    double u_min;
-    double u_max;
-    double v_min;
-    double v_max;
-    int normal_sign;
+    std::uint8_t coord;
+    std::uint8_t u_min;
+    std::uint8_t u_max;
+    std::uint8_t v_min;
+    std::uint8_t v_max;
+    std::int8_t normal_sign;
 };
 
 struct ShapeGeometry {
-    std::uint32_t box_offset;
-    std::uint32_t box_count;
-    std::uint32_t face_offset;
-    std::uint32_t face_count;
+    std::uint16_t box_offset;
+    std::uint8_t box_count;
+    std::uint16_t face_offset;
+    std::uint8_t face_count;
 };
 
 struct GeometryCatalog {
-    std::vector<std::string> shape_names;
-    std::vector<ShapeGeometry> shapes;
-    std::vector<Aabb> boxes;
-    std::vector<RectFace> faces;
+    std::array<const char *, GEOMETRY_SHAPE_COUNT> shape_names;
+    std::array<ShapeGeometry, GEOMETRY_SHAPE_COUNT> shapes;
+    std::array<Aabb16, GEOMETRY_BOX_COUNT> boxes;
+    std::array<RectFace16, GEOMETRY_FACE_COUNT> faces;
 };
 
 const GeometryCatalog &geometry_catalog();
 const ShapeGeometry &geometry_for_shape(std::int32_t shape_id);
 std::int32_t geometry_catalog_shape_count();
 
-std::string shape_id_name(std::int32_t shape_id);
+const char *shape_id_name(std::int32_t shape_id);
 std::int32_t shape_count();
-const std::vector<std::string> &shape_names();
+const std::array<const char *, GEOMETRY_SHAPE_COUNT> &shape_names();
 
 inline bool is_empty_shape(std::int32_t shape_id) {
     return shape_id == SHAPE_EMPTY;

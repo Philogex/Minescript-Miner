@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Tuple
 
 from minescript_miner.adapter.native_bridge import Orientation, ScanPosition, acquire_target
+from minescript_miner.adapter.shape_catalog import BlockShapeCatalog, DEFAULT_CATALOG
 from minescript_miner.minescript.world import fixed_cube_bounds, get_area
 
 
@@ -16,6 +17,8 @@ def acquire_current_target(
     position: ScanPosition,
     orientation: Orientation,
     reach: float = 4.8,
+    *,
+    catalog: BlockShapeCatalog = DEFAULT_CATALOG,
 ) -> Tuple[float, float]:
     min_pos, max_pos = fixed_cube_bounds(position, reach)
     block_strings = tuple(block_string for _pos, block_string in get_area(position, reach))
@@ -26,9 +29,11 @@ def acquire_current_target(
     ):
         raise ValueError(f"Expected a cube region, got min={min_pos} max={max_pos}")
 
+    encoded = catalog.encode_region(side, block_strings)
     return acquire_target(
         position,
         orientation,
-        side,
-        block_strings,
+        encoded.shape_catalog_version,
+        encoded.side,
+        encoded.shape_ids,
     )

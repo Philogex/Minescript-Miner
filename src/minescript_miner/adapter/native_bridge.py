@@ -1,12 +1,10 @@
-"""Pure Python adapter between raw Minescript block data and the native module."""
+"""Pure Python adapter between encoded Python data and the native module."""
 
 from __future__ import annotations
 
-from typing import Optional, Sequence, Tuple
+from typing import Sequence, Tuple
 
 import _minescript_miner_native as native
-
-from .shape_catalog import BlockShapeCatalog, DEFAULT_CATALOG
 
 
 ScanPosition = Tuple[float, float, float]
@@ -16,19 +14,17 @@ Orientation = Tuple[float, float]
 def acquire_target(
     position: ScanPosition,
     orientation: Orientation,
+    shape_catalog_version: int,
     side: int,
-    block_strings: Sequence[Optional[str]],
-    *,
-    catalog: BlockShapeCatalog = DEFAULT_CATALOG,
+    shape_ids: Sequence[int],
 ) -> Tuple[float, float]:
-    """Encode raw block strings and acquire the next target direction."""
+    """Pass encoded shape ids to the native target acquisition step."""
 
-    encoded = catalog.encode_region(side, block_strings)
     x, z = native.acquire_target(
         position,
         orientation,
-        encoded.shape_catalog_version,
-        encoded.side,
-        encoded.shape_ids,
+        shape_catalog_version,
+        side,
+        shape_ids,
     )
     return float(x), float(z)

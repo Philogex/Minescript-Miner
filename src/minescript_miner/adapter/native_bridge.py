@@ -13,7 +13,7 @@ ScanPosition = Tuple[float, float, float]
 Orientation = Tuple[float, float]
 
 
-def scan_region_debug(
+def acquire_target(
     position: ScanPosition,
     orientation: Orientation,
     side: int,
@@ -21,10 +21,10 @@ def scan_region_debug(
     *,
     catalog: BlockShapeCatalog = DEFAULT_CATALOG,
 ) -> Tuple[float, float]:
-    """Encode raw block strings and run the native transfer/logging prototype."""
+    """Encode raw block strings and acquire the next target direction."""
 
     encoded = catalog.encode_region(side, block_strings)
-    x, z = native.scan_region_debug(
+    x, z = native.acquire_target(
         position,
         orientation,
         encoded.shape_catalog_version,

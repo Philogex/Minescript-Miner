@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from typing import Tuple
 
-from minescript_miner.adapter.native_bridge import Orientation, ScanPosition, scan_region_debug
+from minescript_miner.adapter.native_bridge import Orientation, ScanPosition, acquire_target
 from minescript_miner.minescript.world import fixed_cube_bounds, get_area
 
 
-def scan_current_region_debug(
+def acquire_current_target(
     position: ScanPosition,
     orientation: Orientation,
     reach: float = 4.8,
@@ -26,7 +26,7 @@ def scan_current_region_debug(
     ):
         raise ValueError(f"Expected a cube region, got min={min_pos} max={max_pos}")
 
-    return scan_region_debug(
+    return acquire_target(
         position,
         orientation,
         side,

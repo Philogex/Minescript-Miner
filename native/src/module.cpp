@@ -234,7 +234,7 @@ static void log_scan_input(
         }
     }
 
-    log << "scan_region_debug\n";
+    log << "acquire_target\n";
     log << "  time: " << std::put_time(std::localtime(&now_time), "%F %T") << "\n";
     log << "  position: "
         << std::fixed << std::setprecision(3)
@@ -288,7 +288,7 @@ static void log_scan_input(
         << direction_x << ", " << direction_z << "\n\n";
 }
 
-static PyObject *scan_region_debug(PyObject *, PyObject *args) {
+static PyObject *acquire_target(PyObject *, PyObject *args) {
     PyObject *position_object = nullptr;
     PyObject *orientation_object = nullptr;
     PyObject *shape_ids_object = nullptr;
@@ -297,7 +297,7 @@ static PyObject *scan_region_debug(PyObject *, PyObject *args) {
 
     if (!PyArg_ParseTuple(
             args,
-            "OOiiO:scan_region_debug",
+            "OOiiO:acquire_target",
             &position_object,
             &orientation_object,
             &shape_catalog_version,
@@ -372,8 +372,8 @@ static PyMethodDef module_methods[] = {
      "Return a small greeting from the native extension."},
     {"geometry_catalog_debug", reinterpret_cast<PyCFunction>(geometry_catalog_debug), METH_NOARGS,
      "Return the native geometry catalog version, shape names, and geometry counts for parity checks."},
-    {"scan_region_debug", reinterpret_cast<PyCFunction>(scan_region_debug), METH_VARARGS,
-     "Log position, orientation, shape catalog version, side, and shape ids; return a prototype normalized x/z direction."},
+    {"acquire_target", reinterpret_cast<PyCFunction>(acquire_target), METH_VARARGS,
+     "Use position, orientation, shape catalog version, side, and shape ids to acquire a target direction."},
     {nullptr, nullptr, 0, nullptr},
 };
 

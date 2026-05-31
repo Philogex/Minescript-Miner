@@ -1,11 +1,11 @@
 from .api import (
+    acquire_target,
     geometry_catalog_debug,
     hello,
-    scan_region_debug,
 )
 
 __all__ = [
+    "acquire_target",
     "geometry_catalog_debug",
     "hello",
-    "scan_region_debug",
 ]

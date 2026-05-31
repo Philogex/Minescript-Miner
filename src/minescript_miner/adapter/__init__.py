@@ -18,7 +18,7 @@ from .shape_catalog import (
     normalized_shape_key,
     parse_block_state,
 )
-from .native_bridge import scan_region_debug
+from .native_bridge import acquire_target
 
 __all__ = [
     "BlockShapeCatalog",
@@ -37,7 +37,7 @@ __all__ = [
     "SHAPE_CATALOG_VERSION",
     "SHAPE_SLAB_BOTTOM",
     "SHAPE_SLAB_TOP",
+    "acquire_target",
     "normalized_shape_key",
     "parse_block_state",
-    "scan_region_debug",
 ]

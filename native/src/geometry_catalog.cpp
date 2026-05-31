@@ -330,15 +330,15 @@ std::vector<GeneratedShape> generate_shapes() {
     std::vector<GeneratedShape> generated;
     generated.push_back(shape_from_boxes("empty", {}));
     generated.push_back(shape_from_boxes("full_cube", {box(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)}));
-    generated.push_back(shape_from_boxes("oak_slab_bottom", {box(0.0, 0.0, 0.0, 1.0, 0.5, 1.0)}));
-    generated.push_back(shape_from_boxes("oak_slab_top", {box(0.0, 0.5, 0.0, 1.0, 1.0, 1.0)}));
+    generated.push_back(shape_from_boxes("slab_bottom", {box(0.0, 0.0, 0.0, 1.0, 0.5, 1.0)}));
+    generated.push_back(shape_from_boxes("slab_top", {box(0.0, 0.5, 0.0, 1.0, 1.0, 1.0)}));
 
     for (const char *direction : directions) {
         for (const char *half : halves) {
             for (const char *stair_shape : stair_shapes) {
                 generated.push_back(
                     shape_from_boxes(
-                        std::string("oak_stairs_") + direction + "_" + half + "_" + stair_shape,
+                        std::string("stairs_") + direction + "_" + half + "_" + stair_shape,
                         stair_boxes(direction, half, stair_shape)
                     )
                 );
@@ -354,7 +354,7 @@ std::vector<GeneratedShape> generate_shapes() {
 
     for (int mask = 0; mask < 16; ++mask) {
         generated.push_back(
-            shape_from_boxes("oak_fence_" + connection_mask_name(mask), connection_boxes(mask, 4.0 / 16.0, 4.0 / 16.0))
+            shape_from_boxes("fence_" + connection_mask_name(mask), connection_boxes(mask, 4.0 / 16.0, 4.0 / 16.0))
         );
     }
 

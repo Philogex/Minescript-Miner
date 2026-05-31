@@ -10,8 +10,8 @@ inline constexpr int GEOMETRY_CATALOG_VERSION = 1;
 
 inline constexpr std::int32_t SHAPE_EMPTY = 0;
 inline constexpr std::int32_t SHAPE_FULL_CUBE = 1;
-inline constexpr std::int32_t SHAPE_OAK_SLAB_BOTTOM = 2;
-inline constexpr std::int32_t SHAPE_OAK_SLAB_TOP = 3;
+inline constexpr std::int32_t SHAPE_SLAB_BOTTOM = 2;
+inline constexpr std::int32_t SHAPE_SLAB_TOP = 3;
 
 enum class PlaneAxis : std::int32_t {
     X = 0,

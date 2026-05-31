@@ -1,6 +1,11 @@
 import unittest
 
-from minescript_miner.adapter.block_ids import CATALOG_VERSION, SHAPE_NAMES
+from minescript_miner.adapter.block_ids import (
+    CATALOG_VERSION,
+    DEFAULT_CATALOG,
+    SHAPE_ID_BY_NAME,
+    SHAPE_NAMES,
+)
 from minescript_miner.api import geometry_catalog_debug
 
 
@@ -30,6 +35,25 @@ class GeometryCatalogTest(unittest.TestCase):
         for shape_id, shape_name in enumerate(SHAPE_NAMES[1:], start=1):
             self.assertGreater(box_counts[shape_id], 0, shape_name)
             self.assertGreater(face_counts[shape_id], 0, shape_name)
+
+    def test_oak_blocks_map_to_generic_shapes(self):
+        cases = {
+            "minecraft:oak_slab[type=bottom,waterlogged=false]": "slab_bottom",
+            "minecraft:oak_slab[type=top,waterlogged=false]": "slab_top",
+            (
+                "minecraft:oak_stairs["
+                "facing=north,half=bottom,shape=straight,waterlogged=false"
+                "]"
+            ): "stairs_north_bottom_straight",
+            "minecraft:oak_fence[north=true,east=false,south=false,west=false,waterlogged=false]": "fence_north",
+        }
+
+        for block_state, shape_name in cases.items():
+            with self.subTest(block_state=block_state):
+                self.assertEqual(
+                    SHAPE_ID_BY_NAME[shape_name],
+                    DEFAULT_CATALOG.shape_id(block_state),
+                )
 
 
 if __name__ == "__main__":

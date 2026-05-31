@@ -72,22 +72,22 @@ def build_shape_fixtures() -> List[ShapeFixture]:
         ShapeFixture(
             "oak_slab_bottom",
             "minecraft:oak_slab[type=bottom,waterlogged=false]",
-            _shape_id("oak_slab_bottom"),
+            _shape_id("slab_bottom"),
         ),
         ShapeFixture(
             "oak_slab_top",
             "minecraft:oak_slab[type=top,waterlogged=false]",
-            _shape_id("oak_slab_top"),
+            _shape_id("slab_top"),
         ),
     ]
 
     for facing in DIRECTIONS:
         for half in HALVES:
             for stair_shape in STAIR_SHAPES:
-                name = f"oak_stairs_{facing}_{half}_{stair_shape}"
+                name = f"stairs_{facing}_{half}_{stair_shape}"
                 fixtures.append(
                     ShapeFixture(
-                        name,
+                        f"oak_{name}",
                         "minecraft:oak_stairs["
                         f"facing={facing},half={half},shape={stair_shape},"
                         "waterlogged=false"
@@ -117,10 +117,10 @@ def build_shape_fixtures() -> List[ShapeFixture]:
 
     for mask in range(16):
         connection = _connection_properties(mask)
-        name = SHAPE_NAMES[_shape_id("oak_fence_none") + mask]
+        name = SHAPE_NAMES[_shape_id("fence_none") + mask]
         fixtures.append(
             ShapeFixture(
-                name,
+                f"oak_{name}",
                 f"minecraft:oak_fence[{connection},waterlogged=false]",
                 _shape_id(name),
             )

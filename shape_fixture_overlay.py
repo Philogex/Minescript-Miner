@@ -123,18 +123,18 @@ def boxes_for_shape_name(shape_name: str) -> List[Box]:
         return []
     if shape_name == "full_cube":
         return [_box(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)]
-    if shape_name == "oak_slab_bottom":
+    if shape_name == "slab_bottom":
         return [_box(0.0, 0.0, 0.0, 1.0, 0.5, 1.0)]
-    if shape_name == "oak_slab_top":
+    if shape_name == "slab_top":
         return [_box(0.0, 0.5, 0.0, 1.0, 1.0, 1.0)]
-    if shape_name.startswith("oak_stairs_"):
-        _, _, direction, half, *shape_parts = shape_name.split("_")
+    if shape_name.startswith("stairs_"):
+        _, direction, half, *shape_parts = shape_name.split("_")
         return _stair_boxes(direction, half, "_".join(shape_parts))
     if shape_name.startswith("pane_"):
         connection = shape_name.removeprefix("pane_")
         return _connection_boxes(connection, post_width=2.0 / 16.0, arm_width=2.0 / 16.0)
-    if shape_name.startswith("oak_fence_"):
-        connection = shape_name.removeprefix("oak_fence_")
+    if shape_name.startswith("fence_"):
+        connection = shape_name.removeprefix("fence_")
         return _connection_boxes(connection, post_width=4.0 / 16.0, arm_width=4.0 / 16.0)
     return [_box(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)]
 

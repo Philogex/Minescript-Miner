@@ -94,14 +94,14 @@ SHAPE_ID_BY_BLOCK_STATE: Dict[BlockShapeKey, int] = {}
 
 SHAPE_EMPTY = _register_shape("empty")
 SHAPE_FULL_CUBE = _register_shape("full_cube")
-SHAPE_OAK_SLAB_BOTTOM = _register_shape("oak_slab_bottom")
-SHAPE_OAK_SLAB_TOP = _register_shape("oak_slab_top")
+SHAPE_SLAB_BOTTOM = _register_shape("slab_bottom")
+SHAPE_SLAB_TOP = _register_shape("slab_top")
 
 SHAPE_ID_BY_BLOCK_STATE[("minecraft:oak_slab", _state_key(("type", "bottom")))] = (
-    SHAPE_OAK_SLAB_BOTTOM
+    SHAPE_SLAB_BOTTOM
 )
 SHAPE_ID_BY_BLOCK_STATE[("minecraft:oak_slab", _state_key(("type", "top")))] = (
-    SHAPE_OAK_SLAB_TOP
+    SHAPE_SLAB_TOP
 )
 SHAPE_ID_BY_BLOCK_STATE[("minecraft:oak_slab", _state_key(("type", "double")))] = (
     SHAPE_FULL_CUBE
@@ -110,7 +110,7 @@ SHAPE_ID_BY_BLOCK_STATE[("minecraft:oak_slab", _state_key(("type", "double")))] 
 for facing in DIRECTIONS:
     for half in HALVES:
         for stair_shape in STAIR_SHAPES:
-            shape_id = _register_shape(f"oak_stairs_{facing}_{half}_{stair_shape}")
+            shape_id = _register_shape(f"stairs_{facing}_{half}_{stair_shape}")
             SHAPE_ID_BY_BLOCK_STATE[
                 (
                     "minecraft:oak_stairs",
@@ -129,7 +129,7 @@ for mask in range(16):
     SHAPE_ID_BY_BLOCK_STATE[("minecraft:glass_pane", state_key)] = shape_id
 
 for mask in range(16):
-    shape_id = _register_shape(f"oak_fence_{_connection_name(mask)}")
+    shape_id = _register_shape(f"fence_{_connection_name(mask)}")
     SHAPE_ID_BY_BLOCK_STATE[("minecraft:oak_fence", _connection_state_key(mask))] = (
         shape_id
     )

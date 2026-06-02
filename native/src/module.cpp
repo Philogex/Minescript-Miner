@@ -58,7 +58,7 @@ static PyObject *geometry_catalog_debug(PyObject *, PyObject *) {
         Py_DECREF(python_name);
 
         const minescript_miner::ShapeGeometry &geometry = catalog.shapes[i];
-        PyObject *box_count = PyLong_FromSize_t(geometry.box_count);
+        PyObject *box_count = PyLong_FromLong(minescript_miner::shape_box_count(static_cast<std::int32_t>(i)));
         if (box_count == nullptr) {
             Py_DECREF(face_counts);
             Py_DECREF(box_counts);

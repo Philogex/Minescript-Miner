@@ -47,8 +47,6 @@ struct RectFace16 {
 };
 
 struct ShapeGeometry {
-    std::uint16_t box_offset;
-    std::uint8_t box_count;
     std::uint16_t face_offset;
     std::uint8_t face_count;
 };
@@ -56,7 +54,6 @@ struct ShapeGeometry {
 struct GeometryCatalog {
     std::array<const char *, GEOMETRY_SHAPE_COUNT> shape_names;
     std::array<ShapeGeometry, GEOMETRY_SHAPE_COUNT> shapes;
-    std::array<Aabb16, GEOMETRY_BOX_COUNT> boxes;
     std::array<RectFace16, GEOMETRY_FACE_COUNT> faces;
 };
 
@@ -65,6 +62,7 @@ const ShapeGeometry &geometry_for_shape(std::int32_t shape_id);
 std::int32_t geometry_catalog_shape_count();
 
 const char *shape_id_name(std::int32_t shape_id);
+std::uint8_t shape_box_count(std::int32_t shape_id);
 std::int32_t shape_count();
 const std::array<const char *, GEOMETRY_SHAPE_COUNT> &shape_names();
 

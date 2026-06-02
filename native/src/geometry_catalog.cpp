@@ -28,7 +28,6 @@ struct SplitList {
 struct CatalogBuilder {
     GeometryCatalog catalog{};
     std::uint16_t shape_count = 0;
-    std::uint16_t box_count = 0;
     std::uint16_t face_count = 0;
 };
 
@@ -204,20 +203,13 @@ constexpr void add_box_faces(CatalogBuilder &builder, const Aabb16 &b, const Box
 }
 
 constexpr void add_shape(CatalogBuilder &builder, const BoxList &shape) {
-    const std::uint16_t box_offset = builder.box_count;
     const std::uint16_t face_offset = builder.face_count;
 
-    for (std::uint8_t i = 0; i < shape.count; ++i) {
-        builder.catalog.boxes[builder.box_count] = shape.boxes[i];
-        ++builder.box_count;
-    }
     for (std::uint8_t i = 0; i < shape.count; ++i) {
         add_box_faces(builder, shape.boxes[i], shape);
     }
 
     builder.catalog.shapes[builder.shape_count] = {
-        box_offset,
-        shape.count,
         face_offset,
         static_cast<std::uint8_t>(builder.face_count - face_offset),
     };
@@ -248,8 +240,8 @@ constexpr GeometryCatalog CATALOG = build_geometry_catalog();
 
 constexpr std::uint32_t used_box_count() {
     std::uint32_t total = 0;
-    for (const ShapeGeometry &shape : CATALOG.shapes) {
-        total += shape.box_count;
+    for (const generated::ShapeBoxRange &range : generated::SHAPE_BOX_RANGES) {
+        total += range.count;
     }
     return total;
 }
@@ -291,6 +283,13 @@ const char *shape_id_name(std::int32_t shape_id) {
         return "unknown_shape";
     }
     return CATALOG.shape_names[static_cast<std::size_t>(shape_id)];
+}
+
+std::uint8_t shape_box_count(std::int32_t shape_id) {
+    if (shape_id < 0 || static_cast<std::size_t>(shape_id) >= generated::SHAPE_BOX_RANGES.size()) {
+        return generated::SHAPE_BOX_RANGES[static_cast<std::size_t>(SHAPE_FULL_CUBE)].count;
+    }
+    return generated::SHAPE_BOX_RANGES[static_cast<std::size_t>(shape_id)].count;
 }
 
 std::int32_t shape_count() {

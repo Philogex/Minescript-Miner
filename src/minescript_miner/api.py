@@ -9,11 +9,12 @@ def geometry_catalog_debug():
     return native.geometry_catalog_debug()
 
 
-def acquire_target(position, orientation, shape_catalog_version, side, shape_ids):
+def acquire_target(position, orientation, shape_catalog_version, side, shape_ids, target_indices):
     return native.acquire_target(
         position,
         orientation,
         shape_catalog_version,
         side,
         shape_ids,
+        target_indices,
     )

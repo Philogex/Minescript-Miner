@@ -68,6 +68,18 @@ class GeometryCatalogTest(unittest.TestCase):
                 SHAPE_CATALOG_VERSION,
                 MAX_CUBE_SIDE + 1,
                 [],
+                [],
+            )
+
+    def test_native_acquire_target_rejects_target_indices_outside_cube(self):
+        with self.assertRaisesRegex(ValueError, "target_indices values must be valid"):
+            acquire_target(
+                (0.5, 64.5, 0.5),
+                (90.0, 10.0),
+                SHAPE_CATALOG_VERSION,
+                3,
+                [0] * 27,
+                [27],
             )
 
 

@@ -1,6 +1,8 @@
 import sys
+import tempfile
 import types
 import unittest
+from pathlib import Path
 
 
 sys.modules.setdefault(
@@ -31,22 +33,34 @@ class AcquireCurrentTargetTest(unittest.TestCase):
                 for index, block_string in enumerate(block_strings)
             ]
 
-        def fake_acquire_target(position, orientation, shape_catalog_version, side, shape_ids):
+        def fake_acquire_target(position, orientation, shape_catalog_version, side, shape_ids, target_indices):
             captured["position"] = position
             captured["orientation"] = orientation
             captured["shape_catalog_version"] = shape_catalog_version
             captured["side"] = side
             captured["shape_ids"] = list(shape_ids)
+            captured["target_indices"] = list(target_indices)
             return 0.25, -0.5
 
-        try:
-            io.get_area = fake_get_area
-            io.acquire_target = fake_acquire_target
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_config = Path(temp_dir) / "targets.txt"
+            target_config.write_text(
+                "minecraft:oak_slab\nminecraft:unknown_block\n",
+                encoding="utf-8",
+            )
+            try:
+                io.get_area = fake_get_area
+                io.acquire_target = fake_acquire_target
 
-            result = io.acquire_current_target((0.5, 0.5, 0.5), (90.0, 10.0), reach=0.5)
-        finally:
-            io.get_area = original_get_area
-            io.acquire_target = original_acquire_target
+                result = io.acquire_current_target(
+                    (0.5, 0.5, 0.5),
+                    (90.0, 10.0),
+                    reach=0.5,
+                    target_config=target_config,
+                )
+            finally:
+                io.get_area = original_get_area
+                io.acquire_target = original_acquire_target
 
         self.assertEqual((0.25, -0.5), result)
         self.assertEqual((0.5, 0.5, 0.5), captured["position"])
@@ -58,6 +72,23 @@ class AcquireCurrentTargetTest(unittest.TestCase):
         self.assertEqual(SHAPE_ID_BY_NAME["slab_top"], captured["shape_ids"][1])
         self.assertEqual(SHAPE_ID_BY_NAME["full_cube"], captured["shape_ids"][2])
         self.assertEqual(SHAPE_ID_BY_NAME["empty"], captured["shape_ids"][3])
+        self.assertEqual([1, 2], captured["target_indices"])
+
+    def test_load_target_blocks_uses_literal_line_matching(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_config = Path(temp_dir) / "targets.txt"
+            target_config.write_text(
+                "\n"
+                "# comment\n"
+                " minecraft:stone \n"
+                "minecraft:cobblestone # inline comment\n",
+                encoding="utf-8",
+            )
+
+            self.assertEqual(
+                frozenset({"minecraft:stone", "minecraft:cobblestone"}),
+                io.load_target_blocks(target_config),
+            )
 
 
 if __name__ == "__main__":

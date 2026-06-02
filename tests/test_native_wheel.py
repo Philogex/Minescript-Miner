@@ -70,8 +70,8 @@ class NativeWheelTest(unittest.TestCase):
                         "print(native.hello()); "
                         "print(minescript_miner.hello()); "
                         "print(minescript_miner.geometry_catalog_debug()['version']); "
-                        "print(native.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, [0] * 27)); "
-                        "print(minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, [0] * 27))"
+                        "print(native.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, [0] * 27, [])); "
+                        "print(minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, [0] * 27, []))"
                     ),
                 ],
                 check=True,

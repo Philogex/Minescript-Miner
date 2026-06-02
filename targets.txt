@@ -1,0 +1,3 @@
+minecraft:stone
+minecraft:cobblestone
+minecraft:dirt

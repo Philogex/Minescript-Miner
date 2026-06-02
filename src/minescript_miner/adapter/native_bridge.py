@@ -17,6 +17,7 @@ def acquire_target(
     shape_catalog_version: int,
     side: int,
     shape_ids: Sequence[int],
+    target_indices: Sequence[int],
 ) -> Tuple[float, float]:
     """Pass encoded shape ids to the native target acquisition step."""
 
@@ -26,5 +27,6 @@ def acquire_target(
         shape_catalog_version,
         side,
         shape_ids,
+        target_indices,
     )
     return float(x), float(z)

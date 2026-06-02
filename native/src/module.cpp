@@ -209,6 +209,45 @@ static bool parse_int_ids(
     return true;
 }
 
+static bool parse_uint16_indices(
+    PyObject *indices,
+    std::vector<std::uint16_t> &out,
+    const char *name
+) {
+    if (!PySequence_Check(indices)) {
+        PyErr_Format(PyExc_TypeError, "%s must be a sequence of integers", name);
+        return false;
+    }
+
+    const Py_ssize_t size = PySequence_Size(indices);
+    if (size < 0) {
+        return false;
+    }
+
+    out.clear();
+    out.reserve(static_cast<std::size_t>(size));
+
+    for (Py_ssize_t i = 0; i < size; ++i) {
+        PyObject *item = PySequence_GetItem(indices, i);
+        if (item == nullptr) {
+            return false;
+        }
+        const long value = PyLong_AsLong(item);
+        Py_DECREF(item);
+        if (PyErr_Occurred()) {
+            PyErr_Format(PyExc_TypeError, "%s values must be integers", name);
+            return false;
+        }
+        if (value < 0 || value > 65535) {
+            PyErr_Format(PyExc_ValueError, "%s values must fit uint16_t", name);
+            return false;
+        }
+        out.push_back(static_cast<std::uint16_t>(value));
+    }
+
+    return true;
+}
+
 static std::string log_path() {
     const char *override_path = std::getenv("MINESCRIPT_MINER_NATIVE_LOG");
     if (override_path != nullptr && override_path[0] != '\0') {
@@ -222,6 +261,7 @@ static void log_scan_input(
     const double (&orientation)[2],
     int shape_catalog_version,
     const std::vector<std::int32_t> &shape_ids,
+    const std::vector<std::uint16_t> &target_indices,
     int side,
     double direction_x,
     double direction_z
@@ -261,6 +301,7 @@ static void log_scan_input(
     log << "  native_shape_catalog_version: " << minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION << "\n";
     log << "  native_geometry_catalog_version: " << minescript_miner::GEOMETRY_CATALOG_VERSION << "\n";
     log << "  block_count: " << shape_ids.size() << "\n";
+    log << "  target_count: " << target_indices.size() << "\n";
     log << "  cube_side: " << side << "\n";
     log << "  non_empty_count: " << non_air_count << "\n";
 
@@ -290,6 +331,15 @@ static void log_scan_input(
         log << " ...";
     }
     log << "\n";
+    log << "  first_target_indices:";
+    const std::size_t target_sample_count = std::min<std::size_t>(target_indices.size(), 64);
+    for (std::size_t i = 0; i < target_sample_count; ++i) {
+        log << ' ' << target_indices[i];
+    }
+    if (target_sample_count < target_indices.size()) {
+        log << " ...";
+    }
+    log << "\n";
     log << "  returned_direction_xz: "
         << std::fixed << std::setprecision(6)
         << direction_x << ", " << direction_z << "\n\n";
@@ -299,17 +349,19 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     PyObject *position_object = nullptr;
     PyObject *orientation_object = nullptr;
     PyObject *shape_ids_object = nullptr;
+    PyObject *target_indices_object = nullptr;
     int shape_catalog_version = 0;
     int side = 0;
 
     if (!PyArg_ParseTuple(
             args,
-            "OOiiO:acquire_target",
+            "OOiiOO:acquire_target",
             &position_object,
             &orientation_object,
             &shape_catalog_version,
             &side,
-            &shape_ids_object
+            &shape_ids_object,
+            &target_indices_object
         )) {
         return nullptr;
     }
@@ -336,6 +388,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     double position[3] = {0.0, 0.0, 0.0};
     double orientation[2] = {0.0, 0.0};
     std::vector<std::int32_t> shape_ids;
+    std::vector<std::uint16_t> target_indices;
     if (!parse_position(position_object, position)) {
         return nullptr;
     }
@@ -343,6 +396,9 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         return nullptr;
     }
     if (!parse_int_ids(shape_ids_object, shape_ids, "shape_ids")) {
+        return nullptr;
+    }
+    if (!parse_uint16_indices(target_indices_object, target_indices, "target_indices")) {
         return nullptr;
     }
 
@@ -361,6 +417,18 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         );
         return nullptr;
     }
+    for (const std::uint16_t target_index : target_indices) {
+        if (static_cast<std::size_t>(target_index) >= expected_count) {
+            PyErr_Format(
+                PyExc_ValueError,
+                "target_indices values must be valid shape_ids indices "
+                "(expected < %zu, got %u)",
+                expected_count,
+                static_cast<unsigned>(target_index)
+            );
+            return nullptr;
+        }
+    }
 
     const double direction_x = 0.0;
     const double direction_z = 0.0;
@@ -370,6 +438,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         orientation,
         shape_catalog_version,
         shape_ids,
+        target_indices,
         side,
         direction_x,
         direction_z
@@ -384,7 +453,7 @@ static PyMethodDef module_methods[] = {
     {"geometry_catalog_debug", reinterpret_cast<PyCFunction>(geometry_catalog_debug), METH_NOARGS,
      "Return the native geometry catalog version, shape names, and geometry counts for parity checks."},
     {"acquire_target", reinterpret_cast<PyCFunction>(acquire_target), METH_VARARGS,
-     "Use position, orientation, shape catalog version, side, and shape ids to acquire a target direction."},
+     "Use position, orientation, shape catalog version, side, shape ids, and target indices to acquire a target direction."},
     {nullptr, nullptr, 0, nullptr},
 };
 

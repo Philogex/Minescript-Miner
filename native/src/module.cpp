@@ -16,6 +16,13 @@
 #include <vector>
 
 
+namespace {
+
+constexpr int MAX_CUBE_SIDE = 39;
+
+}  // namespace
+
+
 static PyObject *hello(PyObject *, PyObject *) {
     return PyUnicode_FromString("hello from native extension");
 }
@@ -319,6 +326,10 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
 
     if (side <= 0) {
         PyErr_SetString(PyExc_ValueError, "side must be a positive integer");
+        return nullptr;
+    }
+    if (side > MAX_CUBE_SIDE) {
+        PyErr_Format(PyExc_ValueError, "side must be <= %d, got %d", MAX_CUBE_SIDE, side);
         return nullptr;
     }
 

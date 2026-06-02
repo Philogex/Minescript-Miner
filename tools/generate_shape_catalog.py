@@ -362,6 +362,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 SHAPE_CATALOG_VERSION = {catalog["shape_catalog_version"]}
 BLOCK_SHAPE_MAPPING_VERSION = {catalog["block_shape_mapping_version"]}
 CATALOG_VERSION = SHAPE_CATALOG_VERSION
+MAX_CUBE_SIDE = 39
 
 DIRECTIONS = {tuple(catalog["directions"])!r}
 HALVES = {tuple(catalog["halves"])!r}
@@ -480,6 +481,9 @@ class BlockShapeCatalog:
         side: int,
         block_strings: Sequence[Optional[str]],
     ) -> EncodedBlockRegion:
+        if side > MAX_CUBE_SIDE:
+            raise ValueError(f"side must be <= {{MAX_CUBE_SIDE}}, got {{side}}")
+
         expected_count = side * side * side
         if expected_count != len(block_strings):
             raise ValueError(

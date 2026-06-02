@@ -2,11 +2,12 @@ import unittest
 
 from minescript_miner.adapter.shape_catalog import (
     DEFAULT_CATALOG,
+    MAX_CUBE_SIDE,
     SHAPE_CATALOG_VERSION,
     SHAPE_ID_BY_NAME,
     SHAPE_NAMES,
 )
-from minescript_miner.api import geometry_catalog_debug
+from minescript_miner.api import acquire_target, geometry_catalog_debug
 
 
 class GeometryCatalogTest(unittest.TestCase):
@@ -54,6 +55,20 @@ class GeometryCatalogTest(unittest.TestCase):
                     SHAPE_ID_BY_NAME[shape_name],
                     DEFAULT_CATALOG.shape_id(block_state),
                 )
+
+    def test_python_encoder_rejects_cube_sides_above_uint16_index_limit(self):
+        with self.assertRaisesRegex(ValueError, "side must be <= 39"):
+            DEFAULT_CATALOG.encode_region(MAX_CUBE_SIDE + 1, [])
+
+    def test_native_acquire_target_rejects_cube_sides_above_uint16_index_limit(self):
+        with self.assertRaisesRegex(ValueError, "side must be <= 39"):
+            acquire_target(
+                (0.5, 64.5, 0.5),
+                (90.0, 10.0),
+                SHAPE_CATALOG_VERSION,
+                MAX_CUBE_SIDE + 1,
+                [],
+            )
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ native_sources = [
     native_source_dir / "bvh.cpp",
     native_source_dir / "geometry_catalog.cpp",
     native_source_dir / "numerics.cpp",
+    native_source_dir / "scan_region.cpp",
     native_source_dir / "tri2.cpp",
     native_source_dir / "vec.cpp",
     native_source_dir / "visibility.cpp",

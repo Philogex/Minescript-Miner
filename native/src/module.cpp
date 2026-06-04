@@ -174,9 +174,9 @@ static bool parse_orientation(PyObject *orientation, double (&out)[2]) {
     return true;
 }
 
-static bool parse_int_ids(
+static bool parse_uint16_values(
     PyObject *ids,
-    std::vector<std::int32_t> &out,
+    std::vector<std::uint16_t> &out,
     const char *name
 ) {
     if (!PySequence_Check(ids)) {
@@ -194,41 +194,6 @@ static bool parse_int_ids(
 
     for (Py_ssize_t i = 0; i < size; ++i) {
         PyObject *item = PySequence_GetItem(ids, i);
-        if (item == nullptr) {
-            return false;
-        }
-        const long value = PyLong_AsLong(item);
-        Py_DECREF(item);
-        if (PyErr_Occurred()) {
-            PyErr_Format(PyExc_TypeError, "%s values must be integers", name);
-            return false;
-        }
-        out.push_back(static_cast<std::int32_t>(value));
-    }
-
-    return true;
-}
-
-static bool parse_uint16_indices(
-    PyObject *indices,
-    std::vector<std::uint16_t> &out,
-    const char *name
-) {
-    if (!PySequence_Check(indices)) {
-        PyErr_Format(PyExc_TypeError, "%s must be a sequence of integers", name);
-        return false;
-    }
-
-    const Py_ssize_t size = PySequence_Size(indices);
-    if (size < 0) {
-        return false;
-    }
-
-    out.clear();
-    out.reserve(static_cast<std::size_t>(size));
-
-    for (Py_ssize_t i = 0; i < size; ++i) {
-        PyObject *item = PySequence_GetItem(indices, i);
         if (item == nullptr) {
             return false;
         }
@@ -260,7 +225,7 @@ static void log_scan_input(
     const double (&position)[3],
     const double (&orientation)[2],
     int shape_catalog_version,
-    const std::vector<std::int32_t> &shape_ids,
+    const std::vector<std::uint16_t> &shape_ids,
     const std::vector<std::uint16_t> &target_indices,
     int side,
     double direction_x,
@@ -275,7 +240,7 @@ static void log_scan_input(
     const auto now_time = std::chrono::system_clock::to_time_t(now);
 
     std::size_t non_air_count = 0;
-    for (const std::int32_t shape_id : shape_ids) {
+    for (const std::uint16_t shape_id : shape_ids) {
         if (!minescript_miner::is_empty_shape(shape_id)) {
             ++non_air_count;
         }
@@ -387,7 +352,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
 
     double position[3] = {0.0, 0.0, 0.0};
     double orientation[2] = {0.0, 0.0};
-    std::vector<std::int32_t> shape_ids;
+    std::vector<std::uint16_t> shape_ids;
     std::vector<std::uint16_t> target_indices;
     if (!parse_position(position_object, position)) {
         return nullptr;
@@ -395,10 +360,10 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     if (!parse_orientation(orientation_object, orientation)) {
         return nullptr;
     }
-    if (!parse_int_ids(shape_ids_object, shape_ids, "shape_ids")) {
+    if (!parse_uint16_values(shape_ids_object, shape_ids, "shape_ids")) {
         return nullptr;
     }
-    if (!parse_uint16_indices(target_indices_object, target_indices, "target_indices")) {
+    if (!parse_uint16_values(target_indices_object, target_indices, "target_indices")) {
         return nullptr;
     }
 
@@ -416,6 +381,18 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
             shape_ids.size()
         );
         return nullptr;
+    }
+    for (const std::uint16_t shape_id : shape_ids) {
+        if (static_cast<std::size_t>(shape_id) >= minescript_miner::GEOMETRY_SHAPE_COUNT) {
+            PyErr_Format(
+                PyExc_ValueError,
+                "shape_ids values must be valid shape ids "
+                "(expected < %zu, got %u)",
+                minescript_miner::GEOMETRY_SHAPE_COUNT,
+                static_cast<unsigned>(shape_id)
+            );
+            return nullptr;
+        }
     }
     for (const std::uint16_t target_index : target_indices) {
         if (static_cast<std::size_t>(target_index) >= expected_count) {

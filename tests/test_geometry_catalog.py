@@ -82,6 +82,17 @@ class GeometryCatalogTest(unittest.TestCase):
                 [27],
             )
 
+    def test_native_acquire_target_rejects_shape_ids_outside_catalog(self):
+        with self.assertRaisesRegex(ValueError, "shape_ids values must be valid shape ids"):
+            acquire_target(
+                (0.5, 64.5, 0.5),
+                (90.0, 10.0),
+                SHAPE_CATALOG_VERSION,
+                3,
+                [len(SHAPE_NAMES)] * 27,
+                [],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

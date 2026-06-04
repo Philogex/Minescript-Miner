@@ -1,8 +1,10 @@
 #pragma once
 
 #include "minescript_miner/geometry_catalog.hpp"
+#include "minescript_miner/vec.hpp"
 
 #include <cstdint>
+#include <vector>
 
 namespace minescript_miner {
 
@@ -33,6 +35,21 @@ struct WorldRectFace16 {
     WorldPoint16 p3{};
 };
 
+struct WorldFace {
+    WorldRectFace16 face{};
+    Vec3 center{};
+};
+
+struct TargetFaceCandidate {
+    std::uint32_t world_face_index = 0;
+    double center_angle = 0.0;
+};
+
+struct ScanRegionGeometry {
+    std::vector<WorldFace> world_faces{};
+    std::vector<TargetFaceCandidate> target_faces{};
+};
+
 constexpr BlockOffset index_to_offset(std::uint16_t index, std::int32_t side) {
     return {
         static_cast<std::int32_t>(index % side),
@@ -60,6 +77,7 @@ constexpr std::int32_t world16(std::int32_t block_coord, std::uint8_t local_coor
     return block_coord * 16 + static_cast<std::int32_t>(local_coord);
 }
 
+// this might need to change if i have to map non aabb shapes (those don't exist in minecraft...?)
 constexpr WorldRectFace16 face_to_world(const RectFace16 &face, BlockPos block_pos) {
     switch (face.axis) {
         case PlaneAxis::X: {
@@ -89,5 +107,41 @@ constexpr WorldRectFace16 face_to_world(const RectFace16 &face, BlockPos block_p
     }
     return {};
 }
+
+constexpr Vec3 point16_to_world(WorldPoint16 point) {
+    return {
+        static_cast<double>(point.x) / 16.0,
+        static_cast<double>(point.y) / 16.0,
+        static_cast<double>(point.z) / 16.0,
+    };
+}
+
+constexpr Vec3 face_center(const WorldRectFace16 &face) {
+    return {
+        static_cast<double>(face.p0.x + face.p2.x) / 32.0,
+        static_cast<double>(face.p0.y + face.p2.y) / 32.0,
+        static_cast<double>(face.p0.z + face.p2.z) / 32.0,
+    };
+}
+
+constexpr Vec3 face_normal(const WorldRectFace16 &face) {
+    switch (face.axis) {
+        case PlaneAxis::X:
+            return {static_cast<double>(face.normal_sign), 0.0, 0.0};
+        case PlaneAxis::Y:
+            return {0.0, static_cast<double>(face.normal_sign), 0.0};
+        case PlaneAxis::Z:
+            return {0.0, 0.0, static_cast<double>(face.normal_sign)};
+    }
+    return {};
+}
+
+ScanRegionGeometry build_scan_region_geometry(
+    const std::vector<std::uint16_t> &shape_ids,
+    const std::vector<std::uint16_t> &target_indices,
+    const Vec3 &eye,
+    const Vec3 &look_dir,
+    std::int32_t side
+);
 
 }  // namespace minescript_miner

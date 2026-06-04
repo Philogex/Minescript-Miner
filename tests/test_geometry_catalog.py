@@ -1,4 +1,7 @@
+import os
+import tempfile
 import unittest
+from pathlib import Path
 
 from minescript_miner.adapter.shape_catalog import (
     DEFAULT_CATALOG,
@@ -92,6 +95,42 @@ class GeometryCatalogTest(unittest.TestCase):
                 [len(SHAPE_NAMES)] * 27,
                 [],
             )
+
+    def test_native_acquire_target_builds_sorted_target_face_candidates(self):
+        original_log_path = os.environ.get("MINESCRIPT_MINER_NATIVE_LOG")
+
+        with tempfile.TemporaryDirectory(prefix="minescript-miner-target-order-") as temp_dir:
+            log_path = Path(temp_dir) / "native.log"
+            os.environ["MINESCRIPT_MINER_NATIVE_LOG"] = str(log_path)
+            try:
+                shape_ids = [SHAPE_ID_BY_NAME["empty"]] * 27
+                for target_index in (10, 14, 16):
+                    shape_ids[target_index] = SHAPE_ID_BY_NAME["full_cube"]
+
+                acquire_target(
+                    (0.5, 0.5, 0.5),
+                    (0.0, 0.0),
+                    SHAPE_CATALOG_VERSION,
+                    3,
+                    shape_ids,
+                    [10, 14, 16],
+                )
+            finally:
+                if original_log_path is None:
+                    os.environ.pop("MINESCRIPT_MINER_NATIVE_LOG", None)
+                else:
+                    os.environ["MINESCRIPT_MINER_NATIVE_LOG"] = original_log_path
+
+            log_text = log_path.read_text(encoding="utf-8")
+
+        self.assertIn("world_face_count: 18", log_text)
+        self.assertIn("target_face_count: 3", log_text)
+        self.assertIn("first_target_block_indices: 10 14 16", log_text)
+        self.assertIn("first_target_face_indices: 16 6 5", log_text)
+        self.assertIn(
+            "first_target_face_center_angles_rad: 0.000000 1.570796 3.141593",
+            log_text,
+        )
 
 
 if __name__ == "__main__":

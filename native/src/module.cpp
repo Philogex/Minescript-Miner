@@ -1,7 +1,9 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include "minescript_miner/angle.hpp"
 #include "minescript_miner/geometry_catalog.hpp"
+#include "minescript_miner/scan_region.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -227,6 +229,7 @@ static void log_scan_input(
     int shape_catalog_version,
     const std::vector<std::uint16_t> &shape_ids,
     const std::vector<std::uint16_t> &target_indices,
+    const minescript_miner::ScanRegionGeometry &scan_geometry,
     int side,
     double direction_x,
     double direction_z
@@ -254,19 +257,18 @@ static void log_scan_input(
     log << "  orientation_yaw_pitch: "
         << std::fixed << std::setprecision(3)
         << orientation[0] << ", " << orientation[1] << "\n";
-    const double yaw_rad = orientation[0] * 3.14159265358979323846 / 180.0;
-    const double pitch_rad = orientation[1] * 3.14159265358979323846 / 180.0;
-    const double look_x = -std::sin(yaw_rad) * std::cos(pitch_rad);
-    const double look_y = -std::sin(pitch_rad);
-    const double look_z = std::cos(yaw_rad) * std::cos(pitch_rad);
+    const minescript_miner::Vec3 look_dir =
+        minescript_miner::look_direction_from_yaw_pitch(orientation[0], orientation[1]);
     log << "  orientation_look_xyz_from_degrees: "
         << std::fixed << std::setprecision(6)
-        << look_x << ", " << look_y << ", " << look_z << "\n";
+        << look_dir.x << ", " << look_dir.y << ", " << look_dir.z << "\n";
     log << "  shape_catalog_version: " << shape_catalog_version << "\n";
     log << "  native_shape_catalog_version: " << minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION << "\n";
     log << "  native_geometry_catalog_version: " << minescript_miner::GEOMETRY_CATALOG_VERSION << "\n";
     log << "  block_count: " << shape_ids.size() << "\n";
-    log << "  target_count: " << target_indices.size() << "\n";
+    log << "  target_block_count: " << target_indices.size() << "\n";
+    log << "  world_face_count: " << scan_geometry.world_faces.size() << "\n";
+    log << "  target_face_count: " << scan_geometry.target_faces.size() << "\n";
     log << "  cube_side: " << side << "\n";
     log << "  non_empty_count: " << non_air_count << "\n";
 
@@ -296,12 +298,29 @@ static void log_scan_input(
         log << " ...";
     }
     log << "\n";
-    log << "  first_target_indices:";
+    log << "  first_target_block_indices:";
     const std::size_t target_sample_count = std::min<std::size_t>(target_indices.size(), 64);
     for (std::size_t i = 0; i < target_sample_count; ++i) {
         log << ' ' << target_indices[i];
     }
     if (target_sample_count < target_indices.size()) {
+        log << " ...";
+    }
+    log << "\n";
+    log << "  first_target_face_indices:";
+    const std::size_t target_face_sample_count = std::min<std::size_t>(scan_geometry.target_faces.size(), 64);
+    for (std::size_t i = 0; i < target_face_sample_count; ++i) {
+        log << ' ' << scan_geometry.target_faces[i].world_face_index;
+    }
+    if (target_face_sample_count < scan_geometry.target_faces.size()) {
+        log << " ...";
+    }
+    log << "\n";
+    log << "  first_target_face_center_angles_rad:";
+    for (std::size_t i = 0; i < target_face_sample_count; ++i) {
+        log << ' ' << std::fixed << std::setprecision(6) << scan_geometry.target_faces[i].center_angle;
+    }
+    if (target_face_sample_count < scan_geometry.target_faces.size()) {
         log << " ...";
     }
     log << "\n";
@@ -407,6 +426,12 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         }
     }
 
+    const minescript_miner::Vec3 eye{position[0], position[1], position[2]};
+    const minescript_miner::Vec3 look_dir =
+        minescript_miner::look_direction_from_yaw_pitch(orientation[0], orientation[1]);
+    const minescript_miner::ScanRegionGeometry scan_geometry =
+        minescript_miner::build_scan_region_geometry(shape_ids, target_indices, eye, look_dir, side);
+
     const double direction_x = 0.0;
     const double direction_z = 0.0;
 
@@ -416,6 +441,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         shape_catalog_version,
         shape_ids,
         target_indices,
+        scan_geometry,
         side,
         direction_x,
         direction_z

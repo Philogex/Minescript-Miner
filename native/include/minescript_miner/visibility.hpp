@@ -1,5 +1,6 @@
 #pragma once
 
+#include "minescript_miner/clipping.hpp"
 #include "minescript_miner/scan_region.hpp"
 #include "minescript_miner/tri2.hpp"
 
@@ -24,8 +25,15 @@ struct ProjectedPoint {
     double depth = 0.0;
 };
 
+struct InverseDepthPlane {
+    double x = 0.0;
+    double y = 0.0;
+    double constant = 0.0;
+};
+
 struct ProjectedFace {
     std::array<ProjectedPoint, 4> points{};
+    InverseDepthPlane inverse_depth{};
 };
 
 bool make_view_basis(const Vec3 &forward, ViewBasis &out);
@@ -53,6 +61,25 @@ constexpr ProjectedPoint project_view_point(const ViewPoint &point) {
         {point.x / point.depth, point.y / point.depth},
         point.depth,
     };
+}
+
+bool make_inverse_depth_plane(
+    const ProjectedPoint &a,
+    const ProjectedPoint &b,
+    const ProjectedPoint &c,
+    InverseDepthPlane &out
+);
+
+constexpr double inverse_depth_at(const InverseDepthPlane &plane, Point2 point) {
+    return plane.x * point.x + plane.y * point.y + plane.constant;
+}
+
+constexpr bool is_in_front_at(
+    const InverseDepthPlane &candidate,
+    const InverseDepthPlane &reference,
+    Point2 point
+) {
+    return inverse_depth_at(candidate, point) > inverse_depth_at(reference, point);
 }
 
 bool project_world_face(

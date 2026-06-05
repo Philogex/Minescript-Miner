@@ -9,6 +9,7 @@ native_sources = [
     native_source_dir / "angle.cpp",
     native_source_dir / "branch_bound.cpp",
     native_source_dir / "bvh.cpp",
+    native_source_dir / "clipping.cpp",
     native_source_dir / "geometry_catalog.cpp",
     native_source_dir / "numerics.cpp",
     native_source_dir / "scan_region.cpp",

@@ -76,6 +76,26 @@ bool make_inverse_depth_plane(
     return true;
 }
 
+bool clip_projected_face_in_front(
+    const ProjectedFace &candidate,
+    const ProjectedFace &reference,
+    Polygon2 &out
+) {
+    const LinearHalfPlane2 depth_difference =
+        depth_difference_half_plane(candidate.inverse_depth, reference.inverse_depth);
+    if (depth_difference.x == 0.0 &&
+        depth_difference.y == 0.0 &&
+        depth_difference.constant == 0.0) {
+        out = {};
+        return true;
+    }
+    return clip_half_plane(
+        projected_face_polygon(candidate),
+        depth_difference,
+        out
+    );
+}
+
 bool project_world_face(
     const WorldRectFace16 &face,
     const Vec3 &eye,
@@ -120,6 +140,7 @@ static_assert(TEST_VIEW_POINT.y == 4.0);
 static_assert(TEST_VIEW_POINT.depth == 2.0);
 static_assert(TEST_PROJECTED_POINT.point.x == 1.0);
 static_assert(TEST_PROJECTED_POINT.point.y == 2.0);
+static_assert(depth_difference_at(TEST_NEAR_DEPTH, TEST_FAR_DEPTH, {0.0, 0.0}) == 0.25);
 static_assert(is_in_front_at(TEST_NEAR_DEPTH, TEST_FAR_DEPTH, {0.0, 0.0}));
 
 }  // namespace

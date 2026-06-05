@@ -124,7 +124,14 @@ std::vector<Tri2> triangulate_convex_polygon(const Polygon2 &polygon) {
 
     triangles.reserve(polygon.count - 2);
     for (std::uint8_t i = 1; i + 1 < polygon.count; ++i) {
-        triangles.push_back({polygon.points[0], polygon.points[i], polygon.points[i + 1]});
+        const Tri2 triangle{
+            polygon.points[0],
+            polygon.points[i],
+            polygon.points[i + 1],
+        };
+        if (signed_area2(triangle) != 0.0) {
+            triangles.push_back(triangle);
+        }
     }
     return triangles;
 }

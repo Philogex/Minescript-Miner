@@ -19,9 +19,9 @@ def acquire_target(
     shape_ids: Sequence[int],
     target_indices: Sequence[int],
 ) -> Tuple[float, float]:
-    """Pass encoded shape ids to the native target acquisition step."""
+    """Return the nearest visible target as Minecraft yaw and pitch."""
 
-    x, z = native.acquire_target(
+    yaw, pitch = native.acquire_target(
         position,
         orientation,
         shape_catalog_version,
@@ -29,4 +29,4 @@ def acquire_target(
         shape_ids,
         target_indices,
     )
-    return float(x), float(z)
+    return float(yaw), float(pitch)

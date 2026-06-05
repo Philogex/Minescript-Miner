@@ -34,6 +34,23 @@ Vec3 look_direction_from_yaw_pitch(double yaw_degrees, double pitch_degrees) {
     };
 }
 
+YawPitch yaw_pitch_from_direction(const Vec3 &direction) {
+    if (length_squared(direction) <= 0.0) {
+        return {};
+    }
+
+    const double horizontal = std::hypot(direction.x, direction.z);
+    double yaw = std::atan2(-direction.x, direction.z) * 180.0 / PI;
+    double pitch = std::atan2(-direction.y, horizontal) * 180.0 / PI;
+    if (yaw == 0.0) {
+        yaw = 0.0;
+    }
+    if (pitch == 0.0) {
+        pitch = 0.0;
+    }
+    return {yaw, pitch};
+}
+
 double angle_to_tri_corners(
     const Vec3 &eye,
     const Vec3 &look_dir,

@@ -1,0 +1,18 @@
+# Sparse native scan fixture. Unlisted blocks use default_shape.
+fixture_version 1
+shape_catalog_version 1
+side 7
+position 0.5 0.5 0.5
+orientation_yaw_pitch 0.0 0.0
+default_shape 0
+
+# A thin pane occludes the center of the full-cube target behind it.
+block 185 44
+target 192 1
+
+expect_found 1
+expect_angle_min 0.01
+expect_angle_max 0.1
+expect_world_faces 12
+expect_target_faces 1
+expect_min_clips 1

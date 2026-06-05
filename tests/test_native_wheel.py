@@ -88,8 +88,8 @@ class NativeWheelTest(unittest.TestCase):
                     "hello from native extension\n"
                     "hello from native extension\n"
                     "1\n"
-                    "(0.0, 0.0)\n"
-                    "(0.0, 0.0)"
+                    "(90.0, 10.0)\n"
+                    "(90.0, 10.0)"
                 ),
                 result.stdout.strip(),
             )

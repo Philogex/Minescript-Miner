@@ -2,6 +2,7 @@
 #include <Python.h>
 
 #include "minescript_miner/angle.hpp"
+#include "minescript_miner/branch_bound.hpp"
 #include "minescript_miner/geometry_catalog.hpp"
 #include "minescript_miner/scan_region.hpp"
 
@@ -230,9 +231,12 @@ static void log_scan_input(
     const std::vector<std::uint16_t> &shape_ids,
     const std::vector<std::uint16_t> &target_indices,
     const minescript_miner::ScanRegionGeometry &scan_geometry,
+    const minescript_miner::BranchBoundResult &solve_result,
     int side,
-    double direction_x,
-    double direction_z
+    double geometry_ms,
+    double solve_ms,
+    double returned_yaw,
+    double returned_pitch
 ) {
     std::ofstream log(log_path(), std::ios::app);
     if (!log) {
@@ -271,6 +275,23 @@ static void log_scan_input(
     log << "  target_face_count: " << scan_geometry.target_faces.size() << "\n";
     log << "  cube_side: " << side << "\n";
     log << "  non_empty_count: " << non_air_count << "\n";
+    log << "  solver_found: " << (solve_result.found ? 1 : 0) << "\n";
+    log << "  solver_angle_rad: " << solve_result.angle << "\n";
+    log << "  solver_target_world_face_index: " << solve_result.target_world_face_index << "\n";
+    log << "  solver_target_faces_considered: "
+        << solve_result.stats.target_faces_considered << "\n";
+    log << "  solver_target_faces_pruned: "
+        << solve_result.stats.target_faces_pruned << "\n";
+    log << "  solver_occluders_prepared: "
+        << solve_result.stats.occluders_prepared << "\n";
+    log << "  solver_effective_occluders: "
+        << solve_result.stats.effective_occluders << "\n";
+    log << "  solver_branches_visited: "
+        << solve_result.stats.branches_visited << "\n";
+    log << "  solver_clips_performed: "
+        << solve_result.stats.clips_performed << "\n";
+    log << "  geometry_time_ms: " << geometry_ms << "\n";
+    log << "  solve_time_ms: " << solve_ms << "\n";
 
     if (side > 0) {
         const int half = side / 2;
@@ -324,9 +345,13 @@ static void log_scan_input(
         log << " ...";
     }
     log << "\n";
-    log << "  returned_direction_xz: "
+    log << "  solver_direction_xyz: "
         << std::fixed << std::setprecision(6)
-        << direction_x << ", " << direction_z << "\n\n";
+        << solve_result.direction.x << ", "
+        << solve_result.direction.y << ", "
+        << solve_result.direction.z << "\n";
+    log << "  returned_orientation_yaw_pitch: "
+        << returned_yaw << ", " << returned_pitch << "\n\n";
 }
 
 static PyObject *acquire_target(PyObject *, PyObject *args) {
@@ -429,11 +454,28 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     const minescript_miner::Vec3 eye{position[0], position[1], position[2]};
     const minescript_miner::Vec3 look_dir =
         minescript_miner::look_direction_from_yaw_pitch(orientation[0], orientation[1]);
+    const auto geometry_start = std::chrono::steady_clock::now();
     const minescript_miner::ScanRegionGeometry scan_geometry =
         minescript_miner::build_scan_region_geometry(shape_ids, target_indices, eye, look_dir, side);
+    const auto geometry_end = std::chrono::steady_clock::now();
 
-    const double direction_x = 0.0;
-    const double direction_z = 0.0;
+    const minescript_miner::BranchBoundResult solve_result =
+        minescript_miner::solve_visible_target(scan_geometry, eye, look_dir);
+    const auto solve_end = std::chrono::steady_clock::now();
+
+    double returned_yaw = orientation[0];
+    double returned_pitch = orientation[1];
+    if (solve_result.found) {
+        const minescript_miner::YawPitch target_orientation =
+            minescript_miner::yaw_pitch_from_direction(solve_result.direction);
+        returned_yaw = target_orientation.yaw;
+        returned_pitch = target_orientation.pitch;
+    }
+
+    const double geometry_ms =
+        std::chrono::duration<double, std::milli>(geometry_end - geometry_start).count();
+    const double solve_ms =
+        std::chrono::duration<double, std::milli>(solve_end - geometry_end).count();
 
     log_scan_input(
         position,
@@ -442,11 +484,14 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         shape_ids,
         target_indices,
         scan_geometry,
+        solve_result,
         side,
-        direction_x,
-        direction_z
+        geometry_ms,
+        solve_ms,
+        returned_yaw,
+        returned_pitch
     );
-    return Py_BuildValue("(dd)", direction_x, direction_z);
+    return Py_BuildValue("(dd)", returned_yaw, returned_pitch);
 }
 
 
@@ -456,7 +501,7 @@ static PyMethodDef module_methods[] = {
     {"geometry_catalog_debug", reinterpret_cast<PyCFunction>(geometry_catalog_debug), METH_NOARGS,
      "Return the native geometry catalog version, shape names, and geometry counts for parity checks."},
     {"acquire_target", reinterpret_cast<PyCFunction>(acquire_target), METH_VARARGS,
-     "Use position, orientation, shape catalog version, side, shape ids, and target indices to acquire a target direction."},
+     "Return the nearest visible target orientation as Minecraft yaw and pitch."},
     {nullptr, nullptr, 0, nullptr},
 };
 

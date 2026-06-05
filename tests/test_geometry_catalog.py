@@ -96,6 +96,19 @@ class GeometryCatalogTest(unittest.TestCase):
                 [],
             )
 
+    def test_native_acquire_target_preserves_orientation_without_target(self):
+        self.assertEqual(
+            (90.0, 10.0),
+            acquire_target(
+                (0.5, 64.5, 0.5),
+                (90.0, 10.0),
+                SHAPE_CATALOG_VERSION,
+                3,
+                [SHAPE_ID_BY_NAME["empty"]] * 27,
+                [],
+            ),
+        )
+
     def test_native_acquire_target_builds_sorted_target_face_candidates(self):
         original_log_path = os.environ.get("MINESCRIPT_MINER_NATIVE_LOG")
 
@@ -107,7 +120,7 @@ class GeometryCatalogTest(unittest.TestCase):
                 for target_index in (10, 14, 16):
                     shape_ids[target_index] = SHAPE_ID_BY_NAME["full_cube"]
 
-                acquire_target(
+                result = acquire_target(
                     (0.5, 0.5, 0.5),
                     (0.0, 0.0),
                     SHAPE_CATALOG_VERSION,
@@ -131,6 +144,10 @@ class GeometryCatalogTest(unittest.TestCase):
             "first_target_face_center_angles_rad: 0.000000 1.570796 3.141593",
             log_text,
         )
+        self.assertAlmostEqual(0.0, result[0], places=12)
+        self.assertAlmostEqual(0.0, result[1], places=12)
+        self.assertIn("solver_found: 1", log_text)
+        self.assertIn("returned_orientation_yaw_pitch: 0.000000, 0.000000", log_text)
 
 
 if __name__ == "__main__":

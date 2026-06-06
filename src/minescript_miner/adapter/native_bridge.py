@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import _minescript_miner_native as native
 
@@ -16,17 +16,23 @@ def acquire_target(
     orientation: Orientation,
     shape_catalog_version: int,
     side: int,
+    reach: float,
     shape_ids: Sequence[int],
     target_indices: Sequence[int],
-) -> Tuple[float, float]:
+) -> Optional[Orientation]:
     """Return the nearest visible target as Minecraft yaw and pitch."""
 
-    yaw, pitch = native.acquire_target(
+    result = native.acquire_target(
         position,
         orientation,
         shape_catalog_version,
         side,
+        reach,
         shape_ids,
         target_indices,
     )
+    if result is None:
+        return None
+
+    yaw, pitch = result
     return float(yaw), float(pitch)

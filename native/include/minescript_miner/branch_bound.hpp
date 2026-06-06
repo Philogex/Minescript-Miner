@@ -33,6 +33,7 @@ struct BranchBoundResult {
     Point2 projected_point{};
     Vec3 direction{};
     double angle = std::numeric_limits<double>::infinity();
+    double distance = std::numeric_limits<double>::infinity();
     BranchBoundStats stats{};
 };
 

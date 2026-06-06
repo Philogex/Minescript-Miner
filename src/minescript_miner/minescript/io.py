@@ -48,12 +48,15 @@ def acquire_current_target(
     *,
     catalog: BlockShapeCatalog = DEFAULT_CATALOG,
     target_config: Union[str, Path] = DEFAULT_TARGET_CONFIG,
-) -> Tuple[float, float]:
+    await_region: bool = True,
+) -> Optional[Orientation]:
     min_pos, max_pos = fixed_cube_bounds(position, reach)
     target_blocks = load_target_blocks(target_config)
     block_strings: List[Optional[str]] = []
     target_indices: List[int] = []
-    for index, (_pos, block_string) in enumerate(get_area(position, reach)):
+    for index, (_pos, block_string) in enumerate(
+        get_area(position, reach, await_region=await_region)
+    ):
         block_strings.append(block_string)
         if block_id_literal(block_string) in target_blocks:
             target_indices.append(index)
@@ -66,11 +69,15 @@ def acquire_current_target(
         raise ValueError(f"Expected a cube region, got min={min_pos} max={max_pos}")
 
     encoded = catalog.encode_region(side, block_strings)
+    if not target_indices:
+        return None
+
     return acquire_target(
         position,
         orientation,
         encoded.shape_catalog_version,
         encoded.side,
+        reach,
         encoded.shape_ids,
         target_indices,
     )

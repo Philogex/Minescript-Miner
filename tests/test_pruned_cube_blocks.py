@@ -53,6 +53,18 @@ class PrunedCubeBlocksTest(unittest.TestCase):
         self.assertEqual("minecraft:air", block_strings[world.cube_block_index((10, 64, -4), min_pos, 3)])
         self.assertEqual(26, block_strings.count("minecraft:air"))
 
+    def test_positions_within_reach_use_block_aabb_distance(self):
+        positions = {
+            tuple(position)
+            for position in world.positions_within_reach(
+                (0.9, 0.5, 0.5),
+                reach=1.1,
+            )
+        }
+
+        self.assertIn((2, 0, 0), positions)
+        self.assertNotIn((-2, 0, 0), positions)
+
 
 if __name__ == "__main__":
     unittest.main()

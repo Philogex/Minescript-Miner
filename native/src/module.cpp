@@ -277,6 +277,7 @@ static void log_scan_input(
     log << "  non_empty_count: " << non_air_count << "\n";
     log << "  solver_found: " << (solve_result.found ? 1 : 0) << "\n";
     log << "  solver_angle_rad: " << solve_result.angle << "\n";
+    log << "  solver_distance: " << solve_result.distance << "\n";
     log << "  solver_target_world_face_index: " << solve_result.target_world_face_index << "\n";
     log << "  solver_target_faces_considered: "
         << solve_result.stats.target_faces_considered << "\n";
@@ -361,14 +362,16 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     PyObject *target_indices_object = nullptr;
     int shape_catalog_version = 0;
     int side = 0;
+    double reach = 0.0;
 
     if (!PyArg_ParseTuple(
             args,
-            "OOiiOO:acquire_target",
+            "OOiidOO:acquire_target",
             &position_object,
             &orientation_object,
             &shape_catalog_version,
             &side,
+            &reach,
             &shape_ids_object,
             &target_indices_object
         )) {
@@ -391,6 +394,10 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     }
     if (side > MAX_CUBE_SIDE) {
         PyErr_Format(PyExc_ValueError, "side must be <= %d, got %d", MAX_CUBE_SIDE, side);
+        return nullptr;
+    }
+    if (!(reach > 0.0) || !std::isfinite(reach)) {
+        PyErr_SetString(PyExc_ValueError, "reach must be a positive finite number");
         return nullptr;
     }
 
@@ -456,11 +463,22 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         minescript_miner::look_direction_from_yaw_pitch(orientation[0], orientation[1]);
     const auto geometry_start = std::chrono::steady_clock::now();
     const minescript_miner::ScanRegionGeometry scan_geometry =
-        minescript_miner::build_scan_region_geometry(shape_ids, target_indices, eye, look_dir, side);
+        minescript_miner::build_scan_region_geometry(
+            shape_ids,
+            target_indices,
+            eye,
+            look_dir,
+            side,
+            reach
+        );
     const auto geometry_end = std::chrono::steady_clock::now();
 
     const minescript_miner::BranchBoundResult solve_result =
-        minescript_miner::solve_visible_target(scan_geometry, eye, look_dir);
+        minescript_miner::solve_visible_target(
+            scan_geometry,
+            eye,
+            look_dir
+        );
     const auto solve_end = std::chrono::steady_clock::now();
 
     double returned_yaw = orientation[0];
@@ -491,6 +509,9 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         returned_yaw,
         returned_pitch
     );
+    if (!solve_result.found) {
+        Py_RETURN_NONE;
+    }
     return Py_BuildValue("(dd)", returned_yaw, returned_pitch);
 }
 

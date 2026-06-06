@@ -4,6 +4,7 @@
 #include "minescript_miner/vec.hpp"
 
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 namespace minescript_miner {
@@ -141,7 +142,8 @@ ScanRegionGeometry build_scan_region_geometry(
     const std::vector<std::uint16_t> &target_indices,
     const Vec3 &eye,
     const Vec3 &look_dir,
-    std::int32_t side
+    std::int32_t side,
+    double reach = std::numeric_limits<double>::infinity()
 );
 
 }  // namespace minescript_miner

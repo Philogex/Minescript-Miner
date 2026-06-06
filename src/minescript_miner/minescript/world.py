@@ -67,21 +67,27 @@ def positions_within_reach(
     pitch_min, pitch_max = pitch_range
 
     ir = int(math.ceil(reach))
-    sqr = (reach - 0.5) * (reach - 0.5)
+    reach_squared = reach * reach
     fx, fy, fz = math.floor(px), math.floor(py), math.floor(pz)
 
     positions: List[List[int]] = []
     for dx in range(-ir, ir + 1):
         for dy in range(-ir, ir + 1):
             for dz in range(-ir, ir + 1):
-                if dx * dx + dy * dy > sqr:
-                    continue
-                if dx * dx + dy * dy + dz * dz > sqr:
-                    continue
-
                 x = fx + dx
                 y = fy + dy
                 z = fz + dz
+
+                distance_x = max(x - px, 0.0, px - (x + 1.0))
+                distance_y = max(y - py, 0.0, py - (y + 1.0))
+                distance_z = max(z - pz, 0.0, pz - (z + 1.0))
+                if (
+                    distance_x * distance_x
+                    + distance_y * distance_y
+                    + distance_z * distance_z
+                    > reach_squared
+                ):
+                    continue
 
                 vx = (x + 0.5) - px
                 vy = (y + 0.5) - py

@@ -57,6 +57,25 @@ bool face_points_to_eye(const WorldFace &face, const Vec3 &eye) {
     return dot(face_normal(face.face), eye - face.center) > 0.0;
 }
 
+double axis_distance(double value, double minimum, double maximum) {
+    return std::max({minimum - value, 0.0, value - maximum});
+}
+
+bool face_within_reach(const WorldRectFace16 &face, const Vec3 &eye, double reach) {
+    const Vec3 p0 = point16_to_world(face.p0);
+    const Vec3 p2 = point16_to_world(face.p2);
+    const double distance_x =
+        axis_distance(eye.x, std::min(p0.x, p2.x), std::max(p0.x, p2.x));
+    const double distance_y =
+        axis_distance(eye.y, std::min(p0.y, p2.y), std::max(p0.y, p2.y));
+    const double distance_z =
+        axis_distance(eye.z, std::min(p0.z, p2.z), std::max(p0.z, p2.z));
+    return distance_x * distance_x +
+               distance_y * distance_y +
+               distance_z * distance_z <=
+           reach * reach;
+}
+
 std::size_t world_face_capacity(const std::vector<std::uint16_t> &shape_ids) {
     std::size_t capacity = 0;
     for (const std::uint16_t shape_id : shape_ids) {
@@ -83,7 +102,8 @@ ScanRegionGeometry build_scan_region_geometry(
     const std::vector<std::uint16_t> &target_indices,
     const Vec3 &eye,
     const Vec3 &look_dir,
-    std::int32_t side
+    std::int32_t side,
+    double reach
 ) {
     const BlockPos center{
         static_cast<std::int32_t>(std::floor(eye.x)),
@@ -118,7 +138,9 @@ ScanRegionGeometry build_scan_region_geometry(
                 static_cast<std::uint32_t>(geometry.world_faces.size());
             geometry.world_faces.push_back(world_face);
 
-            if (target_lookup[block_index] == 0 || !face_points_to_eye(world_face, eye)) {
+            if (target_lookup[block_index] == 0 ||
+                !face_points_to_eye(world_face, eye) ||
+                !face_within_reach(world_rect, eye, reach)) {
                 continue;
             }
             geometry.target_faces.push_back({

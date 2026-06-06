@@ -47,6 +47,26 @@ struct BoundedPiece {
     TriangleAngleResult bound{};
 };
 
+constexpr double VISIBLE_INTERIOR_FRACTION = 0.05;
+
+Tri2 inset_triangle(const Tri2 &triangle, double fraction) {
+    const Point2 centroid{
+        (triangle.a.x + triangle.b.x + triangle.c.x) / 3.0,
+        (triangle.a.y + triangle.b.y + triangle.c.y) / 3.0,
+    };
+    const auto inset_point = [centroid, fraction](Point2 point) {
+        return Point2{
+            point.x + (centroid.x - point.x) * fraction,
+            point.y + (centroid.y - point.y) * fraction,
+        };
+    };
+    return {
+        inset_point(triangle.a),
+        inset_point(triangle.b),
+        inset_point(triangle.c),
+    };
+}
+
 bool same_point(Point2 lhs, Point2 rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y;
 }
@@ -355,16 +375,41 @@ private:
         return best;
     }
 
-    void update_best(const TriangleAngleResult &candidate) {
-        if (result_.found && candidate.angle >= result_.angle) {
+    void update_best(
+        const Tri2 &region,
+        const TriangleAngleResult &candidate,
+        bool processed_occluder
+    ) {
+        TriangleAngleResult visible_candidate = candidate;
+        if (candidate.angle > 0.0 || processed_occluder) {
+            const Tri2 interior_region =
+                inset_triangle(region, VISIBLE_INTERIOR_FRACTION);
+            visible_candidate =
+                minimum_angle_to_triangle(interior_region, look_in_view_);
+        }
+
+        const Point2 visible_point = visible_candidate.point;
+        const double visible_angle = visible_candidate.angle;
+        const double inverse_depth =
+            inverse_depth_at(target_projection_.inverse_depth, visible_point);
+        const double visible_distance =
+            inverse_depth > 0.0
+                ? std::sqrt(
+                    visible_point.x * visible_point.x +
+                    visible_point.y * visible_point.y +
+                    1.0
+                ) / inverse_depth
+                : std::numeric_limits<double>::infinity();
+        if (result_.found && visible_angle >= result_.angle) {
             return;
         }
 
         result_.found = true;
         result_.target_world_face_index = current_target_index_;
-        result_.projected_point = candidate.point;
-        result_.direction = normalized_world_direction(basis_, candidate.point);
-        result_.angle = candidate.angle;
+        result_.projected_point = visible_point;
+        result_.direction = normalized_world_direction(basis_, visible_point);
+        result_.angle = visible_angle;
+        result_.distance = visible_distance;
     }
 
     void solve_region(const Tri2 &region, std::size_t next_occluder) {
@@ -377,7 +422,7 @@ private:
 
         const OccluderChoice choice = choose_next_occluder(region, next_occluder);
         if (!choice.found) {
-            update_best(region_bound);
+            update_best(region, region_bound, next_occluder > 0);
             return;
         }
 

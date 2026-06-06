@@ -142,6 +142,31 @@ int main(int argc, char **argv) {
     assert(std::abs(round_trip_orientation.yaw - -98.1) < 1e-12);
     assert(std::abs(round_trip_orientation.pitch - -13.2) < 1e-12);
 
+    std::vector<std::uint16_t> reach_shapes(5 * 5 * 5, SHAPE_EMPTY);
+    const std::uint16_t reach_target_index = offset_to_index({2, 2, 4}, 5);
+    reach_shapes[reach_target_index] = SHAPE_FULL_CUBE;
+    const std::vector<std::uint16_t> reach_targets{reach_target_index};
+    const Vec3 reach_eye{0.5, 0.5, 0.5};
+    const Vec3 reach_look{0.0, 0.0, 1.0};
+    const ScanRegionGeometry outside_reach = build_scan_region_geometry(
+        reach_shapes,
+        reach_targets,
+        reach_eye,
+        reach_look,
+        5,
+        1.49
+    );
+    assert(outside_reach.target_faces.empty());
+    const ScanRegionGeometry touching_reach = build_scan_region_geometry(
+        reach_shapes,
+        reach_targets,
+        reach_eye,
+        reach_look,
+        5,
+        1.5
+    );
+    assert(touching_reach.target_faces.size() == 1);
+
     const ScanFixture fixture = load_fixture(argv[1]);
     assert(fixture.fixture_version == 1);
     assert(fixture.shape_catalog_version == GEOMETRY_SHAPE_CATALOG_VERSION);

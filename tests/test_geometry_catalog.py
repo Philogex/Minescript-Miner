@@ -70,6 +70,7 @@ class GeometryCatalogTest(unittest.TestCase):
                 (90.0, 10.0),
                 SHAPE_CATALOG_VERSION,
                 MAX_CUBE_SIDE + 1,
+                4.8,
                 [],
                 [],
             )
@@ -81,6 +82,7 @@ class GeometryCatalogTest(unittest.TestCase):
                 (90.0, 10.0),
                 SHAPE_CATALOG_VERSION,
                 3,
+                4.8,
                 [0] * 27,
                 [27],
             )
@@ -92,18 +94,19 @@ class GeometryCatalogTest(unittest.TestCase):
                 (90.0, 10.0),
                 SHAPE_CATALOG_VERSION,
                 3,
+                4.8,
                 [len(SHAPE_NAMES)] * 27,
                 [],
             )
 
-    def test_native_acquire_target_preserves_orientation_without_target(self):
-        self.assertEqual(
-            (90.0, 10.0),
+    def test_native_acquire_target_returns_none_without_target(self):
+        self.assertIsNone(
             acquire_target(
                 (0.5, 64.5, 0.5),
                 (90.0, 10.0),
                 SHAPE_CATALOG_VERSION,
                 3,
+                4.8,
                 [SHAPE_ID_BY_NAME["empty"]] * 27,
                 [],
             ),
@@ -125,6 +128,7 @@ class GeometryCatalogTest(unittest.TestCase):
                     (0.0, 0.0),
                     SHAPE_CATALOG_VERSION,
                     3,
+                    4.8,
                     shape_ids,
                     [10, 14, 16],
                 )

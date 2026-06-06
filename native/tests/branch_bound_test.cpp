@@ -1,5 +1,6 @@
 #include "minescript_miner/branch_bound.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 
@@ -55,6 +56,7 @@ int main() {
         solve_visible_target(free_geometry, {}, {0.0, 0.0, 1.0});
     assert(free_result.found);
     assert(free_result.angle == 0.0);
+    assert(std::abs(free_result.distance - 4.0) < 1e-12);
     assert(free_result.stats.clips_performed == 0);
 
     const BranchBoundResult hidden_result =
@@ -67,7 +69,23 @@ int main() {
     assert(partial_result.found);
     assert(partial_result.angle > 0.1);
     assert(partial_result.angle < 0.2);
+    assert(std::max(
+        std::abs(partial_result.projected_point.x),
+        std::abs(partial_result.projected_point.y)
+    ) > 0.125);
     assert(partial_result.stats.clips_performed >= 2);
+
+    const BranchBoundResult stable_partial_result =
+        solve_visible_target(
+            target_with_occluder(false),
+            {},
+            partial_result.direction
+        );
+    assert(stable_partial_result.found);
+    assert(stable_partial_result.angle < 1e-12);
+    assert(length_squared(
+        stable_partial_result.direction - partial_result.direction
+    ) < 1e-24);
 
     ScanRegionGeometry two_targets{};
     two_targets.world_faces.push_back(z_face(-16, -16, 16, 16, 64));

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -29,6 +30,7 @@ struct ScanFixture {
     minescript_miner::Vec3 position{};
     double yaw = 0.0;
     double pitch = 0.0;
+    double reach = std::numeric_limits<double>::infinity();
     std::uint16_t default_shape = 0;
     std::vector<SparseBlock> blocks{};
     bool has_expect_found = false;
@@ -84,6 +86,8 @@ ScanFixture load_fixture(const char *path) {
             line >> fixture.position.x >> fixture.position.y >> fixture.position.z;
         } else if (key == "orientation_yaw_pitch") {
             line >> fixture.yaw >> fixture.pitch;
+        } else if (key == "reach") {
+            fixture.reach = std::stod(next_value(line, key.c_str()));
         } else if (key == "default_shape") {
             fixture.default_shape =
                 static_cast<std::uint16_t>(std::stoul(next_value(line, key.c_str())));
@@ -197,7 +201,8 @@ int main(int argc, char **argv) {
         target_indices,
         fixture.position,
         look_direction,
-        fixture.side
+        fixture.side,
+        fixture.reach
     );
     if (fixture.has_expect_world_faces) {
         assert(geometry.world_faces.size() == fixture.expect_world_faces);
@@ -207,7 +212,12 @@ int main(int argc, char **argv) {
     }
 
     const BranchBoundResult result =
-        solve_visible_target(geometry, fixture.position, look_direction);
+        solve_visible_target(
+            geometry,
+            fixture.position,
+            look_direction,
+            fixture.reach
+        );
     if (fixture.has_expect_found) {
         assert(result.found == fixture.expect_found);
     }

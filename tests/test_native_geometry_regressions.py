@@ -71,6 +71,9 @@ class NativeGeometryRegressionTest(unittest.TestCase):
     def test_selected_point_survives_float_camera_orientation(self):
         self.run_regression("float_camera_edge_clearance")
 
+    def test_adjacent_full_cube_hides_shared_target_face(self):
+        self.run_regression("adjacent_full_cube_occlusion")
+
 
 if __name__ == "__main__":
     unittest.main()

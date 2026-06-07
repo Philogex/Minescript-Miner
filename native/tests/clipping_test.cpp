@@ -54,6 +54,35 @@ int main() {
     assert(in_front.count == 4);
     assert(std::abs(std::abs(signed_polygon_area2(in_front)) * 0.5 - 0.5) < 1e-12);
 
+    const Polygon2 vertex_on_clip_boundary = polygon_from_quad({{
+        {-1.0, 0.0},
+        {0.0, 0.0},
+        {1.0, 1.0},
+        {-1.0, 1.0},
+    }});
+    Polygon2 clipped_at_vertex{};
+    assert(clip_half_plane(
+        vertex_on_clip_boundary,
+        {1.0, 0.0, 0.0},
+        clipped_at_vertex
+    ));
+    assert(clipped_at_vertex.count == 3);
+    for (std::uint8_t i = 0; i < clipped_at_vertex.count; ++i) {
+        const Point2 current = clipped_at_vertex.points[i];
+        const Point2 next =
+            clipped_at_vertex.points[(i + 1) % clipped_at_vertex.count];
+        assert(current.x != next.x || current.y != next.y);
+    }
+
+    Polygon2 occluder_boundary{};
+    assert(clip_outside_edge(
+        polygon_from_triangle({{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}}),
+        {0.0, 0.0},
+        {1.0, 0.0},
+        occluder_boundary
+    ));
+    assert(occluder_boundary.count == 0);
+
     candidate.inverse_depth = reference.inverse_depth;
     assert(clip_projected_face_in_front(candidate, reference, in_front));
     assert(in_front.count == 0);

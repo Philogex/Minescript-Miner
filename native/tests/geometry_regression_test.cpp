@@ -37,6 +37,10 @@ WorldFace z_face(
     return {face, minescript_miner::face_center(face)};
 }
 
+WorldFace world_face(WorldRectFace16 face) {
+    return {face, minescript_miner::face_center(face)};
+}
+
 bool robust_orientation_regression() {
     const Point2 a{-0.1825141931108063, 0.30808915383215085};
     const Point2 b{-0.557948852352874, -0.6988892259339703};
@@ -291,6 +295,85 @@ bool float_camera_edge_clearance_regression() {
     return true;
 }
 
+bool adjacent_full_cube_occlusion_regression() {
+    const Vec3 eye{
+        -3.3980173909273184,
+        91.26310893673975,
+        -0.30000001192092896,
+    };
+    const Vec3 look_direction{
+        -0.495830,
+        0.521510,
+        0.694392,
+    };
+
+    ScanRegionGeometry geometry{};
+    geometry.world_faces.push_back(world_face({
+        PlaneAxis::Z,
+        -1,
+        {-96, 1472, 32},
+        {-80, 1472, 32},
+        {-80, 1488, 32},
+        {-96, 1488, 32},
+    }));
+
+    // Eye-facing faces of the full cube directly in front of the target.
+    geometry.world_faces.push_back(world_face({
+        PlaneAxis::X,
+        1,
+        {-80, 1472, 16},
+        {-80, 1488, 16},
+        {-80, 1488, 32},
+        {-80, 1472, 32},
+    }));
+    geometry.world_faces.push_back(world_face({
+        PlaneAxis::Y,
+        -1,
+        {-96, 1472, 16},
+        {-80, 1472, 16},
+        {-80, 1472, 32},
+        {-96, 1472, 32},
+    }));
+    geometry.world_faces.push_back(world_face({
+        PlaneAxis::Z,
+        -1,
+        {-96, 1472, 16},
+        {-80, 1472, 16},
+        {-80, 1488, 16},
+        {-96, 1488, 16},
+    }));
+    geometry.target_faces.push_back({0, 0.0});
+
+    const BranchBoundResult result =
+        minescript_miner::solve_visible_target(
+            geometry,
+            eye,
+            look_direction,
+            4.8
+        );
+    if (result.found) {
+        const Vec3 world_point{
+            eye.x + result.direction.x * result.distance,
+            eye.y + result.direction.y * result.distance,
+            eye.z + result.direction.z * result.distance,
+        };
+        std::cerr
+            << "adjacent target remained visible at point=("
+            << result.projected_point.x << ", "
+            << result.projected_point.y << ") world=("
+            << world_point.x << ", "
+            << world_point.y << ", "
+            << world_point.z << ") distance="
+            << result.distance
+            << " branches=" << result.stats.branches_visited
+            << " clips=" << result.stats.clips_performed
+            << " effective=" << result.stats.effective_occluders
+            << '\n';
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -313,6 +396,8 @@ int main(int argc, char **argv) {
         passed = target_corner_regression();
     } else if (case_name == "float_camera_edge_clearance") {
         passed = float_camera_edge_clearance_regression();
+    } else if (case_name == "adjacent_full_cube_occlusion") {
+        passed = adjacent_full_cube_occlusion_regression();
     } else {
         std::cerr << "unknown regression case: " << case_name << '\n';
         return 2;

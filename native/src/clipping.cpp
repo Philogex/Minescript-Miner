@@ -181,6 +181,11 @@ double robust_orientation_value(Point2 a, Point2 b, Point2 point) {
 }
 
 bool append_point(Polygon2 &polygon, Point2 point) {
+    if (polygon.count > 0 &&
+        polygon.points[polygon.count - 1].x == point.x &&
+        polygon.points[polygon.count - 1].y == point.y) {
+        return true;
+    }
     if (polygon.count >= polygon.points.size()) {
         return false;
     }
@@ -200,6 +205,71 @@ Point2 half_plane_intersection(
         from.x + t * (to.x - from.x),
         from.y + t * (to.y - from.y),
     };
+}
+
+bool clip_edge_side(
+    const Polygon2 &polygon,
+    Point2 edge_a,
+    Point2 edge_b,
+    bool keep_inside,
+    Polygon2 &out
+) {
+    const Polygon2 input = polygon;
+    out = {};
+    if (input.count == 0) {
+        return true;
+    }
+
+    const auto is_kept = [keep_inside](Orientation orientation) {
+        return keep_inside
+            ? orientation != Orientation::Clockwise
+            : orientation == Orientation::Clockwise;
+    };
+
+    Point2 previous = input.points[input.count - 1];
+    Orientation previous_orientation =
+        orient2d(edge_a, edge_b, previous);
+    bool previous_kept = is_kept(previous_orientation);
+
+    for (std::uint8_t i = 0; i < input.count; ++i) {
+        const Point2 current = input.points[i];
+        const Orientation current_orientation =
+            orient2d(edge_a, edge_b, current);
+        const bool current_kept = is_kept(current_orientation);
+
+        if (previous_kept != current_kept) {
+            Point2 intersection{};
+            if (previous_orientation == Orientation::Collinear) {
+                intersection = previous;
+            } else if (current_orientation == Orientation::Collinear) {
+                intersection = current;
+            } else {
+                intersection = half_plane_intersection(
+                    previous,
+                    current,
+                    orient2d_determinant(edge_a, edge_b, previous),
+                    orient2d_determinant(edge_a, edge_b, current)
+                );
+            }
+            if (!append_point(out, intersection)) {
+                return false;
+            }
+        }
+        if (current_kept && !append_point(out, current)) {
+            return false;
+        }
+
+        previous = current;
+        previous_orientation = current_orientation;
+        previous_kept = current_kept;
+    }
+
+    if (out.count > 1 &&
+        out.points[0].x == out.points[out.count - 1].x &&
+        out.points[0].y == out.points[out.count - 1].y) {
+        --out.count;
+    }
+    return true;
 }
 
 }  // namespace
@@ -271,6 +341,11 @@ bool clip_half_plane(
         previous_value = current_value;
         previous_inside = current_inside;
     }
+    if (out.count > 1 &&
+        out.points[0].x == out.points[out.count - 1].x &&
+        out.points[0].y == out.points[out.count - 1].y) {
+        --out.count;
+    }
     return true;
 }
 
@@ -280,7 +355,7 @@ bool clip_inside_edge(
     Point2 edge_b,
     Polygon2 &out
 ) {
-    return clip_half_plane(polygon, edge_inside_half_plane(edge_a, edge_b), out);
+    return clip_edge_side(polygon, edge_a, edge_b, true, out);
 }
 
 bool clip_outside_edge(
@@ -289,11 +364,7 @@ bool clip_outside_edge(
     Point2 edge_b,
     Polygon2 &out
 ) {
-    return clip_half_plane(
-        polygon,
-        negate_half_plane(edge_inside_half_plane(edge_a, edge_b)),
-        out
-    );
+    return clip_edge_side(polygon, edge_a, edge_b, false, out);
 }
 
 std::vector<Tri2> triangulate_convex_polygon(const Polygon2 &polygon) {

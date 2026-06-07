@@ -112,6 +112,7 @@ def run() -> None:
 
             px, py, pz = m.player_position()
             yaw, pitch = m.player_orientation()
+            start = time.process_time()
             target_orientation = acquire_current_target(
                 (px, py + 1.62, pz),
                 (yaw, pitch),
@@ -119,6 +120,7 @@ def run() -> None:
                 target_config=TARGET_CONFIG,
                 await_region=await_region,
             )
+            print("Time: %f ms" % round((time.process_time() - start) * 1000, 4))
             await_region = False
             if target_orientation is None:
                 time.sleep(IDLE_DELAY)

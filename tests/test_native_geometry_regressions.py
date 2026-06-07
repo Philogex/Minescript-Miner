@@ -62,9 +62,14 @@ class NativeGeometryRegressionTest(unittest.TestCase):
     def test_selected_target_point_respects_reach(self):
         self.run_regression("reach")
 
-    @unittest.expectedFailure
     def test_thin_visible_sliver_uses_point_with_stable_clearance(self):
         self.run_regression("thin_sliver")
+
+    def test_zero_angle_target_corner_moves_to_face_interior(self):
+        self.run_regression("target_corner")
+
+    def test_selected_point_survives_float_camera_orientation(self):
+        self.run_regression("float_camera_edge_clearance")
 
 
 if __name__ == "__main__":

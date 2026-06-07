@@ -279,6 +279,46 @@ static void log_scan_input(
     log << "  solver_angle_rad: " << solve_result.angle << "\n";
     log << "  solver_distance: " << solve_result.distance << "\n";
     log << "  solver_target_world_face_index: " << solve_result.target_world_face_index << "\n";
+    if (solve_result.found &&
+        solve_result.target_world_face_index < scan_geometry.world_faces.size()) {
+        const minescript_miner::WorldFace &target_face =
+            scan_geometry.world_faces[solve_result.target_world_face_index];
+        const minescript_miner::Vec3 target_point{
+            position[0] + solve_result.direction.x * solve_result.distance,
+            position[1] + solve_result.direction.y * solve_result.distance,
+            position[2] + solve_result.direction.z * solve_result.distance,
+        };
+        const minescript_miner::Vec3 normal =
+            minescript_miner::face_normal(target_face.face);
+        const minescript_miner::Vec3 owning_block_point =
+            target_face.center - normal * 1.0e-6;
+        log << std::setprecision(17);
+        log << "  solver_target_face_center: "
+            << target_face.center.x << ", "
+            << target_face.center.y << ", "
+            << target_face.center.z << "\n";
+        log << "  solver_target_face_p0: "
+            << minescript_miner::point16_to_world(target_face.face.p0).x << ", "
+            << minescript_miner::point16_to_world(target_face.face.p0).y << ", "
+            << minescript_miner::point16_to_world(target_face.face.p0).z << "\n";
+        log << "  solver_target_face_p2: "
+            << minescript_miner::point16_to_world(target_face.face.p2).x << ", "
+            << minescript_miner::point16_to_world(target_face.face.p2).y << ", "
+            << minescript_miner::point16_to_world(target_face.face.p2).z << "\n";
+        log << "  solver_target_face_normal: "
+            << normal.x << ", "
+            << normal.y << ", "
+            << normal.z << "\n";
+        log << "  solver_target_block_pos: "
+            << static_cast<int>(std::floor(owning_block_point.x)) << ", "
+            << static_cast<int>(std::floor(owning_block_point.y)) << ", "
+            << static_cast<int>(std::floor(owning_block_point.z)) << "\n";
+        log << "  solver_target_point: "
+            << target_point.x << ", "
+            << target_point.y << ", "
+            << target_point.z << "\n";
+        log << std::setprecision(6);
+    }
     log << "  solver_target_faces_considered: "
         << solve_result.stats.target_faces_considered << "\n";
     log << "  solver_target_faces_pruned: "

@@ -1,0 +1,36 @@
+acquire_target
+  time: 2026-06-07 17:25:31
+  position: 0.500, 64.500, 0.500
+  orientation_yaw_pitch: 90.000, 10.000
+  orientation_look_xyz_from_degrees: -0.984808, -0.173648, 0.000000
+  shape_catalog_version: 1
+  native_shape_catalog_version: 1
+  native_geometry_catalog_version: 1
+  block_count: 27
+  target_block_count: 0
+  world_face_count: 0
+  target_face_count: 0
+  cube_side: 3
+  non_empty_count: 0
+  solver_found: 0
+  solver_angle_rad: inf
+  solver_distance: inf
+  solver_target_world_face_index: 0
+  solver_target_faces_considered: 0
+  solver_target_faces_pruned: 0
+  solver_occluders_prepared: 0
+  solver_effective_occluders: 0
+  solver_branches_visited: 0
+  solver_clips_performed: 0
+  geometry_time_ms: 0.000430
+  solve_time_ms: 0.000261
+  inferred_min_pos: -1, 63, -1
+  order: x fastest, then z, then y
+  first_shape_ids: 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+  first_shape_names: empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty empty
+  first_target_block_indices:
+  first_target_face_indices:
+  first_target_face_center_angles_rad:
+  solver_direction_xyz: 0.000000, 0.000000, 0.000000
+  returned_orientation_yaw_pitch: 90.000000, 10.000000
+

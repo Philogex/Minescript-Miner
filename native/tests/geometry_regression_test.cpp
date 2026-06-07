@@ -195,6 +195,102 @@ bool thin_sliver_regression() {
     return true;
 }
 
+bool target_corner_regression() {
+    ScanRegionGeometry geometry{};
+    geometry.world_faces.push_back(z_face(-16, -16, 16, 16, 64));
+    geometry.target_faces.push_back({0, 0.0});
+
+    Vec3 look_direction{-1.0, -1.0, 4.0};
+    look_direction = look_direction * (
+        1.0 / std::sqrt(minescript_miner::length_squared(look_direction))
+    );
+    const BranchBoundResult result =
+        minescript_miner::solve_visible_target(
+            geometry,
+            {},
+            look_direction
+        );
+    if (!result.found ||
+        result.projected_point.x <= -0.25 ||
+        result.projected_point.x >= 0.25 ||
+        result.projected_point.y <= -0.25 ||
+        result.projected_point.y >= 0.25) {
+        std::cerr
+            << "found=" << result.found
+            << " projected=("
+            << result.projected_point.x << ", "
+            << result.projected_point.y << ")\n";
+        return false;
+    }
+    return true;
+}
+
+bool float_camera_edge_clearance_regression() {
+    constexpr double reach = 4.8;
+    const Vec3 eye{
+        -1.4578052415250033,
+        88.62,
+        0.37818589477571585,
+    };
+    const WorldRectFace16 face{
+        PlaneAxis::Y,
+        -1,
+        {-64, 1456, -48},
+        {-48, 1456, -48},
+        {-48, 1456, -32},
+        {-64, 1456, -32},
+    };
+    ScanRegionGeometry geometry{};
+    geometry.world_faces.push_back({
+        face,
+        minescript_miner::face_center(face),
+    });
+    geometry.target_faces.push_back({0, 0.0});
+
+    const Vec3 look_direction{
+        -0.3496430034723743,
+        0.5395881230627724,
+        -0.7658945277075765,
+    };
+    const BranchBoundResult result =
+        minescript_miner::solve_visible_target(
+            geometry,
+            eye,
+            look_direction,
+            reach
+        );
+    if (!result.found) {
+        std::cerr << "stable face target was not found\n";
+        return false;
+    }
+
+    const Vec3 target_point{
+        eye.x + result.direction.x * result.distance,
+        eye.y + result.direction.y * result.distance,
+        eye.z + result.direction.z * result.distance,
+    };
+    const double edge_clearance = std::min({
+        target_point.x - (-4.0),
+        -3.0 - target_point.x,
+        target_point.z - (-3.0),
+        -2.0 - target_point.z,
+    });
+    const double required_clearance =
+        32.0 * std::numeric_limits<float>::epsilon() *
+        std::max(1.0, result.distance);
+    if (edge_clearance < required_clearance) {
+        std::cerr
+            << "edge_clearance=" << edge_clearance
+            << " required_clearance=" << required_clearance
+            << " target=("
+            << target_point.x << ", "
+            << target_point.y << ", "
+            << target_point.z << ")\n";
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -213,6 +309,10 @@ int main(int argc, char **argv) {
         passed = reach_regression();
     } else if (case_name == "thin_sliver") {
         passed = thin_sliver_regression();
+    } else if (case_name == "target_corner") {
+        passed = target_corner_regression();
+    } else if (case_name == "float_camera_edge_clearance") {
+        passed = float_camera_edge_clearance_regression();
     } else {
         std::cerr << "unknown regression case: " << case_name << '\n';
         return 2;

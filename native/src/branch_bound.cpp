@@ -4,6 +4,7 @@
 #include "minescript_miner/visibility.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -47,24 +48,91 @@ struct BoundedPiece {
     TriangleAngleResult bound{};
 };
 
-constexpr double VISIBLE_INTERIOR_FRACTION = 0.05;
+bool point_strictly_inside_convex_polygon(
+    Point2 point,
+    const Point2 *points,
+    std::uint8_t count
+) {
+    if (count < 3) {
+        return false;
+    }
 
-Tri2 inset_triangle(const Tri2 &triangle, double fraction) {
-    const Point2 centroid{
-        (triangle.a.x + triangle.b.x + triangle.c.x) / 3.0,
-        (triangle.a.y + triangle.b.y + triangle.c.y) / 3.0,
+    Orientation winding = Orientation::Collinear;
+    for (std::uint8_t i = 0; i < count; ++i) {
+        const Orientation edge_orientation =
+            orient2d(points[i], points[(i + 1) % count], point);
+        if (edge_orientation == Orientation::Collinear) {
+            return false;
+        }
+        if (winding == Orientation::Collinear) {
+            winding = edge_orientation;
+        } else if (edge_orientation != winding) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool point_strictly_inside_triangle(Point2 point, const Tri2 &triangle) {
+    const Point2 points[]{triangle.a, triangle.b, triangle.c};
+    return point_strictly_inside_convex_polygon(point, points, 3);
+}
+
+bool point_strictly_inside_projected_face(
+    Point2 point,
+    const ProjectedFace &face
+) {
+    std::array<Point2, MAX_CLIP_VERTICES> points{};
+    for (std::uint8_t i = 0; i < face.count; ++i) {
+        points[i] = face.points[i].point;
+    }
+    return point_strictly_inside_convex_polygon(
+        point,
+        points.data(),
+        face.count
+    );
+}
+
+bool triangle_incenter(const Tri2 &triangle, Point2 &out) {
+    if (orient2d(
+            triangle.a,
+            triangle.b,
+            triangle.c
+        ) == Orientation::Collinear) {
+        return false;
+    }
+
+    const double weight_a = std::hypot(
+        triangle.b.x - triangle.c.x,
+        triangle.b.y - triangle.c.y
+    );
+    const double weight_b = std::hypot(
+        triangle.c.x - triangle.a.x,
+        triangle.c.y - triangle.a.y
+    );
+    const double weight_c = std::hypot(
+        triangle.a.x - triangle.b.x,
+        triangle.a.y - triangle.b.y
+    );
+    const double perimeter = weight_a + weight_b + weight_c;
+    if (!(perimeter > 0.0) || !std::isfinite(perimeter)) {
+        return false;
+    }
+
+    const double normalized_a = weight_a / perimeter;
+    const double normalized_b = weight_b / perimeter;
+    const double normalized_c = weight_c / perimeter;
+    out = {
+        normalized_a * triangle.a.x +
+            normalized_b * triangle.b.x +
+        normalized_c * triangle.c.x,
+        normalized_a * triangle.a.y +
+            normalized_b * triangle.b.y +
+            normalized_c * triangle.c.y,
     };
-    const auto inset_point = [centroid, fraction](Point2 point) {
-        return Point2{
-            point.x + (centroid.x - point.x) * fraction,
-            point.y + (centroid.y - point.y) * fraction,
-        };
-    };
-    return {
-        inset_point(triangle.a),
-        inset_point(triangle.b),
-        inset_point(triangle.c),
-    };
+    return std::isfinite(out.x) &&
+           std::isfinite(out.y) &&
+           point_strictly_inside_triangle(out, triangle);
 }
 
 bool same_point(Point2 lhs, Point2 rhs) {
@@ -223,6 +291,44 @@ Vec3 normalized_world_direction(const ViewBasis &basis, Point2 point) {
         return {};
     }
     return direction * (1.0 / std::sqrt(squared_length));
+}
+
+double interval_edge_clearance(double value, double a, double b) {
+    const double minimum = std::min(a, b);
+    const double maximum = std::max(a, b);
+    return std::min(value - minimum, maximum - value);
+}
+
+double world_face_edge_clearance(
+    const WorldRectFace16 &face,
+    const Vec3 &point
+) {
+    const Vec3 p0 = point16_to_world(face.p0);
+    const Vec3 p2 = point16_to_world(face.p2);
+    switch (face.axis) {
+        case PlaneAxis::X:
+            return std::min(
+                interval_edge_clearance(point.y, p0.y, p2.y),
+                interval_edge_clearance(point.z, p0.z, p2.z)
+            );
+        case PlaneAxis::Y:
+            return std::min(
+                interval_edge_clearance(point.x, p0.x, p2.x),
+                interval_edge_clearance(point.z, p0.z, p2.z)
+            );
+        case PlaneAxis::Z:
+            return std::min(
+                interval_edge_clearance(point.x, p0.x, p2.x),
+                interval_edge_clearance(point.y, p0.y, p2.y)
+            );
+    }
+    return -std::numeric_limits<double>::infinity();
+}
+
+double required_world_edge_clearance(double distance) {
+    return 32.0 *
+           static_cast<double>(std::numeric_limits<float>::epsilon()) *
+           std::max(1.0, distance);
 }
 
 class Solver {
@@ -424,29 +530,47 @@ private:
         bool processed_occluder
     ) {
         TriangleAngleResult visible_candidate = candidate;
-        if (candidate.angle > 0.0 || processed_occluder) {
-            const Tri2 interior_region =
-                inset_triangle(region, VISIBLE_INTERIOR_FRACTION);
-            visible_candidate =
-                minimum_angle_to_triangle(interior_region, look_in_view_);
+        double visible_distance = std::numeric_limits<double>::infinity();
+        Vec3 visible_direction{};
+        bool stable_world_point = candidate_world_geometry(
+            visible_candidate.point,
+            visible_distance,
+            visible_direction
+        );
+        const bool needs_interior_point =
+            candidate.angle > 0.0 ||
+            processed_occluder ||
+            !stable_world_point ||
+            !point_strictly_inside_projected_face(
+                candidate.point,
+                target_projection_
+            );
+        if (needs_interior_point) {
+            Point2 interior_point{};
+            if (!triangle_incenter(region, interior_point)) {
+                return;
+            }
+            const double cosine =
+                direction_cosine(interior_point, look_in_view_);
+            if (!std::isfinite(cosine)) {
+                return;
+            }
+            visible_candidate = {
+                interior_point,
+                std::acos(std::clamp(cosine, -1.0, 1.0)),
+            };
+            stable_world_point = candidate_world_geometry(
+                visible_candidate.point,
+                visible_distance,
+                visible_direction
+            );
         }
 
-        const Point2 visible_point = visible_candidate.point;
-        const double visible_angle = visible_candidate.angle;
-        const double inverse_depth =
-            inverse_depth_at(target_projection_.inverse_depth, visible_point);
-        const double visible_distance =
-            inverse_depth > 0.0
-                ? std::sqrt(
-                    visible_point.x * visible_point.x +
-                    visible_point.y * visible_point.y +
-                    1.0
-                ) / inverse_depth
-                : std::numeric_limits<double>::infinity();
-        if (!std::isfinite(visible_distance) ||
-            visible_distance > reach_) {
+        if (!stable_world_point) {
             return;
         }
+        const Point2 visible_point = visible_candidate.point;
+        const double visible_angle = visible_candidate.angle;
         if (result_.found && visible_angle >= result_.angle) {
             return;
         }
@@ -454,9 +578,43 @@ private:
         result_.found = true;
         result_.target_world_face_index = current_target_index_;
         result_.projected_point = visible_point;
-        result_.direction = normalized_world_direction(basis_, visible_point);
+        result_.direction = visible_direction;
         result_.angle = visible_angle;
         result_.distance = visible_distance;
+    }
+
+    bool candidate_world_geometry(
+        Point2 point,
+        double &distance,
+        Vec3 &direction
+    ) const {
+        const double inverse_depth =
+            inverse_depth_at(target_projection_.inverse_depth, point);
+        distance =
+            inverse_depth > 0.0
+                ? std::sqrt(
+                    point.x * point.x +
+                    point.y * point.y +
+                    1.0
+                ) / inverse_depth
+                : std::numeric_limits<double>::infinity();
+        if (!std::isfinite(distance) || distance > reach_) {
+            return false;
+        }
+
+        direction = normalized_world_direction(basis_, point);
+        if (length_squared(direction) <= 0.0) {
+            return false;
+        }
+        const Vec3 world_point{
+            eye_.x + direction.x * distance,
+            eye_.y + direction.y * distance,
+            eye_.z + direction.z * distance,
+        };
+        const WorldRectFace16 &target_face =
+            geometry_.world_faces[current_target_index_].face;
+        return world_face_edge_clearance(target_face, world_point) >=
+               required_world_edge_clearance(distance);
     }
 
     void solve_region(const Tri2 &region, std::size_t next_occluder) {

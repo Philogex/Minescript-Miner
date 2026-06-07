@@ -80,8 +80,54 @@ bool near_plane_regression() {
     );
     if (!projected) {
         std::cerr << "crossing face was discarded\n";
+        return false;
     }
-    return projected;
+    if (projection.count != 4) {
+        std::cerr
+            << "unexpected clipped point count="
+            << static_cast<int>(projection.count)
+            << '\n';
+        return false;
+    }
+    for (std::uint8_t i = 0; i < projection.count; ++i) {
+        if (projection.points[i].depth <
+                minescript_miner::PROJECTION_NEAR_DEPTH ||
+            !std::isfinite(projection.points[i].point.x) ||
+            !std::isfinite(projection.points[i].point.y)) {
+            std::cerr << "invalid projected near-plane point\n";
+            return false;
+        }
+    }
+
+    constexpr double inverse_sqrt_two = 0.7071067811865475244;
+    const ViewBasis diagonal_basis{
+        {inverse_sqrt_two, 0.0, -inverse_sqrt_two},
+        {0.0, 1.0, 0.0},
+        {inverse_sqrt_two, 0.0, inverse_sqrt_two},
+    };
+    const WorldRectFace16 one_corner_behind{
+        PlaneAxis::Y,
+        1,
+        {-16, 0, -16},
+        {16, 0, -16},
+        {16, 0, 16},
+        {-16, 0, 16},
+    };
+    const Vec3 diagonal_eye{-0.5, 0.5, -0.5};
+    if (!minescript_miner::project_world_face(
+            one_corner_behind,
+            diagonal_eye,
+            diagonal_basis,
+            projection
+        ) ||
+        projection.count != 5) {
+        std::cerr
+            << "one-corner near clip point count="
+            << static_cast<int>(projection.count)
+            << '\n';
+        return false;
+    }
+    return true;
 }
 
 bool reach_regression() {

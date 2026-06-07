@@ -1,10 +1,18 @@
 #include "minescript_miner/visibility.hpp"
 
+#include <array>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 
 namespace minescript_miner {
 
 namespace {
+
+struct ViewPolygon {
+    std::array<ViewPoint, MAX_CLIP_VERTICES> points{};
+    std::uint8_t count = 0;
+};
 
 bool normalize(const Vec3 &value, Vec3 &out) {
     const double squared_length = length_squared(value);
@@ -12,6 +20,68 @@ bool normalize(const Vec3 &value, Vec3 &out) {
         return false;
     }
     out = value * (1.0 / std::sqrt(squared_length));
+    return true;
+}
+
+bool same_view_point(const ViewPoint &lhs, const ViewPoint &rhs) {
+    return lhs.x == rhs.x &&
+           lhs.y == rhs.y &&
+           lhs.depth == rhs.depth;
+}
+
+bool append_view_point(ViewPolygon &polygon, const ViewPoint &point) {
+    if (polygon.count > 0 &&
+        same_view_point(polygon.points[polygon.count - 1], point)) {
+        return true;
+    }
+    if (polygon.count >= polygon.points.size()) {
+        return false;
+    }
+    polygon.points[polygon.count++] = point;
+    return true;
+}
+
+ViewPoint intersect_near_plane(const ViewPoint &from, const ViewPoint &to) {
+    const double t =
+        (PROJECTION_NEAR_DEPTH - from.depth) /
+        (to.depth - from.depth);
+    return {
+        from.x + t * (to.x - from.x),
+        from.y + t * (to.y - from.y),
+        PROJECTION_NEAR_DEPTH,
+    };
+}
+
+bool clip_view_polygon_to_near_plane(
+    const std::array<ViewPoint, 4> &input,
+    ViewPolygon &out
+) {
+    out = {};
+    ViewPoint previous = input.back();
+    bool previous_inside = previous.depth >= PROJECTION_NEAR_DEPTH;
+
+    for (const ViewPoint &current : input) {
+        const bool current_inside =
+            current.depth >= PROJECTION_NEAR_DEPTH;
+        if (previous_inside != current_inside &&
+            !append_view_point(
+                out,
+                intersect_near_plane(previous, current)
+            )) {
+            return false;
+        }
+        if (current_inside && !append_view_point(out, current)) {
+            return false;
+        }
+
+        previous = current;
+        previous_inside = current_inside;
+    }
+
+    if (out.count > 1 &&
+        same_view_point(out.points[0], out.points[out.count - 1])) {
+        --out.count;
+    }
     return true;
 }
 
@@ -111,20 +181,39 @@ bool project_world_face(
 
     for (std::size_t i = 0; i < world_points.size(); ++i) {
         view_points[i] = world_to_view(point16_to_world(world_points[i]), eye, basis);
-        if (!is_in_front(view_points[i])) {
+    }
+
+    ViewPolygon clipped{};
+    if (!clip_view_polygon_to_near_plane(view_points, clipped) ||
+        clipped.count < 3) {
+        out = {};
+        return false;
+    }
+
+    out = {};
+    out.count = clipped.count;
+    for (std::uint8_t i = 0; i < clipped.count; ++i) {
+        out.points[i] = project_view_point(clipped.points[i]);
+        if (!std::isfinite(out.points[i].point.x) ||
+            !std::isfinite(out.points[i].point.y)) {
+            out = {};
             return false;
         }
     }
 
-    for (std::size_t i = 0; i < view_points.size(); ++i) {
-        out.points[i] = project_view_point(view_points[i]);
+    for (std::uint8_t i = 1; i + 1 < out.count; ++i) {
+        if (make_inverse_depth_plane(
+                out.points[0],
+                out.points[i],
+                out.points[i + 1],
+                out.inverse_depth
+            )) {
+            return true;
+        }
     }
-    return make_inverse_depth_plane(
-        out.points[0],
-        out.points[1],
-        out.points[2],
-        out.inverse_depth
-    );
+
+    out = {};
+    return false;
 }
 
 namespace {

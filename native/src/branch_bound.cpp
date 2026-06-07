@@ -277,25 +277,32 @@ private:
             dot(look_direction_, basis_.forward),
         };
 
-        const Tri2 target_triangles[2]{
-            {
+        std::array<Tri2, MAX_CLIP_VERTICES - 2> target_triangles{};
+        std::uint8_t target_triangle_count = 0;
+        double target_bound = std::numeric_limits<double>::infinity();
+        for (std::uint8_t i = 1; i + 1 < target_projection_.count; ++i) {
+            const Tri2 triangle{
                 target_projection_.points[0].point,
-                target_projection_.points[1].point,
-                target_projection_.points[2].point,
-            },
-            {
-                target_projection_.points[0].point,
-                target_projection_.points[2].point,
-                target_projection_.points[3].point,
-            },
-        };
-
-        const TriangleAngleResult first_bound =
-            minimum_angle_to_triangle(target_triangles[0], look_in_view_);
-        const TriangleAngleResult second_bound =
-            minimum_angle_to_triangle(target_triangles[1], look_in_view_);
-        if (result_.found &&
-            std::min(first_bound.angle, second_bound.angle) >= result_.angle) {
+                target_projection_.points[i].point,
+                target_projection_.points[i + 1].point,
+            };
+            if (orient2d(
+                    triangle.a,
+                    triangle.b,
+                    triangle.c
+                ) == Orientation::Collinear) {
+                continue;
+            }
+            target_triangles[target_triangle_count++] = triangle;
+            target_bound = std::min(
+                target_bound,
+                minimum_angle_to_triangle(triangle, look_in_view_).angle
+            );
+        }
+        if (target_triangle_count == 0) {
+            return;
+        }
+        if (result_.found && target_bound >= result_.angle) {
             ++result_.stats.target_faces_pruned;
             return;
         }
@@ -308,8 +315,9 @@ private:
             generation_ = 1;
         }
 
-        solve_region(target_triangles[0], 0);
-        solve_region(target_triangles[1], 0);
+        for (std::uint8_t i = 0; i < target_triangle_count; ++i) {
+            solve_region(target_triangles[i], 0);
+        }
     }
 
     bool prepare_occluder(std::uint32_t world_face_index) {

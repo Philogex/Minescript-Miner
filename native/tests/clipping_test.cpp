@@ -43,6 +43,7 @@ int main() {
     candidate.points[1].point = {1.0, 0.0};
     candidate.points[2].point = {1.0, 1.0};
     candidate.points[3].point = {0.0, 1.0};
+    candidate.count = 4;
     candidate.inverse_depth = {1.0, 0.0, 0.0};
 
     ProjectedFace reference{};

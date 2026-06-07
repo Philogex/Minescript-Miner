@@ -56,7 +56,6 @@ class NativeGeometryRegressionTest(unittest.TestCase):
     def test_nearly_collinear_orientation_keeps_exact_sign(self):
         self.run_regression("robust_orientation")
 
-    @unittest.expectedFailure
     def test_face_crossing_near_plane_is_clipped_instead_of_discarded(self):
         self.run_regression("near_plane")
 

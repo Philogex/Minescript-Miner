@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from setuptools import Extension, find_namespace_packages, setup
@@ -10,6 +11,7 @@ native_sources = [
     native_source_dir / "branch_bound.cpp",
     native_source_dir / "bvh.cpp",
     native_source_dir / "clipping.cpp",
+    native_source_dir / "exact_geometry.cpp",
     native_source_dir / "geometry_catalog.cpp",
     native_source_dir / "numerics.cpp",
     native_source_dir / "scan_region.cpp",
@@ -22,7 +24,14 @@ native_sources = [
 native_extension = Extension(
     "_minescript_miner_native",
     sources=[str(path) for path in native_sources],
-    include_dirs=["native/include"],
+    include_dirs=[
+        "native/include",
+        *(
+            [os.environ["BOOST_INCLUDEDIR"]]
+            if os.environ.get("BOOST_INCLUDEDIR")
+            else []
+        ),
+    ],
     language="c++",
     define_macros=[("Py_LIMITED_API", "0x03090000")],
     py_limited_api=True,

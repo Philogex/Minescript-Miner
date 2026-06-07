@@ -1,0 +1,52 @@
+# Exact Geometry Invariants
+
+The visibility solver separates exact topology from approximate metrics.
+
+## Set Semantics
+
+- A target region is a convex intersection of oriented half-planes.
+- Occluders are closed sets: their boundary is occluded.
+- The visible complement of an occluder is open at the occluder boundary.
+- Subtracting a convex occluder partitions a region into disjoint branches.
+- Reordering equivalent occluders must not change visibility.
+
+## Exact Decisions
+
+The following operations must use exact arithmetic:
+
+- conversion of input IEEE 754 coordinates into the geometric model;
+- construction of projective points and lines;
+- point/line incidence and half-plane classification;
+- topological inside, boundary, and outside decisions;
+- construction and comparison of clipping intersections;
+- empty-region decisions.
+
+No epsilon may change one of these decisions.
+
+## Approximate Metrics
+
+Floating-point arithmetic may be used for:
+
+- angle bounds and candidate ordering;
+- performance heuristics;
+- conversion of a final exact point to a Minecraft direction;
+- diagnostics and logging.
+
+Approximate values may reorder work, but must not make a branch visible,
+hidden, or empty. Pruning based on an approximate bound must remain
+conservative.
+
+## Canonical Representation
+
+- Finite homogeneous points have a positive `w`.
+- Homogeneous coordinates are divided by their positive common divisor.
+- Oriented lines are divided by a positive common divisor without changing
+  their sign.
+- Negating a line changes its selected half-plane and is therefore explicit.
+- Equal canonical objects must compare equal and may later share one ID.
+
+## Migration Rule
+
+The current floating-point clipping path remains active until the exact path
+matches all native unit tests, recorded scan fixtures, and in-game regression
+cases. The exact kernel is introduced independently before solver integration.

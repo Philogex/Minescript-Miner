@@ -27,6 +27,15 @@ Requirements:
 * [`minescript`](https://github.com/maxuser0/minescript.git)
 * [NumPy](https://numpy.org/)
 * [Numba](https://numba.pydata.org/)
+* Boost development headers (`rational` and `multiprecision`)
+
+On Fedora, install the native build dependency with:
+
+```bash
+sudo dnf install boost-devel
+```
+
+Alternatively, set `BOOST_INCLUDEDIR` to a directory containing `boost/`.
 
 ```bash
 pip install --force-reinstall numba==0.61.2 llvmlite==0.44.0 numpy==2.2.6

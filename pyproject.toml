@@ -19,3 +19,4 @@ test-command = "python -c \"import _minescript_miner_native as native; import mi
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]
 manylinux-x86_64-image = "manylinux_2_28"
+before-build = "yum install -y boost-devel"

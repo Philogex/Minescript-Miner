@@ -44,6 +44,19 @@ conservative.
   their sign.
 - Negating a line changes its selected half-plane and is therefore explicit.
 - Equal canonical objects must compare equal and may later share one ID.
+- `LineId` identifies an unoriented geometric line.
+- `HalfPlaneId` combines a `LineId` with one selected side.
+- `VertexId` intersections and vertex/half-plane classifications are interned
+  so repeated branches reuse exact integer results.
+
+## Constraint Regions
+
+- A `ConstraintRegion` is keyed by its sorted, duplicate-free half-plane IDs.
+- It represents the exact closure of a bounded two-dimensional region.
+- Regions with no positive-area convex hull are empty for visibility purposes.
+- The B&B target face supplies the initial bounded region; general unbounded
+  half-plane feasibility is intentionally outside this representation.
+- Approximate vertices are derived output and never define region topology.
 
 ## Migration Rule
 

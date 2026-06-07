@@ -46,6 +46,7 @@ public:
     LineId intern_line(ExactLine2 line);
     HalfPlaneId intern_half_plane(ExactLine2 oriented_line);
     VertexId intern_vertex(ExactPoint2H point);
+    HalfPlaneId opposite(HalfPlaneId half_plane);
 
     VertexId intersect(LineId lhs, LineId rhs);
     ExactSign classify(VertexId vertex, HalfPlaneId half_plane);

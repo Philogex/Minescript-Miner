@@ -135,6 +135,16 @@ VertexId ExactGeometryStore::intern_vertex(ExactPoint2H point_value) {
     return id;
 }
 
+HalfPlaneId ExactGeometryStore::opposite(HalfPlaneId half_plane_id) {
+    const ExactHalfPlane &plane = half_plane(half_plane_id);
+    const ExactLine2 &line_value = line(plane.line);
+    return intern_half_plane(
+        plane.positive_side
+            ? opposite_half_plane(line_value)
+            : line_value
+    );
+}
+
 VertexId ExactGeometryStore::intersect(LineId lhs, LineId rhs) {
     (void) line(lhs);
     (void) line(rhs);

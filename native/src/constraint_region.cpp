@@ -36,22 +36,69 @@ ConstraintRegionStore::ConstraintRegionStore(
 RegionId ConstraintRegionStore::intern_bounded_region(
     std::vector<HalfPlaneId> constraints
 ) {
-    return intern_region(std::move(constraints), {}, {});
+    std::vector<RegionConstraint> region_constraints;
+    region_constraints.reserve(constraints.size());
+    for (const HalfPlaneId constraint : constraints) {
+        region_constraints.push_back({constraint, false});
+    }
+    return intern_region(std::move(region_constraints), {}, {});
 }
 
 RegionId ConstraintRegionStore::add_constraint(
     RegionId parent_id,
-    HalfPlaneId constraint
+    HalfPlaneId constraint,
+    bool strict
 ) {
     (void) geometry_.half_plane(constraint);
     const ConstraintRegion &parent_region = region(parent_id);
-    std::vector<HalfPlaneId> constraints = parent_region.constraints;
-    constraints.push_back(constraint);
+    std::vector<RegionConstraint> constraints =
+        parent_region.constraints;
+    const RegionConstraint added_constraint{constraint, strict};
+    constraints.push_back(added_constraint);
     return intern_region(
         std::move(constraints),
         parent_id,
-        constraint
+        added_constraint
     );
+}
+
+std::vector<RegionId> ConstraintRegionStore::subtract_convex_region(
+    RegionId source,
+    const std::vector<HalfPlaneId> &occluder
+) {
+    if (is_empty(source)) {
+        return {};
+    }
+    if (occluder.empty()) {
+        return {source};
+    }
+
+    std::vector<RegionId> visible_pieces;
+    visible_pieces.reserve(occluder.size());
+    RegionId prefix = source;
+
+    for (const HalfPlaneId inside : occluder) {
+        (void) geometry_.half_plane(inside);
+        const RegionId outside = add_constraint(
+            prefix,
+            geometry_.opposite(inside),
+            true
+        );
+        if (!is_empty(outside) &&
+            std::find(
+                visible_pieces.begin(),
+                visible_pieces.end(),
+                outside
+            ) == visible_pieces.end()) {
+            visible_pieces.push_back(outside);
+        }
+
+        prefix = add_constraint(prefix, inside);
+        if (is_empty(prefix)) {
+            break;
+        }
+    }
+    return visible_pieces;
 }
 
 const ConstraintRegion &ConstraintRegionStore::region(RegionId id) const {
@@ -63,6 +110,26 @@ const ConstraintRegion &ConstraintRegionStore::region(RegionId id) const {
 
 bool ConstraintRegionStore::is_empty(RegionId id) const {
     return region(id).state == ConstraintRegionState::Empty;
+}
+
+bool ConstraintRegionStore::contains(RegionId id, VertexId point) {
+    (void) geometry_.vertex(point);
+    const ConstraintRegion &candidate = region(id);
+    if (candidate.state == ConstraintRegionState::Empty) {
+        return false;
+    }
+
+    for (const RegionConstraint constraint : candidate.constraints) {
+        const ExactSign sign =
+            geometry_.classify(point, constraint.half_plane);
+        if (
+            sign == ExactSign::Negative ||
+            (constraint.strict && sign == ExactSign::Zero)
+        ) {
+            return false;
+        }
+    }
+    return true;
 }
 
 const std::vector<VertexId> &ConstraintRegionStore::vertices(
@@ -88,18 +155,30 @@ std::size_t ConstraintRegionStore::region_count() const {
 }
 
 RegionId ConstraintRegionStore::intern_region(
-    std::vector<HalfPlaneId> constraints,
+    std::vector<RegionConstraint> constraints,
     RegionId parent,
-    HalfPlaneId added_constraint
+    RegionConstraint added_constraint
 ) {
-    for (const HalfPlaneId constraint : constraints) {
-        (void) geometry_.half_plane(constraint);
+    for (const RegionConstraint constraint : constraints) {
+        (void) geometry_.half_plane(constraint.half_plane);
     }
     std::sort(constraints.begin(), constraints.end());
-    constraints.erase(
-        std::unique(constraints.begin(), constraints.end()),
-        constraints.end()
-    );
+    std::vector<RegionConstraint> canonical_constraints;
+    canonical_constraints.reserve(constraints.size());
+    for (const RegionConstraint constraint : constraints) {
+        if (
+            !canonical_constraints.empty() &&
+            canonical_constraints.back().half_plane ==
+                constraint.half_plane
+        ) {
+            canonical_constraints.back().strict =
+                canonical_constraints.back().strict ||
+                constraint.strict;
+        } else {
+            canonical_constraints.push_back(constraint);
+        }
+    }
+    constraints = std::move(canonical_constraints);
 
     const auto existing = region_ids_.find(constraints);
     if (existing != region_ids_.end()) {
@@ -128,17 +207,17 @@ RegionId ConstraintRegionStore::intern_region(
 }
 
 std::vector<VertexId> ConstraintRegionStore::compute_convex_hull(
-    const std::vector<HalfPlaneId> &constraints
+    const std::vector<RegionConstraint> &constraints
 ) {
     std::vector<VertexId> candidates;
     for (std::size_t lhs = 0; lhs < constraints.size(); ++lhs) {
         const LineId lhs_line =
-            geometry_.half_plane(constraints[lhs]).line;
+            geometry_.half_plane(constraints[lhs].half_plane).line;
         for (std::size_t rhs = lhs + 1;
              rhs < constraints.size();
              ++rhs) {
             const LineId rhs_line =
-                geometry_.half_plane(constraints[rhs]).line;
+                geometry_.half_plane(constraints[rhs].half_plane).line;
             const VertexId candidate =
                 geometry_.intersect(lhs_line, rhs_line);
             if (!candidate ||
@@ -147,9 +226,12 @@ std::vector<VertexId> ConstraintRegionStore::compute_convex_hull(
             }
 
             bool inside = true;
-            for (const HalfPlaneId constraint : constraints) {
+            for (const RegionConstraint constraint : constraints) {
                 if (
-                    geometry_.classify(candidate, constraint) ==
+                    geometry_.classify(
+                        candidate,
+                        constraint.half_plane
+                    ) ==
                     ExactSign::Negative
                 ) {
                     inside = false;

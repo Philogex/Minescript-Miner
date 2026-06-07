@@ -57,6 +57,8 @@ int main() {
     assert(geometry.classify(origin, x_min) == ExactSign::Zero);
     assert(geometry.classify(origin, x_max) == ExactSign::Positive);
     assert(geometry.classification_cache_size() == 2);
+    assert(geometry.opposite(y_positive) == y_negative);
+    assert(geometry.opposite(y_negative) == y_positive);
     assert(geometry.classify(origin, x_max) == ExactSign::Positive);
     assert(geometry.classification_cache_size() == 2);
 
@@ -97,7 +99,10 @@ int main() {
     assert(!regions.is_empty(half_square));
     assert(regions.vertices(half_square).size() == 4);
     assert(regions.region(half_square).parent == square);
-    assert(regions.region(half_square).added_constraint == right_half);
+    assert((
+        regions.region(half_square).added_constraint ==
+        RegionConstraint{right_half, false}
+    ));
 
     const HalfPlaneId beyond_square =
         geometry.intern_half_plane(line(1, 0, -2));

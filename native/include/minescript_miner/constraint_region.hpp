@@ -16,11 +16,33 @@ enum class ConstraintRegionState : std::uint8_t {
     Bounded,
 };
 
+struct RegionConstraint {
+    HalfPlaneId half_plane{};
+    bool strict = false;
+
+    friend constexpr bool operator==(
+        RegionConstraint lhs,
+        RegionConstraint rhs
+    ) {
+        return lhs.half_plane == rhs.half_plane &&
+               lhs.strict == rhs.strict;
+    }
+
+    friend constexpr bool operator<(
+        RegionConstraint lhs,
+        RegionConstraint rhs
+    ) {
+        return lhs.half_plane != rhs.half_plane
+            ? lhs.half_plane < rhs.half_plane
+            : lhs.strict < rhs.strict;
+    }
+};
+
 struct ConstraintRegion {
     RegionId parent{};
-    HalfPlaneId added_constraint{};
+    RegionConstraint added_constraint{};
     ConstraintRegionState state = ConstraintRegionState::Empty;
-    std::vector<HalfPlaneId> constraints{};
+    std::vector<RegionConstraint> constraints{};
     std::vector<VertexId> vertices{};
 };
 
@@ -36,11 +58,20 @@ public:
     );
     RegionId add_constraint(
         RegionId parent,
-        HalfPlaneId constraint
+        HalfPlaneId constraint,
+        bool strict = false
+    );
+    // Returns closures of the disjoint visible prefix pieces. Complemented
+    // occluder boundaries are stored as strict constraints, and an empty
+    // occluder constraint list is treated as a no-op.
+    std::vector<RegionId> subtract_convex_region(
+        RegionId source,
+        const std::vector<HalfPlaneId> &occluder
     );
 
     const ConstraintRegion &region(RegionId id) const;
     bool is_empty(RegionId id) const;
+    bool contains(RegionId id, VertexId point);
     const std::vector<VertexId> &vertices(RegionId id) const;
     std::vector<Point2> approximate_vertices(RegionId id) const;
 
@@ -48,17 +79,17 @@ public:
 
 private:
     RegionId intern_region(
-        std::vector<HalfPlaneId> constraints,
+        std::vector<RegionConstraint> constraints,
         RegionId parent,
-        HalfPlaneId added_constraint
+        RegionConstraint added_constraint
     );
     std::vector<VertexId> compute_convex_hull(
-        const std::vector<HalfPlaneId> &constraints
+        const std::vector<RegionConstraint> &constraints
     );
 
     ExactGeometryStore &geometry_;
     std::vector<ConstraintRegion> regions_;
-    std::map<std::vector<HalfPlaneId>, RegionId> region_ids_;
+    std::map<std::vector<RegionConstraint>, RegionId> region_ids_;
 };
 
 }  // namespace minescript_miner

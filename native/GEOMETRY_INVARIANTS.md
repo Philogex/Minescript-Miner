@@ -52,11 +52,25 @@ conservative.
 ## Constraint Regions
 
 - A `ConstraintRegion` is keyed by its sorted, duplicate-free half-plane IDs.
+- A region constraint records whether its selected half-plane boundary is
+  included or strict.
 - It represents the exact closure of a bounded two-dimensional region.
 - Regions with no positive-area convex hull are empty for visibility purposes.
 - The B&B target face supplies the initial bounded region; general unbounded
   half-plane feasibility is intentionally outside this representation.
 - Approximate vertices are derived output and never define region topology.
+
+## Convex Subtraction
+
+- For an occluder `H1 & H2 & ... & Hn`, subtraction creates the prefix pieces
+  `R & !H1`, `R & H1 & !H2`, ..., `R & H1 & ... & H(n-1) & !Hn`.
+- Every complemented occluder constraint is strict because the occluder is
+  closed and its boundary is not visible.
+- Prefix constraints retained from the occluder remain closed.
+- The pieces may share closure vertices, but their represented visible sets
+  are disjoint.
+- Changing the occluder edge order may change the partition, but not point
+  membership or total visible area.
 
 ## Migration Rule
 

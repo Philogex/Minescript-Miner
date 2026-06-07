@@ -53,7 +53,6 @@ class NativeGeometryRegressionTest(unittest.TestCase):
             cwd=self.project_root,
         )
 
-    @unittest.expectedFailure
     def test_nearly_collinear_orientation_keeps_exact_sign(self):
         self.run_regression("robust_orientation")
 

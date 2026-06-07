@@ -55,7 +55,11 @@ bool make_inverse_depth_plane(
         return false;
     }
 
-    const double denominator = orient2d(a.point, b.point, c.point);
+    if (orient2d(a.point, b.point, c.point) == Orientation::Collinear) {
+        return false;
+    }
+    const double denominator =
+        orient2d_determinant(a.point, b.point, c.point);
     if (denominator == 0.0) {
         return false;
     }

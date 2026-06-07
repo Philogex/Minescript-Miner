@@ -93,15 +93,21 @@ bool same_triangle(const Tri2 &lhs, const Tri2 &rhs) {
 }
 
 bool point_in_triangle(Point2 point, const Tri2 &triangle) {
-    if (signed_area2(triangle) == 0.0) {
+    if (orient2d(triangle.a, triangle.b, triangle.c) == Orientation::Collinear) {
         return false;
     }
-    const double ab = orient2d(triangle.a, triangle.b, point);
-    const double bc = orient2d(triangle.b, triangle.c, point);
-    const double ca = orient2d(triangle.c, triangle.a, point);
-    const bool has_negative = ab < 0.0 || bc < 0.0 || ca < 0.0;
-    const bool has_positive = ab > 0.0 || bc > 0.0 || ca > 0.0;
-    return !(has_negative && has_positive);
+    const Orientation ab = orient2d(triangle.a, triangle.b, point);
+    const Orientation bc = orient2d(triangle.b, triangle.c, point);
+    const Orientation ca = orient2d(triangle.c, triangle.a, point);
+    const bool has_clockwise =
+        ab == Orientation::Clockwise ||
+        bc == Orientation::Clockwise ||
+        ca == Orientation::Clockwise;
+    const bool has_counter_clockwise =
+        ab == Orientation::CounterClockwise ||
+        bc == Orientation::CounterClockwise ||
+        ca == Orientation::CounterClockwise;
+    return !(has_clockwise && has_counter_clockwise);
 }
 
 double direction_cosine(Point2 point, const Vec3 &look_direction_in_view) {

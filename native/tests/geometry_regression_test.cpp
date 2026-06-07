@@ -43,9 +43,13 @@ bool robust_orientation_regression() {
     const Point2 c{-0.44282367504482284, -0.39010429715305583};
 
     // The exact determinant of these represented doubles is negative.
-    const double determinant = minescript_miner::orient2d(a, b, c);
-    if (determinant >= 0.0) {
-        std::cerr << "orient2d determinant=" << determinant << '\n';
+    const minescript_miner::Orientation orientation =
+        minescript_miner::orient2d(a, b, c);
+    if (orientation != minescript_miner::Orientation::Clockwise) {
+        std::cerr
+            << "orient2d orientation="
+            << static_cast<int>(orientation)
+            << '\n';
         return false;
     }
     return true;

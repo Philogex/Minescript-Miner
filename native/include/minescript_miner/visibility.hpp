@@ -5,12 +5,16 @@
 #include "minescript_miner/tri2.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 
 namespace minescript_miner {
 
 // Positive view-space depth prevents singular perspective projections.
 inline constexpr double PROJECTION_NEAR_DEPTH = 1.0e-6;
+inline constexpr std::size_t MAX_REACH_FACE_VERTICES = 16;
+inline constexpr std::size_t MAX_REACH_FACE_PIECES =
+    MAX_REACH_FACE_VERTICES - 2;
 
 struct ViewBasis {
     Vec3 right{};
@@ -39,6 +43,11 @@ struct ProjectedFace {
     std::array<ProjectedPoint, MAX_CLIP_VERTICES> points{};
     std::uint8_t count = 0;
     InverseDepthPlane inverse_depth{};
+};
+
+struct ProjectedFacePieces {
+    std::array<ProjectedFace, MAX_REACH_FACE_PIECES> faces{};
+    std::uint8_t count = 0;
 };
 
 bool make_view_basis(const Vec3 &forward, ViewBasis &out);
@@ -122,6 +131,14 @@ bool project_world_face(
     const Vec3 &eye,
     const ViewBasis &basis,
     ProjectedFace &out
+);
+
+bool project_reachable_world_face(
+    const WorldRectFace16 &face,
+    const Vec3 &eye,
+    const ViewBasis &basis,
+    double reach,
+    ProjectedFacePieces &out
 );
 
 }

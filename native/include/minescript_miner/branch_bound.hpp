@@ -46,6 +46,7 @@ BranchBoundResult solve_visible_target(
     const ScanRegionGeometry &geometry,
     const Vec3 &eye,
     const Vec3 &look_direction,
+    double reach = std::numeric_limits<double>::infinity(),
     BranchBoundOptions options = {}
 );
 

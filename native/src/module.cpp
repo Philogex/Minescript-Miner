@@ -477,7 +477,8 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         minescript_miner::solve_visible_target(
             scan_geometry,
             eye,
-            look_dir
+            look_dir,
+            reach
         );
     const auto solve_end = std::chrono::steady_clock::now();
 

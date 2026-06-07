@@ -141,7 +141,12 @@ bool reach_regression() {
         1.0 / std::sqrt(minescript_miner::length_squared(look_direction))
     );
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(geometry, {}, look_direction);
+        minescript_miner::solve_visible_target(
+            geometry,
+            {},
+            look_direction,
+            reach
+        );
 
     if (!result.found || result.distance > reach) {
         std::cerr

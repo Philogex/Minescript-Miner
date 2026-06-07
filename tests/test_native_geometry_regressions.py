@@ -59,7 +59,6 @@ class NativeGeometryRegressionTest(unittest.TestCase):
     def test_face_crossing_near_plane_is_clipped_instead_of_discarded(self):
         self.run_regression("near_plane")
 
-    @unittest.expectedFailure
     def test_selected_target_point_respects_reach(self):
         self.run_regression("reach")
 

@@ -231,11 +231,13 @@ public:
         const ScanRegionGeometry &geometry,
         const Vec3 &eye,
         const Vec3 &look_direction,
+        double reach,
         BranchBoundOptions options
     )
         : geometry_(geometry),
           eye_(eye),
           look_direction_(look_direction),
+          reach_(reach),
           options_(options),
           cache_(geometry.world_faces.size()),
           occluder_order_(geometry.world_faces.size()) {
@@ -267,7 +269,14 @@ private:
         if (!make_view_basis_toward(eye_, target_face.center, basis_)) {
             return;
         }
-        if (!project_world_face(target_face.face, eye_, basis_, target_projection_)) {
+        ProjectedFacePieces target_pieces{};
+        if (!project_reachable_world_face(
+                target_face.face,
+                eye_,
+                basis_,
+                reach_,
+                target_pieces
+            )) {
             return;
         }
 
@@ -277,27 +286,31 @@ private:
             dot(look_direction_, basis_.forward),
         };
 
-        std::array<Tri2, MAX_CLIP_VERTICES - 2> target_triangles{};
-        std::uint8_t target_triangle_count = 0;
         double target_bound = std::numeric_limits<double>::infinity();
-        for (std::uint8_t i = 1; i + 1 < target_projection_.count; ++i) {
-            const Tri2 triangle{
-                target_projection_.points[0].point,
-                target_projection_.points[i].point,
-                target_projection_.points[i + 1].point,
-            };
-            if (orient2d(
-                    triangle.a,
-                    triangle.b,
-                    triangle.c
-                ) == Orientation::Collinear) {
-                continue;
+        std::uint8_t target_triangle_count = 0;
+        for (std::uint8_t piece_index = 0;
+             piece_index < target_pieces.count;
+             ++piece_index) {
+            const ProjectedFace &piece = target_pieces.faces[piece_index];
+            for (std::uint8_t i = 1; i + 1 < piece.count; ++i) {
+                const Tri2 triangle{
+                    piece.points[0].point,
+                    piece.points[i].point,
+                    piece.points[i + 1].point,
+                };
+                if (orient2d(
+                        triangle.a,
+                        triangle.b,
+                        triangle.c
+                    ) == Orientation::Collinear) {
+                    continue;
+                }
+                ++target_triangle_count;
+                target_bound = std::min(
+                    target_bound,
+                    minimum_angle_to_triangle(triangle, look_in_view_).angle
+                );
             }
-            target_triangles[target_triangle_count++] = triangle;
-            target_bound = std::min(
-                target_bound,
-                minimum_angle_to_triangle(triangle, look_in_view_).angle
-            );
         }
         if (target_triangle_count == 0) {
             return;
@@ -315,8 +328,24 @@ private:
             generation_ = 1;
         }
 
-        for (std::uint8_t i = 0; i < target_triangle_count; ++i) {
-            solve_region(target_triangles[i], 0);
+        for (std::uint8_t piece_index = 0;
+             piece_index < target_pieces.count;
+             ++piece_index) {
+            target_projection_ = target_pieces.faces[piece_index];
+            for (std::uint8_t i = 1; i + 1 < target_projection_.count; ++i) {
+                const Tri2 triangle{
+                    target_projection_.points[0].point,
+                    target_projection_.points[i].point,
+                    target_projection_.points[i + 1].point,
+                };
+                if (orient2d(
+                        triangle.a,
+                        triangle.b,
+                        triangle.c
+                    ) != Orientation::Collinear) {
+                    solve_region(triangle, 0);
+                }
+            }
         }
     }
 
@@ -414,6 +443,10 @@ private:
                     1.0
                 ) / inverse_depth
                 : std::numeric_limits<double>::infinity();
+        if (!std::isfinite(visible_distance) ||
+            visible_distance > reach_) {
+            return;
+        }
         if (result_.found && visible_angle >= result_.angle) {
             return;
         }
@@ -490,6 +523,7 @@ private:
     const ScanRegionGeometry &geometry_;
     Vec3 eye_{};
     Vec3 look_direction_{};
+    double reach_ = std::numeric_limits<double>::infinity();
     BranchBoundOptions options_{};
     BranchBoundResult result_{};
     std::vector<OccluderCacheEntry> cache_;
@@ -536,9 +570,10 @@ BranchBoundResult solve_visible_target(
     const ScanRegionGeometry &geometry,
     const Vec3 &eye,
     const Vec3 &look_direction,
+    double reach,
     BranchBoundOptions options
 ) {
-    return Solver(geometry, eye, look_direction, options).solve();
+    return Solver(geometry, eye, look_direction, reach, options).solve();
 }
 
 }  // namespace minescript_miner

@@ -99,7 +99,17 @@ conservative.
   they may reject an overlap. Exact region intersection performs the final
   overlap decision.
 - Approximate angle bounds only order branches. They do not decide whether a
-  branch is visible or may be discarded.
+  branch is visible or empty.
+- A branch stores its exact `RegionId`, a persistent occluder traversal-state
+  ID, and an approximate angle lower bound. The traversal-state depth is the
+  next occluder position.
+- Visited `(RegionId, OccluderTraversalStateId)` pairs are memoized per target.
+  Re-entering an identical state cannot repeat clipping work.
+- Every occluder-state transition increases depth by one, so recursion is
+  structurally bounded by the number of world faces even without a memo hit.
+- The pruning bound is evaluated over an outward-expanded rectangle that
+  contains the exact region. A floating-point guard is subtracted before the
+  bound may discard a branch.
 - A returned point must classify strictly inside every target and visibility
   constraint.
 - Reach clipping and the outer target loop are deliberately not part of this

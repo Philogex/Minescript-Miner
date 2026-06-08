@@ -8,8 +8,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <memory>
 #include <numeric>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -49,6 +51,22 @@ struct RegionCandidate {
     Tri2 triangle{};
 };
 
+using OccluderTraversalStateId = std::uint32_t;
+
+struct OccluderTraversalState {
+    OccluderTraversalStateId parent = 0;
+    std::uint32_t world_face_index =
+        std::numeric_limits<std::uint32_t>::max();
+    std::size_t depth = 0;
+};
+
+struct ExactBranch {
+    RegionId region{};
+    OccluderTraversalStateId occluder_state = 0;
+    double approximate_angle_bound =
+        std::numeric_limits<double>::infinity();
+};
+
 Bounds2 point_bounds(const std::vector<Point2> &points) {
     Bounds2 bounds{
         points[0].x,
@@ -79,6 +97,12 @@ Bounds2 point_bounds(const std::vector<Point2> &points) {
         std::numeric_limits<double>::infinity()
     );
     return bounds;
+}
+
+double conservative_angle_guard(double angle) {
+    return 256.0 *
+           std::numeric_limits<double>::epsilon() *
+           std::max(1.0, std::abs(angle));
 }
 
 bool bounds_overlap(const Bounds2 &lhs, const Bounds2 &rhs) {
@@ -185,7 +209,8 @@ public:
         options_(options),
         regions_(exact_geometry_),
         occluder_cache_(scan_geometry.world_faces.size()),
-        occluder_order_(scan_geometry.world_faces.size()) {
+        occluder_order_(scan_geometry.world_faces.size()),
+        occluder_states_(1) {
         std::iota(
             occluder_order_.begin(),
             occluder_order_.end(),
@@ -240,7 +265,11 @@ public:
             return result_;
         }
 
-        solve_region(target_region, 0);
+        const ExactBranch initial_branch =
+            make_branch(target_region, 0);
+        if (std::isfinite(initial_branch.approximate_angle_bound)) {
+            solve_branch(initial_branch);
+        }
         return result_;
     }
 
@@ -382,6 +411,84 @@ private:
         return best;
     }
 
+    double region_angle_lower_bound(RegionId region) {
+        const std::vector<Point2> points =
+            regions_.approximate_vertices(region);
+        if (points.size() < 3) {
+            return std::numeric_limits<double>::infinity();
+        }
+
+        const Bounds2 bounds = point_bounds(points);
+        const Point2 lower_left{bounds.min_x, bounds.min_y};
+        const Point2 lower_right{bounds.max_x, bounds.min_y};
+        const Point2 upper_right{bounds.max_x, bounds.max_y};
+        const Point2 upper_left{bounds.min_x, bounds.max_y};
+        const double angle = std::min(
+            minimum_angle_to_triangle(
+                {lower_left, lower_right, upper_right},
+                look_in_view_
+            ).angle,
+            minimum_angle_to_triangle(
+                {lower_left, upper_right, upper_left},
+                look_in_view_
+            ).angle
+        );
+        if (!std::isfinite(angle)) {
+            return std::numeric_limits<double>::infinity();
+        }
+        return std::max(
+            0.0,
+            angle - conservative_angle_guard(angle)
+        );
+    }
+
+    ExactBranch make_branch(
+        RegionId region,
+        OccluderTraversalStateId occluder_state
+    ) {
+        return {
+            region,
+            occluder_state,
+            region_angle_lower_bound(region),
+        };
+    }
+
+    const OccluderTraversalState &occluder_state(
+        OccluderTraversalStateId id
+    ) const {
+        return occluder_states_.at(id);
+    }
+
+    OccluderTraversalStateId advance_occluder_state(
+        OccluderTraversalStateId parent,
+        std::uint32_t world_face_index
+    ) {
+        const std::pair<OccluderTraversalStateId, std::uint32_t>
+            transition{parent, world_face_index};
+        const auto existing =
+            occluder_state_transitions_.find(transition);
+        if (existing != occluder_state_transitions_.end()) {
+            return existing->second;
+        }
+
+        const OccluderTraversalStateId id =
+            static_cast<OccluderTraversalStateId>(
+                occluder_states_.size()
+            );
+        occluder_states_.push_back({
+            parent,
+            world_face_index,
+            occluder_state(parent).depth + 1,
+        });
+        occluder_state_transitions_.emplace(transition, id);
+        return id;
+    }
+
+    bool can_prune(const ExactBranch &branch) const {
+        return result_.found &&
+               branch.approximate_angle_bound > result_.angle;
+    }
+
     Point2 exact_centroid(RegionId region) {
         const std::vector<VertexId> &vertices =
             regions_.vertices(region);
@@ -503,20 +610,34 @@ private:
         result_.distance = distance;
     }
 
-    void solve_region(
-        RegionId region,
-        std::size_t next_occluder
-    ) {
+    void solve_branch(const ExactBranch &branch) {
         ++result_.stats.branches_visited;
-        const RegionCandidate bound = region_bound(region);
-        if (!bound.valid) {
+        const std::uint64_t memo_key =
+            static_cast<std::uint64_t>(branch.region.value) << 32 |
+            branch.occluder_state;
+        if (!visited_branches_.insert(memo_key).second) {
+            ++result_.stats.branches_memoized;
+            return;
+        }
+        if (can_prune(branch)) {
+            ++result_.stats.branches_pruned;
             return;
         }
 
+        const std::size_t next_occluder =
+            occluder_state(branch.occluder_state).depth;
         const ExactOccluderChoice choice =
-            choose_next_occluder(region, next_occluder);
+            choose_next_occluder(
+                branch.region,
+                next_occluder
+            );
         if (!choice.found) {
-            update_best(region, bound);
+            const RegionCandidate bound =
+                region_bound(branch.region);
+            if (!bound.valid) {
+                return;
+            }
+            update_best(branch.region, bound);
             return;
         }
 
@@ -526,31 +647,37 @@ private:
         );
         const std::uint32_t world_face_index =
             occluder_order_[next_occluder];
+        const OccluderTraversalStateId child_occluder_state =
+            advance_occluder_state(
+                branch.occluder_state,
+                world_face_index
+            );
         ++result_.stats.clips_performed;
         std::vector<RegionId> pieces =
             regions_.subtract_convex_region(
-                region,
+                branch.region,
                 occluder_cache_[world_face_index].constraints
             );
 
-        std::vector<std::pair<RegionId, RegionCandidate>> bounded;
-        bounded.reserve(pieces.size());
+        std::vector<ExactBranch> children;
+        children.reserve(pieces.size());
         for (const RegionId piece : pieces) {
-            const RegionCandidate piece_bound = region_bound(piece);
-            if (piece_bound.valid) {
-                bounded.push_back({piece, piece_bound});
+            ExactBranch child =
+                make_branch(piece, child_occluder_state);
+            if (std::isfinite(child.approximate_angle_bound)) {
+                children.push_back(std::move(child));
             }
         }
         std::sort(
-            bounded.begin(),
-            bounded.end(),
-            [](const auto &lhs, const auto &rhs) {
-                return lhs.second.angle < rhs.second.angle;
+            children.begin(),
+            children.end(),
+            [](const ExactBranch &lhs, const ExactBranch &rhs) {
+                return lhs.approximate_angle_bound <
+                       rhs.approximate_angle_bound;
             }
         );
-        for (const auto &[piece, piece_bound] : bounded) {
-            (void) piece_bound;
-            solve_region(piece, next_occluder + 1);
+        for (const ExactBranch &child : children) {
+            solve_branch(child);
         }
 
         std::swap(
@@ -570,6 +697,12 @@ private:
     std::unique_ptr<ExactProjector> projector_{};
     std::vector<ExactOccluderCacheEntry> occluder_cache_;
     std::vector<std::uint32_t> occluder_order_;
+    std::vector<OccluderTraversalState> occluder_states_;
+    std::map<
+        std::pair<OccluderTraversalStateId, std::uint32_t>,
+        OccluderTraversalStateId
+    > occluder_state_transitions_;
+    std::unordered_set<std::uint64_t> visited_branches_;
     ViewBasis basis_{};
     Vec3 look_in_view_{};
     ExactProjectedFace target_projection_{};

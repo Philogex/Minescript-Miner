@@ -329,6 +329,10 @@ static void log_scan_input(
         << solve_result.stats.effective_occluders << "\n";
     log << "  solver_branches_visited: "
         << solve_result.stats.branches_visited << "\n";
+    log << "  solver_branches_pruned: "
+        << solve_result.stats.branches_pruned << "\n";
+    log << "  solver_branches_memoized: "
+        << solve_result.stats.branches_memoized << "\n";
     log << "  solver_clips_performed: "
         << solve_result.stats.clips_performed << "\n";
     log << "  geometry_time_ms: " << geometry_ms << "\n";

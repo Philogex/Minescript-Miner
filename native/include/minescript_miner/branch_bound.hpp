@@ -24,6 +24,8 @@ struct BranchBoundStats {
     std::uint32_t occluders_prepared = 0;
     std::uint32_t effective_occluders = 0;
     std::uint64_t branches_visited = 0;
+    std::uint64_t branches_pruned = 0;
+    std::uint64_t branches_memoized = 0;
     std::uint64_t clips_performed = 0;
 };
 

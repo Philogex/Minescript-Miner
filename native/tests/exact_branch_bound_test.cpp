@@ -105,6 +105,21 @@ int main() {
     assert(stable_partial.found);
     assert(stable_partial.angle < 1e-12);
 
+    Vec3 visible_side_look{0.2, 0.0, 1.0};
+    visible_side_look = visible_side_look * (
+        1.0 / std::sqrt(length_squared(visible_side_look))
+    );
+    const BranchBoundResult pruned_partial =
+        solve_visible_target_face_exact(
+            target_with_occluder(false),
+            0,
+            {},
+            visible_side_look
+        );
+    assert(pruned_partial.found);
+    assert(pruned_partial.angle < 1e-12);
+    assert(pruned_partial.stats.branches_pruned > 0);
+
     ScanRegionGeometry far_occluder{};
     far_occluder.world_faces.push_back(
         z_face(-16, -16, 16, 16, 64)
@@ -160,6 +175,26 @@ int main() {
     assert(thin_result.projected_point.x > 15.0 / 1584.0);
     assert(thin_result.projected_point.x < 16.0 / 1600.0);
     assert(thin_result.stats.clips_performed == 1);
+
+    ScanRegionGeometry repeated_occluders{};
+    repeated_occluders.world_faces.push_back(
+        z_face(-16, -16, 16, 16, 64)
+    );
+    for (int i = 0; i < 8; ++i) {
+        repeated_occluders.world_faces.push_back(
+            z_face(-4, -4, 4, 4, 32)
+        );
+    }
+    const BranchBoundResult repeated_result =
+        solve_visible_target_face_exact(
+            repeated_occluders,
+            0,
+            {},
+            {0.0, 0.0, 1.0}
+        );
+    assert(repeated_result.found);
+    assert(repeated_result.stats.clips_performed == 1);
+    assert(repeated_result.stats.branches_visited <= 5);
 
     const BranchBoundResult invalid_target =
         solve_visible_target_face_exact(

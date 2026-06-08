@@ -89,6 +89,22 @@ conservative.
 - The difference between candidate and reference inverse depth is interned as
   another oriented half-plane. A positive value means the candidate is closer.
 
+## Exact Single-Target Solver
+
+- The isolated exact solver owns one geometry store and one region store for
+  the target-local view basis.
+- Occluder faces are projected lazily and cached for the duration of the
+  target solve.
+- Approximate bounds are expanded outward by one representable step before
+  they may reject an overlap. Exact region intersection performs the final
+  overlap decision.
+- Approximate angle bounds only order branches. They do not decide whether a
+  branch is visible or may be discarded.
+- A returned point must classify strictly inside every target and visibility
+  constraint.
+- Reach clipping and the outer target loop are deliberately not part of this
+  isolated milestone.
+
 ## Migration Rule
 
 The current floating-point clipping path remains active until the exact path

@@ -132,6 +132,27 @@ bool ConstraintRegionStore::contains(RegionId id, VertexId point) {
     return true;
 }
 
+bool ConstraintRegionStore::contains_interior(
+    RegionId id,
+    VertexId point
+) {
+    (void) geometry_.vertex(point);
+    const ConstraintRegion &candidate = region(id);
+    if (candidate.state == ConstraintRegionState::Empty) {
+        return false;
+    }
+
+    for (const RegionConstraint constraint : candidate.constraints) {
+        if (
+            geometry_.classify(point, constraint.half_plane) !=
+            ExactSign::Positive
+        ) {
+            return false;
+        }
+    }
+    return true;
+}
+
 const std::vector<VertexId> &ConstraintRegionStore::vertices(
     RegionId id
 ) const {

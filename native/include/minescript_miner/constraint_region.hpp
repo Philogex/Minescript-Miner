@@ -72,6 +72,7 @@ public:
     const ConstraintRegion &region(RegionId id) const;
     bool is_empty(RegionId id) const;
     bool contains(RegionId id, VertexId point);
+    bool contains_interior(RegionId id, VertexId point);
     const std::vector<VertexId> &vertices(RegionId id) const;
     std::vector<Point2> approximate_vertices(RegionId id) const;
 

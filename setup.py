@@ -12,6 +12,7 @@ native_sources = [
     native_source_dir / "bvh.cpp",
     native_source_dir / "clipping.cpp",
     native_source_dir / "constraint_region.cpp",
+    native_source_dir / "exact_branch_bound.cpp",
     native_source_dir / "exact_geometry.cpp",
     native_source_dir / "exact_geometry_store.cpp",
     native_source_dir / "exact_projection.cpp",

@@ -14,6 +14,7 @@ native_sources = [
     native_source_dir / "constraint_region.cpp",
     native_source_dir / "exact_geometry.cpp",
     native_source_dir / "exact_geometry_store.cpp",
+    native_source_dir / "exact_projection.cpp",
     native_source_dir / "geometry_catalog.cpp",
     native_source_dir / "numerics.cpp",
     native_source_dir / "scan_region.cpp",

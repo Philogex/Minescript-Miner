@@ -72,6 +72,23 @@ conservative.
 - Changing the occluder edge order may change the partition, but not point
   membership or total visible area.
 
+## Exact Projection
+
+- World catalog coordinates enter the exact path directly as integer
+  sixteenths.
+- Eye and view-basis components are imported exactly from their represented
+  IEEE 754 values. The exact path models the basis actually used by the
+  program, not an idealized rotation.
+- View points are projected as homogeneous `[X:Y:Z]` integer coordinates.
+  Perspective division is not used to construct footprint topology.
+- Near-plane intersections are rational and use the exact represented
+  near-depth value.
+- Consecutive projected duplicates are removed before footprint lines are
+  interned.
+- Face inverse depth is an exact affine function over projected coordinates.
+- The difference between candidate and reference inverse depth is interned as
+  another oriented half-plane. A positive value means the candidate is closer.
+
 ## Migration Rule
 
 The current floating-point clipping path remains active until the exact path

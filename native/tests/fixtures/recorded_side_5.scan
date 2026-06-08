@@ -5,6 +5,7 @@ shape_catalog_version 1
 side 5
 position 13.390604666383773 103.3970275986376 27.672535192084464
 orientation_yaw_pitch -120.05 52.299995
+reach 4.8
 default_shape 0
 
 expect_found 0

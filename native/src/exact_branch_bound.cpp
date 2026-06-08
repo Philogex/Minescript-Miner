@@ -10,7 +10,6 @@
 #include <limits>
 #include <map>
 #include <memory>
-#include <numeric>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -24,6 +23,15 @@ struct Bounds2 {
     double min_y = 0.0;
     double max_x = 0.0;
     double max_y = 0.0;
+};
+
+struct Bounds3 {
+    double min_x = 0.0;
+    double min_y = 0.0;
+    double min_z = 0.0;
+    double max_x = 0.0;
+    double max_y = 0.0;
+    double max_z = 0.0;
 };
 
 enum class ExactOccluderState : std::uint8_t {
@@ -67,6 +75,14 @@ struct ExactBranch {
         std::numeric_limits<double>::infinity();
 };
 
+struct BoundedTarget {
+    const TargetFaceCandidate *target = nullptr;
+    double ordering_bound = std::numeric_limits<double>::infinity();
+    double center_distance_squared =
+        std::numeric_limits<double>::infinity();
+    double pruning_bound = 0.0;
+};
+
 Bounds2 point_bounds(const std::vector<Point2> &points) {
     Bounds2 bounds{
         points[0].x,
@@ -103,6 +119,108 @@ double conservative_angle_guard(double angle) {
     return 256.0 *
            std::numeric_limits<double>::epsilon() *
            std::max(1.0, std::abs(angle));
+}
+
+double target_face_angle_lower_bound(
+    const ScanRegionGeometry &geometry,
+    const TargetFaceCandidate &target,
+    const Vec3 &eye
+) {
+    if (target.world_face_index >= geometry.world_faces.size()) {
+        return 0.0;
+    }
+    const WorldFace &world_face =
+        geometry.world_faces[target.world_face_index];
+    const Vec3 center_direction = world_face.center - eye;
+    const double center_distance =
+        std::sqrt(length_squared(center_direction));
+    if (!(center_distance > 0.0)) {
+        return 0.0;
+    }
+
+    double radius_squared = 0.0;
+    const WorldPoint16 corners[]{
+        world_face.face.p0,
+        world_face.face.p1,
+        world_face.face.p2,
+        world_face.face.p3,
+    };
+    for (const WorldPoint16 corner16 : corners) {
+        const Vec3 corner =
+            point16_to_world(corner16) - world_face.center;
+        radius_squared = std::max(
+            radius_squared,
+            length_squared(corner)
+        );
+    }
+    const double radius = std::sqrt(radius_squared);
+    if (center_distance <= radius) {
+        return 0.0;
+    }
+
+    const double angular_radius =
+        std::asin(std::clamp(radius / center_distance, 0.0, 1.0));
+    const double lower_bound =
+        target.center_angle - angular_radius;
+    return std::max(
+        0.0,
+        lower_bound - conservative_angle_guard(lower_bound)
+    );
+}
+
+double target_face_ordering_bound(
+    const ScanRegionGeometry &geometry,
+    const TargetFaceCandidate &target,
+    const Vec3 &eye,
+    const Vec3 &look_direction,
+    double reach
+) {
+    if (target.world_face_index >= geometry.world_faces.size()) {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    const WorldFace &world_face =
+        geometry.world_faces[target.world_face_index];
+    ViewBasis basis{};
+    if (!make_view_basis_toward(eye, world_face.center, basis)) {
+        return std::numeric_limits<double>::infinity();
+    }
+    ProjectedFacePieces pieces{};
+    if (!project_reachable_world_face(
+            world_face.face,
+            eye,
+            basis,
+            reach,
+            pieces
+        )) {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    const Vec3 look_in_view{
+        dot(look_direction, basis.right),
+        dot(look_direction, basis.up),
+        dot(look_direction, basis.forward),
+    };
+    double angle = std::numeric_limits<double>::infinity();
+    for (std::uint8_t piece_index = 0;
+         piece_index < pieces.count;
+         ++piece_index) {
+        const ProjectedFace &piece = pieces.faces[piece_index];
+        for (std::uint8_t i = 1; i + 1 < piece.count; ++i) {
+            angle = std::min(
+                angle,
+                minimum_angle_to_triangle(
+                    {
+                        piece.points[0].point,
+                        piece.points[i].point,
+                        piece.points[i + 1].point,
+                    },
+                    look_in_view
+                ).angle
+            );
+        }
+    }
+    return angle;
 }
 
 bool bounds_overlap(const Bounds2 &lhs, const Bounds2 &rhs) {
@@ -194,6 +312,118 @@ Point2 triangle_incenter(const Tri2 &triangle) {
     };
 }
 
+bool face_points_to_eye(
+    const WorldRectFace16 &face,
+    const Vec3 &eye
+) {
+    const Vec3 center = face_center(face);
+    switch (face.axis) {
+        case PlaneAxis::X:
+            return face.normal_sign > 0
+                ? eye.x > center.x
+                : eye.x < center.x;
+        case PlaneAxis::Y:
+            return face.normal_sign > 0
+                ? eye.y > center.y
+                : eye.y < center.y;
+        case PlaneAxis::Z:
+            return face.normal_sign > 0
+                ? eye.z > center.z
+                : eye.z < center.z;
+    }
+    return false;
+}
+
+Bounds3 target_occlusion_bounds(
+    const WorldRectFace16 &face,
+    const Vec3 &eye
+) {
+    Bounds3 bounds{
+        eye.x,
+        eye.y,
+        eye.z,
+        eye.x,
+        eye.y,
+        eye.z,
+    };
+    const WorldPoint16 points[]{
+        face.p0,
+        face.p1,
+        face.p2,
+        face.p3,
+    };
+    for (const WorldPoint16 point16 : points) {
+        const Vec3 point = point16_to_world(point16);
+        bounds.min_x = std::min(bounds.min_x, point.x);
+        bounds.min_y = std::min(bounds.min_y, point.y);
+        bounds.min_z = std::min(bounds.min_z, point.z);
+        bounds.max_x = std::max(bounds.max_x, point.x);
+        bounds.max_y = std::max(bounds.max_y, point.y);
+        bounds.max_z = std::max(bounds.max_z, point.z);
+    }
+    return bounds;
+}
+
+bool face_intersects_bounds(
+    const WorldRectFace16 &face,
+    const Bounds3 &bounds
+) {
+    const Vec3 p0 = point16_to_world(face.p0);
+    const Vec3 p2 = point16_to_world(face.p2);
+    const double min_x = std::min(p0.x, p2.x);
+    const double min_y = std::min(p0.y, p2.y);
+    const double min_z = std::min(p0.z, p2.z);
+    const double max_x = std::max(p0.x, p2.x);
+    const double max_y = std::max(p0.y, p2.y);
+    const double max_z = std::max(p0.z, p2.z);
+    return max_x >= bounds.min_x &&
+           min_x <= bounds.max_x &&
+           max_y >= bounds.min_y &&
+           min_y <= bounds.max_y &&
+           max_z >= bounds.min_z &&
+           min_z <= bounds.max_z;
+}
+
+double interval_edge_clearance(
+    double value,
+    double a,
+    double b
+) {
+    return std::min(value - std::min(a, b), std::max(a, b) - value);
+}
+
+double world_face_edge_clearance(
+    const WorldRectFace16 &face,
+    const Vec3 &point
+) {
+    const Vec3 p0 = point16_to_world(face.p0);
+    const Vec3 p2 = point16_to_world(face.p2);
+    switch (face.axis) {
+        case PlaneAxis::X:
+            return std::min(
+                interval_edge_clearance(point.y, p0.y, p2.y),
+                interval_edge_clearance(point.z, p0.z, p2.z)
+            );
+        case PlaneAxis::Y:
+            return std::min(
+                interval_edge_clearance(point.x, p0.x, p2.x),
+                interval_edge_clearance(point.z, p0.z, p2.z)
+            );
+        case PlaneAxis::Z:
+            return std::min(
+                interval_edge_clearance(point.x, p0.x, p2.x),
+                interval_edge_clearance(point.y, p0.y, p2.y)
+            );
+    }
+    return -std::numeric_limits<double>::infinity();
+}
+
+double required_world_edge_clearance(double distance) {
+    return 32.0 *
+           static_cast<double>(std::numeric_limits<float>::epsilon()) *
+           std::max(1.0, distance);
+}
+
 class ExactSingleTargetSolver {
 public:
     ExactSingleTargetSolver(
@@ -201,21 +431,19 @@ public:
         std::uint32_t target_world_face_index,
         const Vec3 &eye,
         const Vec3 &look_direction,
+        double reach,
+        double angle_limit,
         BranchBoundOptions options
     ) : scan_geometry_(scan_geometry),
         target_world_face_index_(target_world_face_index),
         eye_(eye),
         look_direction_(look_direction),
+        reach_(reach),
+        angle_limit_(angle_limit),
         options_(options),
         regions_(exact_geometry_),
         occluder_cache_(scan_geometry.world_faces.size()),
-        occluder_order_(scan_geometry.world_faces.size()),
         occluder_states_(1) {
-        std::iota(
-            occluder_order_.begin(),
-            occluder_order_.end(),
-            0
-        );
         if (options_.occluder_probe_limit == 0) {
             options_.occluder_probe_limit = 1;
         }
@@ -252,28 +480,87 @@ public:
             dot(look_direction_, basis_.up),
             dot(look_direction_, basis_.forward),
         };
-        std::vector<HalfPlaneId> target_constraints{
-            target_projection_.footprint.begin(),
-            target_projection_.footprint.begin() +
-                target_projection_.count,
-        };
-        const RegionId target_region =
-            regions_.intern_bounded_region(
-                std::move(target_constraints)
-            );
-        if (regions_.is_empty(target_region)) {
+        ReachableWorldFacePieces reachable_pieces{};
+        if (!make_reachable_world_face_pieces(
+                target.face,
+                eye_,
+                reach_,
+                reachable_pieces
+            )) {
             return result_;
         }
 
-        const ExactBranch initial_branch =
-            make_branch(target_region, 0);
-        if (std::isfinite(initial_branch.approximate_angle_bound)) {
+        bool searched_branch = false;
+        for (std::uint8_t piece_index = 0;
+             piece_index < reachable_pieces.count;
+             ++piece_index) {
+            const WorldFacePolygon &piece =
+                reachable_pieces.faces[piece_index];
+            ExactProjectedFace projected_piece{};
+            if (!projector_->project_world_polygon(
+                    piece.points.data(),
+                    piece.count,
+                    projected_piece
+                )) {
+                continue;
+            }
+
+            std::vector<HalfPlaneId> constraints{
+                projected_piece.footprint.begin(),
+                projected_piece.footprint.begin() +
+                    projected_piece.count,
+            };
+            const RegionId target_region =
+                regions_.intern_bounded_region(
+                    std::move(constraints)
+                );
+            if (regions_.is_empty(target_region)) {
+                continue;
+            }
+
+            const ExactBranch initial_branch =
+                make_branch(target_region, 0);
+            if (!std::isfinite(
+                    initial_branch.approximate_angle_bound
+                )) {
+                continue;
+            }
+            if (!can_prune(initial_branch)) {
+                searched_branch = true;
+            }
             solve_branch(initial_branch);
+        }
+        if (!searched_branch &&
+            std::isfinite(angle_limit_)) {
+            result_.stats.target_faces_pruned = 1;
         }
         return result_;
     }
 
 private:
+    void ensure_occluder_order() {
+        if (occluder_order_initialized_) {
+            return;
+        }
+        occluder_order_initialized_ = true;
+        const Bounds3 bounds = target_occlusion_bounds(
+            scan_geometry_.world_faces[
+                target_world_face_index_
+            ].face,
+            eye_
+        );
+        occluder_order_.reserve(scan_geometry_.world_faces.size());
+        for (std::uint32_t world_face_index = 0;
+             world_face_index < scan_geometry_.world_faces.size();
+             ++world_face_index) {
+            const WorldRectFace16 &face =
+                scan_geometry_.world_faces[world_face_index].face;
+            if (face_intersects_bounds(face, bounds)) {
+                occluder_order_.push_back(world_face_index);
+            }
+        }
+    }
+
     bool prepare_occluder(std::uint32_t world_face_index) {
         ExactOccluderCacheEntry &entry =
             occluder_cache_[world_face_index];
@@ -286,9 +573,15 @@ private:
         }
 
         ++result_.stats.occluders_prepared;
+        const WorldRectFace16 &world_face =
+            scan_geometry_.world_faces[world_face_index].face;
+        if (!face_points_to_eye(world_face, eye_)) {
+            entry.state = ExactOccluderState::Empty;
+            return false;
+        }
         ExactProjectedFace projection{};
         if (!projector_->project_world_face(
-                scan_geometry_.world_faces[world_face_index].face,
+                world_face,
                 projection
             )) {
             entry.state = ExactOccluderState::Empty;
@@ -485,8 +778,12 @@ private:
     }
 
     bool can_prune(const ExactBranch &branch) const {
-        return result_.found &&
-               branch.approximate_angle_bound > result_.angle;
+        const double upper_bound =
+            result_.found
+                ? std::min(result_.angle, angle_limit_)
+                : angle_limit_;
+        return std::isfinite(upper_bound) &&
+               branch.approximate_angle_bound > upper_bound;
     }
 
     Point2 exact_centroid(RegionId region) {
@@ -522,7 +819,14 @@ private:
                 exact_geometry_.intern_vertex(
                     exact_point(look_point.x, look_point.y)
                 );
-            if (regions_.contains_interior(region, exact_look)) {
+            double distance = 0.0;
+            Vec3 direction{};
+            if (regions_.contains_interior(region, exact_look) &&
+                candidate_world_geometry(
+                    look_point,
+                    distance,
+                    direction
+                )) {
                 out = look_point;
                 return true;
             }
@@ -538,8 +842,16 @@ private:
             exact_candidate &&
             regions_.contains_interior(region, exact_candidate)
         ) {
-            out = candidate;
-            return true;
+            double distance = 0.0;
+            Vec3 direction{};
+            if (candidate_world_geometry(
+                    candidate,
+                    distance,
+                    direction
+                )) {
+                out = candidate;
+                return true;
+            }
         }
 
         out = exact_centroid(region);
@@ -547,11 +859,64 @@ private:
             exact_geometry_.intern_vertex(
                 exact_point(out.x, out.y)
             );
-        return exact_centroid_candidate &&
-               regions_.contains_interior(
-                   region,
-                   exact_centroid_candidate
-               );
+        if (!exact_centroid_candidate ||
+            !regions_.contains_interior(
+                region,
+                exact_centroid_candidate
+            )) {
+            return false;
+        }
+        double distance = 0.0;
+        Vec3 direction{};
+        return candidate_world_geometry(out, distance, direction);
+    }
+
+    bool candidate_world_geometry(
+        Point2 point,
+        double &distance,
+        Vec3 &direction
+    ) {
+        const VertexId exact_point_id =
+            exact_geometry_.intern_vertex(
+                exact_point(point.x, point.y)
+            );
+        const ExactRational inverse_depth =
+            projector_->inverse_depth_at(
+                target_projection_,
+                exact_point_id
+            );
+        const double approximate_inverse_depth =
+            approximate_double(inverse_depth);
+        if (!(approximate_inverse_depth > 0.0)) {
+            return false;
+        }
+
+        distance =
+            std::sqrt(
+                point.x * point.x +
+                point.y * point.y +
+                1.0
+            ) / approximate_inverse_depth;
+        direction = normalized_world_direction(basis_, point);
+        if (!std::isfinite(distance) ||
+            distance > reach_ ||
+            length_squared(direction) <= 0.0) {
+            return false;
+        }
+
+        const Vec3 world_point{
+            eye_.x + direction.x * distance,
+            eye_.y + direction.y * distance,
+            eye_.z + direction.z * distance,
+        };
+        const WorldRectFace16 &target_face =
+            scan_geometry_.world_faces[
+                target_world_face_index_
+            ].face;
+        return world_face_edge_clearance(
+                   target_face,
+                   world_point
+               ) >= required_world_edge_clearance(distance);
     }
 
     void update_best(
@@ -573,31 +938,13 @@ private:
             return;
         }
 
-        const VertexId exact_point_id =
-            exact_geometry_.intern_vertex(
-                exact_point(point.x, point.y)
-            );
-        const ExactRational inverse_depth =
-            projector_->inverse_depth_at(
-                target_projection_,
-                exact_point_id
-            );
-        const double approximate_inverse_depth =
-            approximate_double(inverse_depth);
-        if (!(approximate_inverse_depth > 0.0)) {
-            return;
-        }
-
-        const double distance =
-            std::sqrt(
-                point.x * point.x +
-                point.y * point.y +
-                1.0
-            ) / approximate_inverse_depth;
-        const Vec3 direction =
-            normalized_world_direction(basis_, point);
-        if (!std::isfinite(distance) ||
-            length_squared(direction) <= 0.0) {
+        double distance = 0.0;
+        Vec3 direction{};
+        if (!candidate_world_geometry(
+                point,
+                distance,
+                direction
+            )) {
             return;
         }
 
@@ -624,6 +971,7 @@ private:
             return;
         }
 
+        ensure_occluder_order();
         const std::size_t next_occluder =
             occluder_state(branch.occluder_state).depth;
         const ExactOccluderChoice choice =
@@ -690,6 +1038,8 @@ private:
     std::uint32_t target_world_face_index_ = 0;
     Vec3 eye_{};
     Vec3 look_direction_{};
+    double reach_ = std::numeric_limits<double>::infinity();
+    double angle_limit_ = std::numeric_limits<double>::infinity();
     BranchBoundOptions options_{};
     BranchBoundResult result_{};
     ExactGeometryStore exact_geometry_{};
@@ -697,6 +1047,7 @@ private:
     std::unique_ptr<ExactProjector> projector_{};
     std::vector<ExactOccluderCacheEntry> occluder_cache_;
     std::vector<std::uint32_t> occluder_order_;
+    bool occluder_order_initialized_ = false;
     std::vector<OccluderTraversalState> occluder_states_;
     std::map<
         std::pair<OccluderTraversalStateId, std::uint32_t>,
@@ -715,6 +1066,8 @@ BranchBoundResult solve_visible_target_face_exact(
     std::uint32_t target_world_face_index,
     const Vec3 &eye,
     const Vec3 &look_direction,
+    double reach,
+    double angle_limit,
     BranchBoundOptions options
 ) {
     return ExactSingleTargetSolver(
@@ -722,8 +1075,150 @@ BranchBoundResult solve_visible_target_face_exact(
         target_world_face_index,
         eye,
         look_direction,
+        reach,
+        angle_limit,
         options
     ).solve();
+}
+
+namespace {
+
+void add_stats(
+    BranchBoundStats &destination,
+    const BranchBoundStats &source
+) {
+    destination.target_faces_considered +=
+        source.target_faces_considered;
+    destination.target_faces_pruned +=
+        source.target_faces_pruned;
+    destination.occluders_prepared +=
+        source.occluders_prepared;
+    destination.effective_occluders +=
+        source.effective_occluders;
+    destination.branches_visited +=
+        source.branches_visited;
+    destination.branches_pruned +=
+        source.branches_pruned;
+    destination.branches_memoized +=
+        source.branches_memoized;
+    destination.clips_performed +=
+        source.clips_performed;
+}
+
+}  // namespace
+
+BranchBoundResult solve_visible_target_exact(
+    const ScanRegionGeometry &geometry,
+    const Vec3 &eye,
+    const Vec3 &look_direction,
+    double reach,
+    BranchBoundOptions options
+) {
+    BranchBoundResult result{};
+    std::vector<BoundedTarget> ordered_targets;
+    ordered_targets.reserve(geometry.target_faces.size());
+    for (const TargetFaceCandidate &target : geometry.target_faces) {
+        ordered_targets.push_back({
+            &target,
+            target_face_ordering_bound(
+                geometry,
+                target,
+                eye,
+                look_direction,
+                reach
+            ),
+            target.world_face_index < geometry.world_faces.size()
+                ? length_squared(
+                    geometry.world_faces[
+                        target.world_face_index
+                    ].center - eye
+                )
+                : std::numeric_limits<double>::infinity(),
+            target_face_angle_lower_bound(geometry, target, eye),
+        });
+    }
+    std::sort(
+        ordered_targets.begin(),
+        ordered_targets.end(),
+        [](const BoundedTarget &lhs, const BoundedTarget &rhs) {
+            if (lhs.center_distance_squared !=
+                rhs.center_distance_squared) {
+                return lhs.center_distance_squared <
+                       rhs.center_distance_squared;
+            }
+            if (lhs.ordering_bound != rhs.ordering_bound) {
+                return lhs.ordering_bound < rhs.ordering_bound;
+            }
+            if (lhs.target->center_angle != rhs.target->center_angle) {
+                return lhs.target->center_angle <
+                       rhs.target->center_angle;
+            }
+            return lhs.target->world_face_index <
+                   rhs.target->world_face_index;
+        }
+    );
+
+    const auto process_target =
+        [&](const BoundedTarget &bounded_target) {
+            if (result.found &&
+                bounded_target.pruning_bound > result.angle) {
+                ++result.stats.target_faces_considered;
+                ++result.stats.target_faces_pruned;
+                return;
+            }
+            const TargetFaceCandidate &target =
+                *bounded_target.target;
+            const BranchBoundResult candidate =
+                solve_visible_target_face_exact(
+                    geometry,
+                    target.world_face_index,
+                    eye,
+                    look_direction,
+                    reach,
+                    result.angle,
+                    options
+                );
+            add_stats(result.stats, candidate.stats);
+            if (candidate.found &&
+                (!result.found || candidate.angle < result.angle)) {
+                const BranchBoundStats aggregate_stats = result.stats;
+                result = candidate;
+                result.stats = aggregate_stats;
+            }
+        };
+
+    std::size_t seed_count = 0;
+    while (seed_count < ordered_targets.size() && !result.found) {
+        process_target(ordered_targets[seed_count]);
+        ++seed_count;
+    }
+    if (result.found && result.angle != 0.0) {
+        std::sort(
+            ordered_targets.begin() + seed_count,
+            ordered_targets.end(),
+            [](const BoundedTarget &lhs, const BoundedTarget &rhs) {
+                if (lhs.ordering_bound != rhs.ordering_bound) {
+                    return lhs.ordering_bound < rhs.ordering_bound;
+                }
+                if (lhs.center_distance_squared !=
+                    rhs.center_distance_squared) {
+                    return lhs.center_distance_squared <
+                           rhs.center_distance_squared;
+                }
+                return lhs.target->world_face_index <
+                       rhs.target->world_face_index;
+            }
+        );
+        for (auto iterator = ordered_targets.begin() + seed_count;
+             iterator != ordered_targets.end();
+             ++iterator) {
+            process_target(*iterator);
+            if (result.angle == 0.0) {
+                break;
+            }
+        }
+    }
+    return result;
 }
 
 }  // namespace minescript_miner

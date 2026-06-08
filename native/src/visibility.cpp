@@ -448,21 +448,6 @@ bool make_reachable_face_polygon(
     return convex_hull(candidates, out);
 }
 
-bool project_world_triangle(
-    const std::array<Vec3, 3> &triangle,
-    const Vec3 &eye,
-    const ViewBasis &basis,
-    ProjectedFace &out
-) {
-    ViewPolygon view_polygon{};
-    view_polygon.count = 3;
-    for (std::uint8_t i = 0; i < view_polygon.count; ++i) {
-        view_polygon.points[i] =
-            world_to_view(triangle[i], eye, basis);
-    }
-    return project_view_polygon(view_polygon, out);
-}
-
 }  // namespace
 
 bool make_view_basis(const Vec3 &forward, ViewBasis &out) {
@@ -565,12 +550,11 @@ bool project_world_face(
     return project_view_polygon(view_polygon, out);
 }
 
-bool project_reachable_world_face(
+bool make_reachable_world_face_pieces(
     const WorldRectFace16 &face,
     const Vec3 &eye,
-    const ViewBasis &basis,
     double reach,
-    ProjectedFacePieces &out
+    ReachableWorldFacePieces &out
 ) {
     out = {};
     ReachPolygon reachable{};
@@ -585,12 +569,13 @@ bool project_reachable_world_face(
         return false;
     }
 
-    ProjectedFace full_projection{};
-    if (!project_world_face(face, eye, basis, full_projection)) {
-        return false;
-    }
     if (full_face) {
-        out.faces[0] = full_projection;
+        WorldFacePolygon &polygon = out.faces[0];
+        polygon.points[0] = point16_to_world(face.p0);
+        polygon.points[1] = point16_to_world(face.p1);
+        polygon.points[2] = point16_to_world(face.p2);
+        polygon.points[3] = point16_to_world(face.p3);
+        polygon.count = 4;
         out.count = 1;
         return true;
     }
@@ -601,18 +586,60 @@ bool project_reachable_world_face(
             out = {};
             return false;
         }
-        const std::array<Vec3, 3> world_triangle{{
-            local_to_world(local, face.axis, reachable.points[0]),
-            local_to_world(local, face.axis, reachable.points[i]),
-            local_to_world(local, face.axis, reachable.points[i + 1]),
-        }};
+        WorldFacePolygon &triangle = out.faces[out.count++];
+        triangle.points[0] =
+            local_to_world(local, face.axis, reachable.points[0]);
+        triangle.points[1] =
+            local_to_world(local, face.axis, reachable.points[i]);
+        triangle.points[2] =
+            local_to_world(local, face.axis, reachable.points[i + 1]);
+        triangle.count = 3;
+    }
+    return out.count > 0;
+}
+
+bool project_reachable_world_face(
+    const WorldRectFace16 &face,
+    const Vec3 &eye,
+    const ViewBasis &basis,
+    double reach,
+    ProjectedFacePieces &out
+) {
+    out = {};
+    ReachableWorldFacePieces reachable{};
+    if (!make_reachable_world_face_pieces(
+            face,
+            eye,
+            reach,
+            reachable
+        )) {
+        return false;
+    }
+
+    ProjectedFace full_projection{};
+    if (!project_world_face(face, eye, basis, full_projection)) {
+        return false;
+    }
+
+    for (std::uint8_t i = 0; i < reachable.count; ++i) {
+        if (out.count >= out.faces.size()) {
+            out = {};
+            return false;
+        }
+        const WorldFacePolygon &world_polygon = reachable.faces[i];
         ProjectedFace projection{};
-        if (!project_world_triangle(
-                world_triangle,
+        ViewPolygon view_polygon{};
+        view_polygon.count = world_polygon.count;
+        for (std::uint8_t point_index = 0;
+             point_index < world_polygon.count;
+             ++point_index) {
+            view_polygon.points[point_index] = world_to_view(
+                world_polygon.points[point_index],
                 eye,
-                basis,
-                projection
-            )) {
+                basis
+            );
+        }
+        if (!project_view_polygon(view_polygon, projection)) {
             continue;
         }
         projection.inverse_depth = full_projection.inverse_depth;

@@ -42,6 +42,7 @@ class RecordScanFixturesTest(unittest.TestCase):
         self.assertIn("side 5", lines)
         self.assertIn("position 10.25 65.62 -3.75", lines)
         self.assertIn("orientation_yaw_pitch -98.1 -13.2", lines)
+        self.assertIn("reach 4.8", lines)
         self.assertIn("block 1 1", lines)
         self.assertIn("target 7 44", lines)
         self.assertNotIn("block 7 44", lines)

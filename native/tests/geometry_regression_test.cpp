@@ -1,4 +1,5 @@
 #include "minescript_miner/branch_bound.hpp"
+#include "minescript_miner/exact_branch_bound.hpp"
 #include "minescript_miner/clipping.hpp"
 #include "minescript_miner/visibility.hpp"
 
@@ -145,7 +146,7 @@ bool reach_regression() {
         1.0 / std::sqrt(minescript_miner::length_squared(look_direction))
     );
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(
+        minescript_miner::solve_visible_target_exact(
             geometry,
             {},
             look_direction,
@@ -170,7 +171,7 @@ bool thin_sliver_regression() {
     geometry.target_faces.push_back({0, 0.0});
 
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(
+        minescript_miner::solve_visible_target_exact(
             geometry,
             {},
             {0.0, 0.0, 1.0}
@@ -209,7 +210,7 @@ bool target_corner_regression() {
         1.0 / std::sqrt(minescript_miner::length_squared(look_direction))
     );
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(
+        minescript_miner::solve_visible_target_exact(
             geometry,
             {},
             look_direction
@@ -257,7 +258,7 @@ bool float_camera_edge_clearance_regression() {
         -0.7658945277075765,
     };
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(
+        minescript_miner::solve_visible_target_exact(
             geometry,
             eye,
             look_direction,
@@ -345,7 +346,7 @@ bool adjacent_full_cube_occlusion_regression() {
     geometry.target_faces.push_back({0, 0.0});
 
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(
+        minescript_miner::solve_visible_target_exact(
             geometry,
             eye,
             look_direction,

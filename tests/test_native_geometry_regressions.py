@@ -6,12 +6,28 @@ import unittest
 from pathlib import Path
 
 
+def boost_include_dir():
+    configured = os.environ.get("BOOST_INCLUDEDIR")
+    candidates = [configured, "/usr/local/include", "/usr/include"]
+    for candidate in candidates:
+        if candidate and (
+            Path(candidate) / "boost/multiprecision/cpp_int.hpp"
+        ).is_file():
+            return Path(candidate)
+    return None
+
+
 class NativeGeometryRegressionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         compiler = shutil.which(os.environ.get("CXX", "c++"))
         if compiler is None:
             raise unittest.SkipTest("No C++ compiler available")
+        boost_include = boost_include_dir()
+        if boost_include is None:
+            raise unittest.SkipTest(
+                "Boost headers unavailable; install boost-devel or set BOOST_INCLUDEDIR"
+            )
 
         cls.project_root = Path(__file__).resolve().parents[1]
         cls.temp_dir = tempfile.TemporaryDirectory(
@@ -28,12 +44,19 @@ class NativeGeometryRegressionTest(unittest.TestCase):
                 "-Wpedantic",
                 "-I",
                 str(cls.project_root / "native/include"),
+                "-I",
+                str(boost_include),
                 str(
                     cls.project_root
                     / "native/tests/geometry_regression_test.cpp"
                 ),
                 str(cls.project_root / "native/src/branch_bound.cpp"),
                 str(cls.project_root / "native/src/clipping.cpp"),
+                str(cls.project_root / "native/src/constraint_region.cpp"),
+                str(cls.project_root / "native/src/exact_branch_bound.cpp"),
+                str(cls.project_root / "native/src/exact_geometry.cpp"),
+                str(cls.project_root / "native/src/exact_geometry_store.cpp"),
+                str(cls.project_root / "native/src/exact_projection.cpp"),
                 str(cls.project_root / "native/src/visibility.cpp"),
                 "-o",
                 str(cls.executable),

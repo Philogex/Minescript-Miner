@@ -112,11 +112,27 @@ conservative.
   bound may discard a branch.
 - A returned point must classify strictly inside every target and visibility
   constraint.
-- Reach clipping and the outer target loop are deliberately not part of this
-  isolated milestone.
+- Reach clipping first constructs conservative straight-edged world polygons.
+  Their represented IEEE coordinates are then imported into the exact
+  projector, so all subsequent topology is exact.
+- Final points are rejected when their reconstructed world position exceeds
+  Reach or lies too close to the original target-face boundary for Minecraft's
+  float camera orientation.
+- Occluders outside the world-space AABB spanning the eye and target face
+  cannot intersect a sight segment and are excluded before projection.
+
+## Exact Target Loop
+
+- Target faces retain a fast projected-angle bound for search ordering.
+- The first visible target is seeded by increasing world distance; remaining
+  targets are searched by projected angle.
+- A sphere enclosing each target face supplies the conservative outer pruning
+  bound. Approximate projected bounds never remove a target.
+- Each exact single-target solve receives the current global best angle as its
+  upper bound, and all solver statistics are accumulated across targets.
 
 ## Migration Rule
 
-The current floating-point clipping path remains active until the exact path
-matches all native unit tests, recorded scan fixtures, and in-game regression
-cases. The exact kernel is introduced independently before solver integration.
+The native Minescript entry point uses the exact target loop. The former
+floating-point solver remains temporarily available as a comparison reference
+until profiling and in-game regression checks justify removing it.

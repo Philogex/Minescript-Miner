@@ -133,10 +133,10 @@ int main() {
             0,
             {},
             {0.0, 0.0, 1.0}
-        );
+    );
     assert(far_result.found);
     assert(far_result.angle == 0.0);
-    assert(far_result.stats.occluders_prepared == 1);
+    assert(far_result.stats.occluders_prepared == 0);
     assert(far_result.stats.clips_performed == 0);
 
     ScanRegionGeometry touching_edge{};
@@ -195,6 +195,47 @@ int main() {
     assert(repeated_result.found);
     assert(repeated_result.stats.clips_performed == 1);
     assert(repeated_result.stats.branches_visited <= 5);
+
+    ScanRegionGeometry reachable_edge{};
+    reachable_edge.world_faces.push_back(
+        z_face(0, -8, 16, 8, 76)
+    );
+    reachable_edge.target_faces.push_back({0, 0.0});
+    Vec3 reach_look{1.0, 0.0, 4.75};
+    reach_look = reach_look * (
+        1.0 / std::sqrt(length_squared(reach_look))
+    );
+    const BranchBoundResult reach_result =
+        solve_visible_target_exact(
+            reachable_edge,
+            {},
+            reach_look,
+            4.8
+        );
+    assert(reach_result.found);
+    assert(reach_result.distance <= 4.8);
+
+    ScanRegionGeometry target_loop{};
+    target_loop.world_faces.push_back(
+        z_face(-16, -16, 16, 16, 64)
+    );
+    target_loop.world_faces.push_back(
+        z_face(-16, -16, 16, 16, 32)
+    );
+    target_loop.world_faces.push_back(
+        z_face(48, -16, 80, 16, 64)
+    );
+    target_loop.target_faces.push_back({0, 0.0});
+    target_loop.target_faces.push_back({2, 0.75});
+    const BranchBoundResult loop_result =
+        solve_visible_target_exact(
+            target_loop,
+            {},
+            {0.0, 0.0, 1.0}
+        );
+    assert(loop_result.found);
+    assert(loop_result.target_world_face_index == 2);
+    assert(loop_result.stats.target_faces_considered == 2);
 
     const BranchBoundResult invalid_target =
         solve_visible_target_face_exact(

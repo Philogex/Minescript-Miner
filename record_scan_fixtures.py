@@ -15,6 +15,7 @@ SRC_DIR = PROJECT_DIR / "src"
 TARGET_CONFIG = PROJECT_DIR / "targets.txt"
 FIXTURE_DIR = PROJECT_DIR / "native" / "tests" / "fixtures"
 SIDES = (5, 39)
+TARGET_REACH = 4.8
 
 for path in (PROJECT_DIR, SRC_DIR):
     path_string = str(path)
@@ -45,6 +46,7 @@ def fixture_lines(
     side: int,
     position: ScanPosition,
     orientation: Orientation,
+    reach: float = TARGET_REACH,
     shape_ids: Sequence[int],
     target_indices: Iterable[int],
 ) -> List[str]:
@@ -64,6 +66,7 @@ def fixture_lines(
         "position " + " ".join(float_literal(value) for value in position),
         "orientation_yaw_pitch "
         + " ".join(float_literal(value) for value in orientation),
+        f"reach {float_literal(reach)}",
         f"default_shape {SHAPE_EMPTY}",
         "",
     ]
@@ -100,6 +103,7 @@ def record_fixture(
         side=side,
         position=position,
         orientation=orientation,
+        reach=TARGET_REACH,
         shape_ids=encoded.shape_ids,
         target_indices=target_indices,
     )

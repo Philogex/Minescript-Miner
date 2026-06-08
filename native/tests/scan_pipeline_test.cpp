@@ -1,5 +1,6 @@
 #include "minescript_miner/branch_bound.hpp"
 #include "minescript_miner/angle.hpp"
+#include "minescript_miner/exact_branch_bound.hpp"
 #include "minescript_miner/geometry_catalog.hpp"
 #include "minescript_miner/scan_region.hpp"
 
@@ -212,7 +213,7 @@ int main(int argc, char **argv) {
     }
 
     const BranchBoundResult result =
-        solve_visible_target(
+        solve_visible_target_exact(
             geometry,
             fixture.position,
             look_direction,
@@ -253,6 +254,8 @@ int main(int argc, char **argv) {
         << " occluders_prepared=" << result.stats.occluders_prepared
         << " effective_occluders=" << result.stats.effective_occluders
         << " branches=" << result.stats.branches_visited
+        << " branches_pruned=" << result.stats.branches_pruned
+        << " branches_memoized=" << result.stats.branches_memoized
         << " clips=" << result.stats.clips_performed
         << '\n';
 }

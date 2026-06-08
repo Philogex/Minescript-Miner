@@ -11,8 +11,8 @@ block 185 44
 target 192 1
 
 expect_found 1
-expect_angle_min 0.01
-expect_angle_max 0.1
+expect_angle_min 0.164
+expect_angle_max 0.165
 expect_world_faces 12
 expect_target_faces 1
 expect_min_clips 1

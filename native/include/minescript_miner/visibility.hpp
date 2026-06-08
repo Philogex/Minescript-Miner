@@ -50,6 +50,16 @@ struct ProjectedFacePieces {
     std::uint8_t count = 0;
 };
 
+struct WorldFacePolygon {
+    std::array<Vec3, MAX_REACH_FACE_VERTICES> points{};
+    std::uint8_t count = 0;
+};
+
+struct ReachableWorldFacePieces {
+    std::array<WorldFacePolygon, MAX_REACH_FACE_PIECES> faces{};
+    std::uint8_t count = 0;
+};
+
 bool make_view_basis(const Vec3 &forward, ViewBasis &out);
 bool make_view_basis_toward(const Vec3 &eye, const Vec3 &target, ViewBasis &out);
 
@@ -131,6 +141,13 @@ bool project_world_face(
     const Vec3 &eye,
     const ViewBasis &basis,
     ProjectedFace &out
+);
+
+bool make_reachable_world_face_pieces(
+    const WorldRectFace16 &face,
+    const Vec3 &eye,
+    double reach,
+    ReachableWorldFacePieces &out
 );
 
 bool project_reachable_world_face(

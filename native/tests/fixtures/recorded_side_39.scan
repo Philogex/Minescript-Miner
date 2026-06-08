@@ -5,13 +5,14 @@ shape_catalog_version 1
 side 39
 position 13.390604666383773 103.3970275986376 27.672535192084464
 orientation_yaw_pitch -120.05 52.299995
+reach 4.8
 default_shape 0
 
 expect_found 1
-expect_angle_min 0.1228
-expect_angle_max 0.1230
+expect_angle_min 1.65
+expect_angle_max 1.66
 expect_world_faces 82560
-expect_target_faces 33802
+expect_target_faces 282
 expect_min_clips 1
 
 target 2124 1

@@ -75,7 +75,7 @@ bool contains_any(
     const ExactRational &y
 ) {
     const VertexId point =
-        geometry.intern_vertex(minescript_miner::exact_point(x, y));
+        geometry.intern_vertex(minescript_miner::make_point(x, y));
     return std::any_of(
         pieces.begin(),
         pieces.end(),

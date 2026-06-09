@@ -1,5 +1,5 @@
 #include "minescript_miner/angle.hpp"
-#include "minescript_miner/exact_branch_bound.hpp"
+#include "minescript_miner/branch_bound.hpp"
 #include "minescript_miner/geometry_catalog.hpp"
 #include "minescript_miner/scan_region.hpp"
 #include "minescript_miner/target_solver.hpp"
@@ -213,7 +213,7 @@ int main(int argc, char **argv) {
     }
 
     const BranchBoundResult result =
-        solve_visible_target_exact(
+        solve_visible_target(
             geometry,
             fixture.position,
             look_direction,

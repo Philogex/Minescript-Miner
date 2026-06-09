@@ -38,27 +38,27 @@ struct ExactLine2 {
     }
 };
 
-ExactRational exact_rational_from_double(double value);
+ExactRational rational_from_double(double value);
 double approximate_double(const ExactRational &value);
 
-ExactPoint2H normalize_exact_point(ExactPoint2H point);
-ExactLine2 normalize_exact_line(ExactLine2 line);
+ExactPoint2H normalize_point(ExactPoint2H point);
+ExactLine2 normalize_line(ExactLine2 line);
 
-ExactPoint2H exact_point(const ExactRational &x, const ExactRational &y);
-ExactPoint2H exact_point(double x, double y);
+ExactPoint2H make_point(const ExactRational &x, const ExactRational &y);
+ExactPoint2H make_point(double x, double y);
 Point2 approximate_point(const ExactPoint2H &point);
 
-ExactLine2 exact_line_through(
+ExactLine2 line_through(
     const ExactPoint2H &from,
     const ExactPoint2H &to
 );
-ExactPoint2H exact_line_intersection(
+ExactPoint2H line_intersection(
     const ExactLine2 &lhs,
     const ExactLine2 &rhs
 );
 
 ExactLine2 opposite_half_plane(ExactLine2 line);
-ExactSign classify_exact(
+ExactSign classify_line(
     const ExactLine2 &line,
     const ExactPoint2H &point
 );

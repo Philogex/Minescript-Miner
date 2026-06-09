@@ -52,10 +52,10 @@ class NativeGeometryRegressionTest(unittest.TestCase):
                 ),
                 str(cls.project_root / "native/src/clipping.cpp"),
                 str(cls.project_root / "native/src/constraint_region.cpp"),
-                str(cls.project_root / "native/src/exact_branch_bound.cpp"),
-                str(cls.project_root / "native/src/exact_geometry.cpp"),
-                str(cls.project_root / "native/src/exact_geometry_store.cpp"),
-                str(cls.project_root / "native/src/exact_projection.cpp"),
+                str(cls.project_root / "native/src/branch_bound.cpp"),
+                str(cls.project_root / "native/src/geometry.cpp"),
+                str(cls.project_root / "native/src/geometry_store.cpp"),
+                str(cls.project_root / "native/src/projection.cpp"),
                 str(cls.project_root / "native/src/target_solver.cpp"),
                 str(cls.project_root / "native/src/visibility.cpp"),
                 "-o",
@@ -76,7 +76,7 @@ class NativeGeometryRegressionTest(unittest.TestCase):
             cwd=self.project_root,
         )
 
-    def test_nearly_collinear_orientation_keeps_exact_sign(self):
+    def test_nearly_collinear_orientation_keeps_robust_sign(self):
         self.run_regression("robust_orientation")
 
     def test_face_crossing_near_plane_is_clipped_instead_of_discarded(self):

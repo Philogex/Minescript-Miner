@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minescript_miner/exact_geometry_store.hpp"
+#include "minescript_miner/geometry_store.hpp"
 #include "minescript_miner/tri2.hpp"
 
 #include <cstdint>

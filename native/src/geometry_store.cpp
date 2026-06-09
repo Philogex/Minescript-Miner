@@ -1,4 +1,4 @@
-#include "minescript_miner/exact_geometry_store.hpp"
+#include "minescript_miner/geometry_store.hpp"
 
 #include <algorithm>
 #include <stdexcept>
@@ -54,7 +54,7 @@ bool ExactGeometryStore::PointLess::operator()(
 }
 
 ExactLine2 ExactGeometryStore::canonical_unoriented_line(ExactLine2 line) {
-    line = normalize_exact_line(std::move(line));
+    line = normalize_line(std::move(line));
     if (!is_valid(line)) {
         return line;
     }
@@ -93,7 +93,7 @@ LineId ExactGeometryStore::intern_line(ExactLine2 line_value) {
 }
 
 HalfPlaneId ExactGeometryStore::intern_half_plane(ExactLine2 oriented_line) {
-    oriented_line = normalize_exact_line(std::move(oriented_line));
+    oriented_line = normalize_line(std::move(oriented_line));
     if (!is_valid(oriented_line)) {
         return {};
     }
@@ -119,7 +119,7 @@ HalfPlaneId ExactGeometryStore::intern_half_plane(ExactLine2 oriented_line) {
 }
 
 VertexId ExactGeometryStore::intern_vertex(ExactPoint2H point_value) {
-    point_value = normalize_exact_point(std::move(point_value));
+    point_value = normalize_point(std::move(point_value));
     if (!is_valid(point_value)) {
         return {};
     }
@@ -161,7 +161,7 @@ VertexId ExactGeometryStore::intersect(LineId lhs, LineId rhs) {
     VertexId result{};
     if (lhs != rhs) {
         result = intern_vertex(
-            exact_line_intersection(line(lhs), line(rhs))
+            line_intersection(line(lhs), line(rhs))
         );
     }
     intersections_.emplace(key, result);
@@ -183,7 +183,7 @@ ExactSign ExactGeometryStore::classify(
         return cached->second;
     }
 
-    ExactSign result = classify_exact(
+    ExactSign result = classify_line(
         line(plane.line),
         vertex(vertex_id)
     );

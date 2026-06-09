@@ -133,7 +133,7 @@ double most_significant_component(
     return 0.0;
 }
 
-double exact_orientation_value(Point2 a, Point2 b, Point2 point) {
+double expansion_orientation_value(Point2 a, Point2 b, Point2 point) {
     constexpr std::size_t MAX_COMPONENTS = 16;
     std::array<double, MAX_COMPONENTS> expansion{};
     std::array<double, MAX_COMPONENTS> scratch{};
@@ -177,7 +177,7 @@ double robust_orientation_value(Point2 a, Point2 b, Point2 point) {
     if (std::abs(determinant) >= error_bound) {
         return determinant;
     }
-    return exact_orientation_value(a, b, point);
+    return expansion_orientation_value(a, b, point);
 }
 
 bool append_point(Polygon2 &polygon, Point2 point) {

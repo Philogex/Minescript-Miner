@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minescript_miner/exact_geometry_store.hpp"
+#include "minescript_miner/geometry_store.hpp"
 #include "minescript_miner/scan_region.hpp"
 #include "minescript_miner/visibility.hpp"
 
@@ -66,10 +66,10 @@ public:
     ) const;
 
 private:
-    ExactVec3 exact_vec3(const Vec3 &value) const;
-    ExactVec3 exact_world_point(const WorldPoint16 &point) const;
-    ExactViewPoint world_to_exact_view(const ExactVec3 &point) const;
-    bool project_exact_view_polygon(
+    ExactVec3 rational_vec3(const Vec3 &value) const;
+    ExactVec3 rational_world_point(const WorldPoint16 &point) const;
+    ExactViewPoint world_to_view(const ExactVec3 &point) const;
+    bool project_view_polygon(
         const ExactViewPoint *points,
         std::size_t count,
         ExactProjectedFace &out

@@ -17,8 +17,8 @@ def boost_include_dir():
     return None
 
 
-class NativeExactBranchBoundTest(unittest.TestCase):
-    def test_single_target_exact_solver(self):
+class NativeGeometryTest(unittest.TestCase):
+    def test_projective_kernel(self):
         compiler = shutil.which(os.environ.get("CXX", "c++"))
         if compiler is None:
             self.skipTest("No C++ compiler available")
@@ -31,9 +31,9 @@ class NativeExactBranchBoundTest(unittest.TestCase):
 
         project_root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory(
-            prefix="minescript-exact-branch-bound-test-"
+            prefix="minescript-geometry-test-"
         ) as temp_dir:
-            executable = Path(temp_dir) / "exact_branch_bound_test"
+            executable = Path(temp_dir) / "geometry_test"
             subprocess.run(
                 [
                     compiler,
@@ -45,21 +45,8 @@ class NativeExactBranchBoundTest(unittest.TestCase):
                     str(project_root / "native/include"),
                     "-I",
                     str(boost_include),
-                    str(
-                        project_root
-                        / "native/tests/exact_branch_bound_test.cpp"
-                    ),
-                    str(project_root / "native/src/clipping.cpp"),
-                    str(project_root / "native/src/constraint_region.cpp"),
-                    str(project_root / "native/src/exact_branch_bound.cpp"),
-                    str(project_root / "native/src/exact_geometry.cpp"),
-                    str(
-                        project_root
-                        / "native/src/exact_geometry_store.cpp"
-                    ),
-                    str(project_root / "native/src/exact_projection.cpp"),
-                    str(project_root / "native/src/target_solver.cpp"),
-                    str(project_root / "native/src/visibility.cpp"),
+                    str(project_root / "native/tests/geometry_test.cpp"),
+                    str(project_root / "native/src/geometry.cpp"),
                     "-o",
                     str(executable),
                 ],

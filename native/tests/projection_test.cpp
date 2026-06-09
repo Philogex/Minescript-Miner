@@ -1,5 +1,5 @@
 #include "minescript_miner/constraint_region.hpp"
-#include "minescript_miner/exact_projection.hpp"
+#include "minescript_miner/projection.hpp"
 
 #include <algorithm>
 #include <array>
@@ -71,10 +71,10 @@ int main() {
     assert(near_face.inverse_depth.constant == half);
 
     const std::array<ExactPoint2H, 4> expected_points{
-        exact_point(ExactRational{0}, ExactRational{0}),
-        exact_point(ExactRational{1}, ExactRational{0}),
-        exact_point(ExactRational{1}, ExactRational{1}),
-        exact_point(ExactRational{0}, ExactRational{1}),
+        make_point(ExactRational{0}, ExactRational{0}),
+        make_point(ExactRational{1}, ExactRational{0}),
+        make_point(ExactRational{1}, ExactRational{1}),
+        make_point(ExactRational{0}, ExactRational{1}),
     };
     for (std::uint8_t i = 0; i < near_face.count; ++i) {
         assert(geometry.vertex(near_face.vertices[i]) == expected_points[i]);
@@ -136,9 +136,9 @@ int main() {
         right
     ));
     const LineId shared_edge = geometry.intern_line(
-        exact_line_through(
-            exact_point(half, ExactRational{0}),
-            exact_point(half, half)
+        line_through(
+            make_point(half, ExactRational{0}),
+            make_point(half, half)
         )
     );
     const HalfPlaneId left_shared =

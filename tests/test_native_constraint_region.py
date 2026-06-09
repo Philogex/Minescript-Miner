@@ -18,7 +18,7 @@ def boost_include_dir():
 
 
 class NativeConstraintRegionTest(unittest.TestCase):
-    def test_exact_geometry_interning_and_constraint_regions(self):
+    def test_geometry_interning_and_constraint_regions(self):
         compiler = shutil.which(os.environ.get("CXX", "c++"))
         if compiler is None:
             self.skipTest("No C++ compiler available")
@@ -49,10 +49,10 @@ class NativeConstraintRegionTest(unittest.TestCase):
                         project_root
                         / "native/tests/constraint_region_test.cpp"
                     ),
-                    str(project_root / "native/src/exact_geometry.cpp"),
+                    str(project_root / "native/src/geometry.cpp"),
                     str(
                         project_root
-                        / "native/src/exact_geometry_store.cpp"
+                        / "native/src/geometry_store.cpp"
                     ),
                     str(project_root / "native/src/constraint_region.cpp"),
                     "-o",

@@ -1,4 +1,4 @@
-#include "minescript_miner/exact_projection.hpp"
+#include "minescript_miner/projection.hpp"
 
 #include <algorithm>
 #include <array>
@@ -111,7 +111,7 @@ ExactRational point_y(const ExactPoint2H &point) {
 }
 
 ExactPoint2H project_homogeneous(const ExactViewPoint &point) {
-    return normalize_exact_point({
+    return normalize_point({
         point.x.numerator() *
             point.y.denominator() *
             point.depth.denominator(),
@@ -124,12 +124,12 @@ ExactPoint2H project_homogeneous(const ExactViewPoint &point) {
     });
 }
 
-ExactLine2 exact_line_from_coefficients(
+ExactLine2 line_from_coefficients(
     const ExactRational &a,
     const ExactRational &b,
     const ExactRational &c
 ) {
-    return normalize_exact_line({
+    return normalize_line({
         a.numerator() * b.denominator() * c.denominator(),
         b.numerator() * a.denominator() * c.denominator(),
         c.numerator() * a.denominator() * b.denominator(),
@@ -201,8 +201,8 @@ ExactSign polygon_orientation(
         return ExactSign::Zero;
     }
     for (std::uint8_t i = 1; i + 1 < count; ++i) {
-        const ExactSign sign = classify_exact(
-            exact_line_through(
+        const ExactSign sign = classify_line(
+            line_through(
                 geometry.vertex(vertices[0]),
                 geometry.vertex(vertices[i])
             ),
@@ -223,11 +223,11 @@ ExactProjector::ExactProjector(
     const ViewBasis &basis,
     double near_depth
 ) : geometry_(geometry),
-    eye_(exact_vec3(eye)),
-    right_(exact_vec3(basis.right)),
-    up_(exact_vec3(basis.up)),
-    forward_(exact_vec3(basis.forward)),
-    near_depth_(exact_rational_from_double(near_depth)) {
+    eye_(rational_vec3(eye)),
+    right_(rational_vec3(basis.right)),
+    up_(rational_vec3(basis.up)),
+    forward_(rational_vec3(basis.forward)),
+    near_depth_(rational_from_double(near_depth)) {
     if (near_depth_ <= 0) {
         throw std::domain_error(
             "exact projection requires a positive near depth"
@@ -248,9 +248,9 @@ bool ExactProjector::project_world_face(
     std::array<ExactViewPoint, 4> view_points{};
     for (std::size_t i = 0; i < points.size(); ++i) {
         view_points[i] =
-            world_to_exact_view(exact_world_point(points[i]));
+            world_to_view(rational_world_point(points[i]));
     }
-    return project_exact_view_polygon(
+    return project_view_polygon(
         view_points.data(),
         view_points.size(),
         out
@@ -271,9 +271,9 @@ bool ExactProjector::project_world_polygon(
     std::array<ExactViewPoint, MAX_CLIP_VERTICES> view_points{};
     for (std::size_t i = 0; i < count; ++i) {
         view_points[i] =
-            world_to_exact_view(exact_vec3(points[i]));
+            world_to_view(rational_vec3(points[i]));
     }
-    return project_exact_view_polygon(
+    return project_view_polygon(
         view_points.data(),
         count,
         out
@@ -295,7 +295,7 @@ HalfPlaneId ExactProjector::depth_front_half_plane(
         return {};
     }
     return geometry_.intern_half_plane(
-        exact_line_from_coefficients(x, y, constant)
+        line_from_coefficients(x, y, constant)
     );
 }
 
@@ -310,15 +310,15 @@ ExactRational ExactProjector::inverse_depth_at(
         face.inverse_depth.constant;
 }
 
-ExactVec3 ExactProjector::exact_vec3(const Vec3 &value) const {
+ExactVec3 ExactProjector::rational_vec3(const Vec3 &value) const {
     return {
-        exact_rational_from_double(value.x),
-        exact_rational_from_double(value.y),
-        exact_rational_from_double(value.z),
+        rational_from_double(value.x),
+        rational_from_double(value.y),
+        rational_from_double(value.z),
     };
 }
 
-ExactVec3 ExactProjector::exact_world_point(
+ExactVec3 ExactProjector::rational_world_point(
     const WorldPoint16 &point
 ) const {
     return {
@@ -328,7 +328,7 @@ ExactVec3 ExactProjector::exact_world_point(
     };
 }
 
-ExactViewPoint ExactProjector::world_to_exact_view(
+ExactViewPoint ExactProjector::world_to_view(
     const ExactVec3 &point
 ) const {
     const ExactVec3 relative{
@@ -336,19 +336,19 @@ ExactViewPoint ExactProjector::world_to_exact_view(
         point.y - eye_.y,
         point.z - eye_.z,
     };
-    const auto dot_exact = [&relative](const ExactVec3 &axis) {
+    const auto dot_rational = [&relative](const ExactVec3 &axis) {
         return relative.x * axis.x +
                relative.y * axis.y +
                relative.z * axis.z;
     };
     return {
-        dot_exact(right_),
-        dot_exact(up_),
-        dot_exact(forward_),
+        dot_rational(right_),
+        dot_rational(up_),
+        dot_rational(forward_),
     };
 }
 
-bool ExactProjector::project_exact_view_polygon(
+bool ExactProjector::project_view_polygon(
     const ExactViewPoint *points,
     std::size_t count,
     ExactProjectedFace &out
@@ -438,7 +438,7 @@ bool ExactProjector::project_exact_view_polygon(
         const VertexId to =
             out.vertices[(i + 1) % out.count];
         out.footprint[i] = geometry_.intern_half_plane(
-            exact_line_through(
+            line_through(
                 geometry_.vertex(from),
                 geometry_.vertex(to)
             )

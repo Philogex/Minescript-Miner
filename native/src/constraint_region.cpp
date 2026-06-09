@@ -7,7 +7,7 @@ namespace minescript_miner {
 
 namespace {
 
-bool exact_point_less(
+bool point_less(
     const ExactPoint2H &lhs,
     const ExactPoint2H &rhs
 ) {
@@ -24,7 +24,7 @@ ExactSign orientation(
     const ExactPoint2H &b,
     const ExactPoint2H &point
 ) {
-    return classify_exact(exact_line_through(a, b), point);
+    return classify_line(line_through(a, b), point);
 }
 
 }  // namespace
@@ -163,9 +163,9 @@ std::vector<Point2> ConstraintRegionStore::approximate_vertices(
     RegionId id
 ) const {
     std::vector<Point2> result;
-    const std::vector<VertexId> &exact_vertices = vertices(id);
-    result.reserve(exact_vertices.size());
-    for (const VertexId vertex_id : exact_vertices) {
+    const std::vector<VertexId> &region_vertices = vertices(id);
+    result.reserve(region_vertices.size());
+    for (const VertexId vertex_id : region_vertices) {
         result.push_back(approximate_point(geometry_.vertex(vertex_id)));
     }
     return result;
@@ -274,7 +274,7 @@ std::vector<VertexId> ConstraintRegionStore::compute_convex_hull(
         candidates.begin(),
         candidates.end(),
         [this](VertexId lhs, VertexId rhs) {
-            return exact_point_less(
+            return point_less(
                 geometry_.vertex(lhs),
                 geometry_.vertex(rhs)
             );

@@ -18,7 +18,7 @@ def boost_include_dir():
 
 
 class NativeConstraintSubtractionTest(unittest.TestCase):
-    def test_exact_convex_region_subtraction(self):
+    def test_convex_region_subtraction(self):
         compiler = shutil.which(os.environ.get("CXX", "c++"))
         if compiler is None:
             self.skipTest("No C++ compiler available")
@@ -49,10 +49,10 @@ class NativeConstraintSubtractionTest(unittest.TestCase):
                         project_root
                         / "native/tests/constraint_subtraction_test.cpp"
                     ),
-                    str(project_root / "native/src/exact_geometry.cpp"),
+                    str(project_root / "native/src/geometry.cpp"),
                     str(
                         project_root
-                        / "native/src/exact_geometry_store.cpp"
+                        / "native/src/geometry_store.cpp"
                     ),
                     str(project_root / "native/src/constraint_region.cpp"),
                     "-o",

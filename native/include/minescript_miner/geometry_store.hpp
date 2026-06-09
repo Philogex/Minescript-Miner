@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minescript_miner/exact_geometry.hpp"
+#include "minescript_miner/geometry.hpp"
 
 #include <cstddef>
 #include <cstdint>

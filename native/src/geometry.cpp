@@ -1,4 +1,4 @@
-#include "minescript_miner/exact_geometry.hpp"
+#include "minescript_miner/geometry.hpp"
 
 #include <cmath>
 #include <cstdint>
@@ -11,13 +11,13 @@ namespace minescript_miner {
 
 namespace {
 
-ExactInt exact_abs(ExactInt value) {
+ExactInt integer_abs(ExactInt value) {
     return value < 0 ? -value : value;
 }
 
-ExactInt exact_gcd(ExactInt lhs, ExactInt rhs) {
-    lhs = exact_abs(std::move(lhs));
-    rhs = exact_abs(std::move(rhs));
+ExactInt integer_gcd(ExactInt lhs, ExactInt rhs) {
+    lhs = integer_abs(std::move(lhs));
+    rhs = integer_abs(std::move(rhs));
     while (rhs != 0) {
         ExactInt remainder = lhs % rhs;
         lhs = std::move(rhs);
@@ -31,7 +31,7 @@ ExactInt common_divisor(
     const ExactInt &second,
     const ExactInt &third
 ) {
-    return exact_gcd(exact_gcd(first, second), third);
+    return integer_gcd(integer_gcd(first, second), third);
 }
 
 ExactSign sign_of(const ExactInt &value) {
@@ -86,7 +86,7 @@ double double_from_bits(std::uint64_t bits) {
 
 }  // namespace
 
-ExactRational exact_rational_from_double(double value) {
+ExactRational rational_from_double(double value) {
     static_assert(
         std::numeric_limits<double>::is_iec559 &&
             sizeof(double) == sizeof(std::uint64_t),
@@ -132,7 +132,7 @@ double approximate_double(const ExactRational &value) {
     }
 
     const bool negative = value.numerator() < 0;
-    const ExactInt numerator = exact_abs(value.numerator());
+    const ExactInt numerator = integer_abs(value.numerator());
     const ExactInt &denominator = value.denominator();
     const std::int64_t exponent =
         binary_exponent(numerator, denominator);
@@ -195,7 +195,7 @@ double approximate_double(const ExactRational &value) {
     );
 }
 
-ExactPoint2H normalize_exact_point(ExactPoint2H point) {
+ExactPoint2H normalize_point(ExactPoint2H point) {
     if (!is_valid(point)) {
         return point;
     }
@@ -219,7 +219,7 @@ ExactPoint2H normalize_exact_point(ExactPoint2H point) {
     return point;
 }
 
-ExactLine2 normalize_exact_line(ExactLine2 line) {
+ExactLine2 normalize_line(ExactLine2 line) {
     if (!is_valid(line)) {
         return line;
     }
@@ -233,21 +233,21 @@ ExactLine2 normalize_exact_line(ExactLine2 line) {
     return line;
 }
 
-ExactPoint2H exact_point(
+ExactPoint2H make_point(
     const ExactRational &x,
     const ExactRational &y
 ) {
-    return normalize_exact_point({
+    return normalize_point({
         x.numerator() * y.denominator(),
         y.numerator() * x.denominator(),
         x.denominator() * y.denominator(),
     });
 }
 
-ExactPoint2H exact_point(double x, double y) {
-    return exact_point(
-        exact_rational_from_double(x),
-        exact_rational_from_double(y)
+ExactPoint2H make_point(double x, double y) {
+    return make_point(
+        rational_from_double(x),
+        rational_from_double(y)
     );
 }
 
@@ -261,22 +261,22 @@ Point2 approximate_point(const ExactPoint2H &point) {
     };
 }
 
-ExactLine2 exact_line_through(
+ExactLine2 line_through(
     const ExactPoint2H &from,
     const ExactPoint2H &to
 ) {
-    return normalize_exact_line({
+    return normalize_line({
         from.y * to.w - from.w * to.y,
         from.w * to.x - from.x * to.w,
         from.x * to.y - from.y * to.x,
     });
 }
 
-ExactPoint2H exact_line_intersection(
+ExactPoint2H line_intersection(
     const ExactLine2 &lhs,
     const ExactLine2 &rhs
 ) {
-    return normalize_exact_point({
+    return normalize_point({
         lhs.b * rhs.c - lhs.c * rhs.b,
         lhs.c * rhs.a - lhs.a * rhs.c,
         lhs.a * rhs.b - lhs.b * rhs.a,
@@ -290,7 +290,7 @@ ExactLine2 opposite_half_plane(ExactLine2 line) {
     return line;
 }
 
-ExactSign classify_exact(
+ExactSign classify_line(
     const ExactLine2 &line,
     const ExactPoint2H &point
 ) {

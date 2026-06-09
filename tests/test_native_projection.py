@@ -17,8 +17,8 @@ def boost_include_dir():
     return None
 
 
-class NativeExactProjectionTest(unittest.TestCase):
-    def test_exact_projection_and_depth_half_planes(self):
+class NativeProjectionTest(unittest.TestCase):
+    def test_projection_and_depth_half_planes(self):
         compiler = shutil.which(os.environ.get("CXX", "c++"))
         if compiler is None:
             self.skipTest("No C++ compiler available")
@@ -31,9 +31,9 @@ class NativeExactProjectionTest(unittest.TestCase):
 
         project_root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory(
-            prefix="minescript-exact-projection-test-"
+            prefix="minescript-projection-test-"
         ) as temp_dir:
-            executable = Path(temp_dir) / "exact_projection_test"
+            executable = Path(temp_dir) / "projection_test"
             subprocess.run(
                 [
                     compiler,
@@ -47,15 +47,15 @@ class NativeExactProjectionTest(unittest.TestCase):
                     str(boost_include),
                     str(
                         project_root
-                        / "native/tests/exact_projection_test.cpp"
+                        / "native/tests/projection_test.cpp"
                     ),
-                    str(project_root / "native/src/exact_geometry.cpp"),
+                    str(project_root / "native/src/geometry.cpp"),
                     str(
                         project_root
-                        / "native/src/exact_geometry_store.cpp"
+                        / "native/src/geometry_store.cpp"
                     ),
                     str(project_root / "native/src/constraint_region.cpp"),
-                    str(project_root / "native/src/exact_projection.cpp"),
+                    str(project_root / "native/src/projection.cpp"),
                     "-o",
                     str(executable),
                 ],

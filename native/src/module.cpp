@@ -2,7 +2,7 @@
 #include <Python.h>
 
 #include "minescript_miner/angle.hpp"
-#include "minescript_miner/exact_branch_bound.hpp"
+#include "minescript_miner/branch_bound.hpp"
 #include "minescript_miner/geometry_catalog.hpp"
 #include "minescript_miner/scan_region.hpp"
 
@@ -518,7 +518,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     const auto geometry_end = std::chrono::steady_clock::now();
 
     const minescript_miner::BranchBoundResult solve_result =
-        minescript_miner::solve_visible_target_exact(
+        minescript_miner::solve_visible_target(
             scan_geometry,
             eye,
             look_dir,

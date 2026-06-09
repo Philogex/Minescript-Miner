@@ -1,6 +1,6 @@
-#include "minescript_miner/branch_bound.hpp"
 #include "minescript_miner/exact_branch_bound.hpp"
 #include "minescript_miner/clipping.hpp"
+#include "minescript_miner/target_solver.hpp"
 #include "minescript_miner/visibility.hpp"
 
 #include <algorithm>

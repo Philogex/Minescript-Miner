@@ -24,6 +24,7 @@ class NativeBranchBoundTest(unittest.TestCase):
                     str(project_root / "native/tests/branch_bound_test.cpp"),
                     str(project_root / "native/src/branch_bound.cpp"),
                     str(project_root / "native/src/clipping.cpp"),
+                    str(project_root / "native/src/target_solver.cpp"),
                     str(project_root / "native/src/visibility.cpp"),
                     "-o",
                     str(executable),

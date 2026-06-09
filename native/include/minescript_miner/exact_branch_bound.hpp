@@ -1,6 +1,7 @@
 #pragma once
 
-#include "minescript_miner/branch_bound.hpp"
+#include "minescript_miner/scan_region.hpp"
+#include "minescript_miner/target_solver.hpp"
 
 #include <cstdint>
 

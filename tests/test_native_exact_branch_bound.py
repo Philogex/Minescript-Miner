@@ -49,7 +49,6 @@ class NativeExactBranchBoundTest(unittest.TestCase):
                         project_root
                         / "native/tests/exact_branch_bound_test.cpp"
                     ),
-                    str(project_root / "native/src/branch_bound.cpp"),
                     str(project_root / "native/src/clipping.cpp"),
                     str(project_root / "native/src/constraint_region.cpp"),
                     str(project_root / "native/src/exact_branch_bound.cpp"),
@@ -59,6 +58,7 @@ class NativeExactBranchBoundTest(unittest.TestCase):
                         / "native/src/exact_geometry_store.cpp"
                     ),
                     str(project_root / "native/src/exact_projection.cpp"),
+                    str(project_root / "native/src/target_solver.cpp"),
                     str(project_root / "native/src/visibility.cpp"),
                     "-o",
                     str(executable),

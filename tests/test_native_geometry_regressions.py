@@ -50,13 +50,13 @@ class NativeGeometryRegressionTest(unittest.TestCase):
                     cls.project_root
                     / "native/tests/geometry_regression_test.cpp"
                 ),
-                str(cls.project_root / "native/src/branch_bound.cpp"),
                 str(cls.project_root / "native/src/clipping.cpp"),
                 str(cls.project_root / "native/src/constraint_region.cpp"),
                 str(cls.project_root / "native/src/exact_branch_bound.cpp"),
                 str(cls.project_root / "native/src/exact_geometry.cpp"),
                 str(cls.project_root / "native/src/exact_geometry_store.cpp"),
                 str(cls.project_root / "native/src/exact_projection.cpp"),
+                str(cls.project_root / "native/src/target_solver.cpp"),
                 str(cls.project_root / "native/src/visibility.cpp"),
                 "-o",
                 str(cls.executable),

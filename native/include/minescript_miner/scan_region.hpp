@@ -78,7 +78,7 @@ constexpr std::int32_t world16(std::int32_t block_coord, std::uint8_t local_coor
     return block_coord * 16 + static_cast<std::int32_t>(local_coord);
 }
 
-// this might need to change if i have to map non aabb shapes (those don't exist in minecraft...?)
+// Does not consider non AABB shapes
 constexpr WorldRectFace16 face_to_world(const RectFace16 &face, BlockPos block_pos) {
     switch (face.axis) {
         case PlaneAxis::X: {

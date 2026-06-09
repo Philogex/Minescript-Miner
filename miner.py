@@ -33,6 +33,9 @@ REACH = 4.8
 ROTATION_DURATION = 0.01
 IDLE_DELAY = 0.25
 BREAK_POLL_DELAY = 0.05
+LOG_SCAN_TIMINGS = os.environ.get(
+    "MINESCRIPT_MINER_LOG_TIMINGS", ""
+).lower() in {"1", "true", "yes"}
 
 active = threading.Event()
 
@@ -112,7 +115,7 @@ def run() -> None:
 
             px, py, pz = m.player_position()
             yaw, pitch = m.player_orientation()
-            start = time.process_time()
+            start = time.perf_counter()
             target_orientation = acquire_current_target(
                 (px, py + 1.62, pz),
                 (yaw, pitch),
@@ -120,7 +123,9 @@ def run() -> None:
                 target_config=TARGET_CONFIG,
                 await_region=await_region,
             )
-            print("Time: %f ms" % round((time.process_time() - start) * 1000, 4))
+            if LOG_SCAN_TIMINGS:
+                elapsed_ms = (time.perf_counter() - start) * 1000.0
+                m.log(f"Miner scan time: {elapsed_ms:.4f} ms")
             await_region = False
             if target_orientation is None:
                 time.sleep(IDLE_DELAY)

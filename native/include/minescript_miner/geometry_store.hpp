@@ -70,11 +70,14 @@ private:
         bool operator()(const ExactPoint2H &lhs, const ExactPoint2H &rhs) const;
     };
 
-    static ExactLine2 canonical_unoriented_line(ExactLine2 line);
+    static ExactLine2 canonical_unoriented_normalized_line(
+        ExactLine2 line
+    );
     static bool same_orientation(
         const ExactLine2 &oriented,
         const ExactLine2 &canonical
     );
+    LineId intern_canonical_line(ExactLine2 line);
 
     std::vector<ExactLine2> lines_;
     std::vector<ExactHalfPlane> half_planes_;

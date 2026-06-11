@@ -24,7 +24,7 @@ ExactSign orientation(
     const ExactPoint2H &b,
     const ExactPoint2H &point
 ) {
-    return classify_line(line_through(a, b), point);
+    return classify_line(line_through_raw(a, b), point);
 }
 
 }  // namespace

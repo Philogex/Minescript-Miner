@@ -111,7 +111,7 @@ ExactRational point_y(const ExactPoint2H &point) {
 }
 
 ExactPoint2H project_homogeneous(const ExactViewPoint &point) {
-    return normalize_point({
+    return {
         point.x.numerator() *
             point.y.denominator() *
             point.depth.denominator(),
@@ -121,7 +121,7 @@ ExactPoint2H project_homogeneous(const ExactViewPoint &point) {
         point.depth.numerator() *
             point.x.denominator() *
             point.y.denominator(),
-    });
+    };
 }
 
 ExactLine2 line_from_coefficients(
@@ -129,11 +129,11 @@ ExactLine2 line_from_coefficients(
     const ExactRational &b,
     const ExactRational &c
 ) {
-    return normalize_line({
+    return {
         a.numerator() * b.denominator() * c.denominator(),
         b.numerator() * a.denominator() * c.denominator(),
         c.numerator() * a.denominator() * b.denominator(),
-    });
+    };
 }
 
 bool make_inverse_depth_plane(
@@ -202,7 +202,7 @@ ExactSign polygon_orientation(
     }
     for (std::uint8_t i = 1; i + 1 < count; ++i) {
         const ExactSign sign = classify_line(
-            line_through(
+            line_through_raw(
                 geometry.vertex(vertices[0]),
                 geometry.vertex(vertices[i])
             ),
@@ -438,7 +438,7 @@ bool ExactProjector::project_view_polygon(
         const VertexId to =
             out.vertices[(i + 1) % out.count];
         out.footprint[i] = geometry_.intern_half_plane(
-            line_through(
+            line_through_raw(
                 geometry_.vertex(from),
                 geometry_.vertex(to)
             )

@@ -265,22 +265,36 @@ ExactLine2 line_through(
     const ExactPoint2H &from,
     const ExactPoint2H &to
 ) {
-    return normalize_line({
+    return normalize_line(line_through_raw(from, to));
+}
+
+ExactLine2 line_through_raw(
+    const ExactPoint2H &from,
+    const ExactPoint2H &to
+) {
+    return {
         from.y * to.w - from.w * to.y,
         from.w * to.x - from.x * to.w,
         from.x * to.y - from.y * to.x,
-    });
+    };
 }
 
 ExactPoint2H line_intersection(
     const ExactLine2 &lhs,
     const ExactLine2 &rhs
 ) {
-    return normalize_point({
+    return normalize_point(line_intersection_raw(lhs, rhs));
+}
+
+ExactPoint2H line_intersection_raw(
+    const ExactLine2 &lhs,
+    const ExactLine2 &rhs
+) {
+    return {
         lhs.b * rhs.c - lhs.c * rhs.b,
         lhs.c * rhs.a - lhs.a * rhs.c,
         lhs.a * rhs.b - lhs.b * rhs.a,
-    });
+    };
 }
 
 ExactLine2 opposite_half_plane(ExactLine2 line) {

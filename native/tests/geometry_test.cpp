@@ -113,8 +113,17 @@ int main() {
     const ExactLine2 vertical = line_through(vertical_a, vertical_b);
     const ExactLine2 horizontal =
         line_through(horizontal_b, horizontal_a);
+    assert(
+        normalize_line(line_through_raw(vertical_a, vertical_b)) ==
+        vertical
+    );
     const ExactPoint2H intersection =
         line_intersection(vertical, horizontal);
+    assert(
+        normalize_point(
+            line_intersection_raw(vertical, horizontal)
+        ) == intersection
+    );
     assert(intersection == make_point(one_third, two_fifths));
     assert(classify_line(vertical, intersection) == ExactSign::Zero);
     assert(

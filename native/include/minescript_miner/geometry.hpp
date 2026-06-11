@@ -52,7 +52,17 @@ ExactLine2 line_through(
     const ExactPoint2H &from,
     const ExactPoint2H &to
 );
+// Returns equivalent homogeneous coordinates without canonical reduction.
+ExactLine2 line_through_raw(
+    const ExactPoint2H &from,
+    const ExactPoint2H &to
+);
 ExactPoint2H line_intersection(
+    const ExactLine2 &lhs,
+    const ExactLine2 &rhs
+);
+// Returns equivalent homogeneous coordinates without canonical reduction.
+ExactPoint2H line_intersection_raw(
     const ExactLine2 &lhs,
     const ExactLine2 &rhs
 );

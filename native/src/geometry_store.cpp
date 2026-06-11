@@ -53,8 +53,9 @@ bool ExactGeometryStore::PointLess::operator()(
     return lhs.w < rhs.w;
 }
 
-ExactLine2 ExactGeometryStore::canonical_unoriented_line(ExactLine2 line) {
-    line = normalize_line(std::move(line));
+ExactLine2 ExactGeometryStore::canonical_unoriented_normalized_line(
+    ExactLine2 line
+) {
     if (!is_valid(line)) {
         return line;
     }
@@ -75,8 +76,7 @@ bool ExactGeometryStore::same_orientation(
            oriented.c == canonical.c;
 }
 
-LineId ExactGeometryStore::intern_line(ExactLine2 line_value) {
-    line_value = canonical_unoriented_line(std::move(line_value));
+LineId ExactGeometryStore::intern_canonical_line(ExactLine2 line_value) {
     if (!is_valid(line_value)) {
         return {};
     }
@@ -92,6 +92,13 @@ LineId ExactGeometryStore::intern_line(ExactLine2 line_value) {
     return id;
 }
 
+LineId ExactGeometryStore::intern_line(ExactLine2 line_value) {
+    line_value = normalize_line(std::move(line_value));
+    return intern_canonical_line(
+        canonical_unoriented_normalized_line(std::move(line_value))
+    );
+}
+
 HalfPlaneId ExactGeometryStore::intern_half_plane(ExactLine2 oriented_line) {
     oriented_line = normalize_line(std::move(oriented_line));
     if (!is_valid(oriented_line)) {
@@ -99,8 +106,8 @@ HalfPlaneId ExactGeometryStore::intern_half_plane(ExactLine2 oriented_line) {
     }
 
     const ExactLine2 canonical =
-        canonical_unoriented_line(oriented_line);
-    const LineId line_id = intern_line(canonical);
+        canonical_unoriented_normalized_line(oriented_line);
+    const LineId line_id = intern_canonical_line(canonical);
     const bool positive_side =
         same_orientation(oriented_line, canonical);
     const std::pair<LineId, bool> key{line_id, positive_side};
@@ -161,7 +168,7 @@ VertexId ExactGeometryStore::intersect(LineId lhs, LineId rhs) {
     VertexId result{};
     if (lhs != rhs) {
         result = intern_vertex(
-            line_intersection(line(lhs), line(rhs))
+            line_intersection_raw(line(lhs), line(rhs))
         );
     }
     intersections_.emplace(key, result);

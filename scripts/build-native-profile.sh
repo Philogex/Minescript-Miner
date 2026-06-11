@@ -5,6 +5,16 @@ cd "$(dirname "$0")/.."
 
 CXX="${CXX:-c++}"
 OUTPUT="${1:-build/profile/scan_pipeline_profile}"
+if [[ -n "${PROFILE_CXXFLAGS:-}" ]]; then
+    read -r -a PROFILE_FLAGS <<< "${PROFILE_CXXFLAGS}"
+else
+    PROFILE_FLAGS=(
+        -O0
+        -g
+        -fno-inline
+        -fno-omit-frame-pointer
+    )
+fi
 
 if [[ -n "${BOOST_INCLUDEDIR:-}" ]]; then
     BOOST_INCLUDE="${BOOST_INCLUDEDIR}"
@@ -27,10 +37,7 @@ mkdir -p "$(dirname "${OUTPUT}")"
 
 "${CXX}" \
     -std=c++17 \
-    -O0 \
-    -g \
-    -fno-inline \
-    -fno-omit-frame-pointer \
+    "${PROFILE_FLAGS[@]}" \
     -Wall \
     -Wextra \
     -Wpedantic \

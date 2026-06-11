@@ -1,5 +1,3 @@
-"""Minescript entry point for the native visibility-based miner."""
-
 from __future__ import annotations
 
 import os

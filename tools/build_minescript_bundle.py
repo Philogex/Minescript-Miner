@@ -23,6 +23,15 @@ def python_sources() -> list[Path]:
     return sorted(sources)
 
 
+def bundled_native_name(member: str) -> str:
+    path = Path(member)
+
+    if path.suffix == ".pyd":
+        return "_minescript_miner_native.pyd"
+
+    return path.name
+
+
 def native_member(wheel: Path) -> str:
     with zipfile.ZipFile(wheel) as archive:
         members = [
@@ -59,7 +68,7 @@ def build_bundle(wheel: Path, output: Path) -> None:
             shutil.copy2(source, destination)
 
         with zipfile.ZipFile(wheel) as archive:
-            native_path = bundle / Path(member).name
+            native_path = bundle / bundled_native_name(member)
             native_path.write_bytes(archive.read(member))
 
         output.parent.mkdir(parents=True, exist_ok=True)

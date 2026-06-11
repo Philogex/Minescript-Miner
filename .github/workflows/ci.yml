@@ -46,7 +46,10 @@ jobs:
 
   linux-wheel:
     name: Build manylinux wheel
-    needs: test
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - test
+      - performance
     runs-on: ubuntu-24.04
 
     steps:
@@ -62,31 +65,38 @@ jobs:
       - name: Install cibuildwheel
         run: python -m pip install --upgrade pip cibuildwheel
 
+      - name: Prepare release tag
+        id: release
+        run: echo "tag=$(python tools/release_tag.py "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
+
       - name: Build wheel
         run: python -m cibuildwheel --platform linux --output-dir wheelhouse
 
       - name: Build Minescript bundle
-        run: python tools/build_minescript_bundle.py wheelhouse/*.whl dist/minescript-miner-linux.zip
+        run: python tools/build_minescript_bundle.py wheelhouse/*.whl "dist/minescript-miner-linux-${{ steps.release.outputs.tag }}.zip"
 
       - name: Verify Minescript bundle
         run: |
           rm -rf build/bundle-check
-          python -m zipfile -e dist/minescript-miner-linux.zip build/bundle-check
+          python -m zipfile -e "dist/minescript-miner-linux-${{ steps.release.outputs.tag }}.zip" build/bundle-check
           MINESCRIPT_MINER_NATIVE_LOG=build/bundle-check/native.log \
             python -I -c "import sys; sys.path[:0] = ['build/bundle-check/Minescript-Miner', 'build/bundle-check/Minescript-Miner/src']; import _minescript_miner_native as native; import minescript_miner; assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert minescript_miner.geometry_catalog_debug()['version'] == 1; assert minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, 4.8, [0] * 27, []) is None"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: minescript-miner-linux
+          name: minescript-miner-linux-${{ steps.release.outputs.tag }}
           path: |
             wheelhouse/*.whl
-            dist/minescript-miner-linux.zip
+            dist/minescript-miner-linux-${{ steps.release.outputs.tag }}.zip
           if-no-files-found: error
 
   windows-wheel:
     name: Build Windows wheel
-    needs: test
+    if: startsWith(github.ref, 'refs/tags/')
+    needs:
+      - test
+      - performance
     runs-on: windows-2022
 
     steps:
@@ -108,6 +118,13 @@ jobs:
       - name: Install cibuildwheel
         run: python -m pip install --upgrade pip cibuildwheel
 
+      - name: Prepare release tag
+        id: release
+        shell: pwsh
+        run: |
+          $tag = python tools/release_tag.py $env:GITHUB_REF_NAME
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+
       - name: Build wheel
         run: python -m cibuildwheel --platform windows --output-dir wheelhouse
 
@@ -115,21 +132,59 @@ jobs:
         shell: pwsh
         run: |
           $wheel = Get-ChildItem wheelhouse/*.whl | Select-Object -First 1
-          python tools/build_minescript_bundle.py $wheel.FullName dist/minescript-miner-windows.zip
+          python tools/build_minescript_bundle.py $wheel.FullName "dist/minescript-miner-windows-${{ steps.release.outputs.tag }}.zip"
 
       - name: Verify Minescript bundle
         shell: pwsh
         run: |
           Remove-Item -Recurse -Force build/bundle-check -ErrorAction SilentlyContinue
-          python -m zipfile -e dist/minescript-miner-windows.zip build/bundle-check
+          python -m zipfile -e "dist/minescript-miner-windows-${{ steps.release.outputs.tag }}.zip" build/bundle-check
           $env:MINESCRIPT_MINER_NATIVE_LOG = "build/bundle-check/native.log"
           python -I -c "import sys; sys.path[:0] = ['build/bundle-check/Minescript-Miner', 'build/bundle-check/Minescript-Miner/src']; import _minescript_miner_native as native; import minescript_miner; assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert minescript_miner.geometry_catalog_debug()['version'] == 1; assert minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, 4.8, [0] * 27, []) is None"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: minescript-miner-windows
+          name: minescript-miner-windows-${{ steps.release.outputs.tag }}
           path: |
             wheelhouse/*.whl
-            dist/minescript-miner-windows.zip
+            dist/minescript-miner-windows-${{ steps.release.outputs.tag }}.zip
+          if-no-files-found: error
+
+  performance:
+    name: Record performance metadata
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: test
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install profiling dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes g++ libboost-dev valgrind
+
+      - name: Prepare release tag
+        id: release
+        run: echo "tag=$(python tools/release_tag.py "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
+
+      - name: Run Callgrind benchmark
+        run: scripts/run-performance-report.sh "${{ steps.release.outputs.tag }}" build/profile/report
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: minescript-miner-performance-${{ steps.release.outputs.tag }}
+          path: |
+            build/profile/report/performance-report.json
+            build/profile/report/benchmark-output.txt
+            build/profile/report/callgrind-annotate.txt
+            build/profile/report/callgrind.out
           if-no-files-found: error

@@ -12,6 +12,10 @@
 #include <string>
 #include <vector>
 
+#ifdef MINESCRIPT_MINER_CALLGRIND
+#include <valgrind/callgrind.h>
+#endif
+
 namespace {
 
 struct ScanInput {
@@ -117,6 +121,10 @@ int main(int argc, char **argv) {
         std::size_t last_target_faces = 0;
         double checksum = 0.0;
 
+#ifdef MINESCRIPT_MINER_CALLGRIND
+        CALLGRIND_START_INSTRUMENTATION;
+        CALLGRIND_ZERO_STATS;
+#endif
         for (std::size_t iteration = 0; iteration < iterations; ++iteration) {
             const ScanRegionGeometry geometry = build_scan_region_geometry(
                 input.shape_ids,
@@ -141,6 +149,9 @@ int main(int argc, char **argv) {
                     last_result.direction.y + last_result.direction.z
                 : -1.0;
         }
+#ifdef MINESCRIPT_MINER_CALLGRIND
+        CALLGRIND_STOP_INSTRUMENTATION;
+#endif
 
         if (!std::isfinite(checksum)) {
             throw std::runtime_error("non-finite profiling checksum");

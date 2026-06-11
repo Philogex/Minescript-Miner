@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 
 CXX="${CXX:-c++}"
 OUTPUT="${1:-build/profile/scan_pipeline_profile}"
+read -r -a PROFILE_PREPROCESSOR_FLAGS <<< "${PROFILE_CPPFLAGS:-}"
 if [[ -n "${PROFILE_CXXFLAGS:-}" ]]; then
     read -r -a PROFILE_FLAGS <<< "${PROFILE_CXXFLAGS}"
 else
@@ -37,6 +38,7 @@ mkdir -p "$(dirname "${OUTPUT}")"
 
 "${CXX}" \
     -std=c++17 \
+    "${PROFILE_PREPROCESSOR_FLAGS[@]}" \
     "${PROFILE_FLAGS[@]}" \
     -Wall \
     -Wextra \

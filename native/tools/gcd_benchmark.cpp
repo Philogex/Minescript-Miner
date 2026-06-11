@@ -233,7 +233,7 @@ int main(int argc, char **argv) {
 
         for (const auto &sample : samples) {
             if (
-                gcd_benchmark::current_integer_gcd(
+                gcd_benchmark::legacy_integer_gcd(
                     sample.lhs,
                     sample.rhs
                 ) != boost_integer_gcd(sample.lhs, sample.rhs)
@@ -242,14 +242,14 @@ int main(int argc, char **argv) {
             }
         }
 
-        (void) run_once(samples, gcd_benchmark::current_integer_gcd);
+        (void) run_once(samples, gcd_benchmark::legacy_integer_gcd);
         (void) run_once(samples, boost_integer_gcd);
 
-        std::vector<double> current_durations;
+        std::vector<double> legacy_durations;
         std::vector<double> boost_durations;
-        current_durations.reserve(rounds);
+        legacy_durations.reserve(rounds);
         boost_durations.reserve(rounds);
-        std::uint64_t current_checksum = 0;
+        std::uint64_t legacy_checksum = 0;
         std::uint64_t boost_checksum = 0;
         for (std::size_t round = 0; round < rounds; ++round) {
             const bool boost_first = (round & 1U) != 0;
@@ -257,32 +257,32 @@ int main(int argc, char **argv) {
                 samples,
                 boost_first
                     ? boost_integer_gcd
-                    : gcd_benchmark::current_integer_gcd,
+                    : gcd_benchmark::legacy_integer_gcd,
                 1
             );
             const TimingResult second = benchmark(
                 samples,
                 boost_first
-                    ? gcd_benchmark::current_integer_gcd
+                    ? gcd_benchmark::legacy_integer_gcd
                     : boost_integer_gcd,
                 1
             );
             if (boost_first) {
                 boost_durations.push_back(first.median_seconds);
-                current_durations.push_back(second.median_seconds);
+                legacy_durations.push_back(second.median_seconds);
                 boost_checksum ^= first.checksum;
-                current_checksum ^= second.checksum;
+                legacy_checksum ^= second.checksum;
             } else {
-                current_durations.push_back(first.median_seconds);
+                legacy_durations.push_back(first.median_seconds);
                 boost_durations.push_back(second.median_seconds);
-                current_checksum ^= first.checksum;
+                legacy_checksum ^= first.checksum;
                 boost_checksum ^= second.checksum;
             }
         }
-        std::sort(current_durations.begin(), current_durations.end());
+        std::sort(legacy_durations.begin(), legacy_durations.end());
         std::sort(boost_durations.begin(), boost_durations.end());
-        const double current_seconds =
-            current_durations[current_durations.size() / 2];
+        const double legacy_seconds =
+            legacy_durations[legacy_durations.size() / 2];
         const double boost_seconds =
             boost_durations[boost_durations.size() / 2];
 
@@ -296,17 +296,17 @@ int main(int argc, char **argv) {
                   << '\n';
         print_operand_statistics(samples);
         std::cout
-            << "current_seconds=" << current_seconds
-            << " current_ns_per_gcd="
-            << current_seconds * 1e9 / samples.size()
-            << " current_checksum=" << current_checksum
+            << "legacy_seconds=" << legacy_seconds
+            << " legacy_ns_per_gcd="
+            << legacy_seconds * 1e9 / samples.size()
+            << " legacy_checksum=" << legacy_checksum
             << '\n'
             << "boost_seconds=" << boost_seconds
             << " boost_ns_per_gcd="
             << boost_seconds * 1e9 / samples.size()
             << " boost_checksum=" << boost_checksum
             << '\n'
-            << "boost_speedup=" << current_seconds / boost_seconds
+            << "boost_speedup=" << legacy_seconds / boost_seconds
             << '\n';
     } catch (const std::exception &error) {
         gcd_benchmark::stop_collection();

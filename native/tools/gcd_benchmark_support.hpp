@@ -61,6 +61,6 @@ inline void record_operands(const ExactInt &lhs, const ExactInt &rhs) {
     }
 }
 
-ExactInt current_integer_gcd(ExactInt lhs, ExactInt rhs);
+ExactInt legacy_integer_gcd(ExactInt lhs, ExactInt rhs);
 
 }  // namespace minescript_miner::gcd_benchmark

@@ -1,5 +1,9 @@
 #include "minescript_miner/geometry.hpp"
 
+#ifdef MINESCRIPT_MINER_GCD_BENCHMARK
+#include "gcd_benchmark_support.hpp"
+#endif
+
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -15,7 +19,7 @@ ExactInt integer_abs(ExactInt value) {
     return value < 0 ? -value : value;
 }
 
-ExactInt integer_gcd(ExactInt lhs, ExactInt rhs) {
+ExactInt integer_gcd_impl(ExactInt lhs, ExactInt rhs) {
     lhs = integer_abs(std::move(lhs));
     rhs = integer_abs(std::move(rhs));
     while (rhs != 0) {
@@ -24,6 +28,13 @@ ExactInt integer_gcd(ExactInt lhs, ExactInt rhs) {
         rhs = std::move(remainder);
     }
     return lhs;
+}
+
+ExactInt integer_gcd(ExactInt lhs, ExactInt rhs) {
+#ifdef MINESCRIPT_MINER_GCD_BENCHMARK
+    gcd_benchmark::record_operands(lhs, rhs);
+#endif
+    return integer_gcd_impl(std::move(lhs), std::move(rhs));
 }
 
 ExactInt common_divisor(
@@ -85,6 +96,15 @@ double double_from_bits(std::uint64_t bits) {
 }
 
 }  // namespace
+
+#ifdef MINESCRIPT_MINER_GCD_BENCHMARK
+ExactInt gcd_benchmark::current_integer_gcd(
+    ExactInt lhs,
+    ExactInt rhs
+) {
+    return integer_gcd_impl(std::move(lhs), std::move(rhs));
+}
+#endif
 
 ExactRational rational_from_double(double value) {
     static_assert(

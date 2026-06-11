@@ -27,7 +27,10 @@ mkdir -p "$(dirname "${OUTPUT}")"
 
 "${CXX}" \
     -std=c++17 \
-    -O2 \
+    -O0 \
+    -g \
+    -fno-inline \
+    -fno-omit-frame-pointer \
     -Wall \
     -Wextra \
     -Wpedantic \

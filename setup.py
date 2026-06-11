@@ -22,6 +22,12 @@ native_sources = [
     native_source_dir / "visibility.cpp",
 ]
 
+native_compile_args = (
+    ["/std:c++17", "/EHsc"]
+    if os.name == "nt"
+    else ["-std=c++17"]
+)
+
 
 native_extension = Extension(
     "_minescript_miner_native",
@@ -36,6 +42,7 @@ native_extension = Extension(
     ],
     language="c++",
     define_macros=[("Py_LIMITED_API", "0x03090000")],
+    extra_compile_args=native_compile_args,
     py_limited_api=True,
 )
 

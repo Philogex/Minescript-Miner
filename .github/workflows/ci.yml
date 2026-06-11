@@ -44,7 +44,7 @@ jobs:
       - name: Build package and run tests
         run: scripts/run-tests.sh
 
-  wheel:
+  linux-wheel:
     name: Build manylinux wheel
     needs: test
     runs-on: ubuntu-24.04
@@ -65,9 +65,71 @@ jobs:
       - name: Build wheel
         run: python -m cibuildwheel --platform linux --output-dir wheelhouse
 
-      - name: Upload wheel
+      - name: Build Minescript bundle
+        run: python tools/build_minescript_bundle.py wheelhouse/*.whl dist/minescript-miner-linux.zip
+
+      - name: Verify Minescript bundle
+        run: |
+          rm -rf build/bundle-check
+          python -m zipfile -e dist/minescript-miner-linux.zip build/bundle-check
+          MINESCRIPT_MINER_NATIVE_LOG=build/bundle-check/native.log \
+            python -I -c "import sys; sys.path[:0] = ['build/bundle-check/Minescript-Miner', 'build/bundle-check/Minescript-Miner/src']; import _minescript_miner_native as native; import minescript_miner; assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert minescript_miner.geometry_catalog_debug()['version'] == 1; assert minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, 4.8, [0] * 27, []) is None"
+
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: minescript-miner-linux-wheel
-          path: wheelhouse/*.whl
+          name: minescript-miner-linux
+          path: |
+            wheelhouse/*.whl
+            dist/minescript-miner-linux.zip
+          if-no-files-found: error
+
+  windows-wheel:
+    name: Build Windows wheel
+    needs: test
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Boost headers
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install boost-integer:x64-windows boost-multiprecision:x64-windows boost-rational:x64-windows
+          "BOOST_INCLUDEDIR=$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\include" >> $env:GITHUB_ENV
+
+      - name: Install cibuildwheel
+        run: python -m pip install --upgrade pip cibuildwheel
+
+      - name: Build wheel
+        run: python -m cibuildwheel --platform windows --output-dir wheelhouse
+
+      - name: Build Minescript bundle
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem wheelhouse/*.whl | Select-Object -First 1
+          python tools/build_minescript_bundle.py $wheel.FullName dist/minescript-miner-windows.zip
+
+      - name: Verify Minescript bundle
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force build/bundle-check -ErrorAction SilentlyContinue
+          python -m zipfile -e dist/minescript-miner-windows.zip build/bundle-check
+          $env:MINESCRIPT_MINER_NATIVE_LOG = "build/bundle-check/native.log"
+          python -I -c "import sys; sys.path[:0] = ['build/bundle-check/Minescript-Miner', 'build/bundle-check/Minescript-Miner/src']; import _minescript_miner_native as native; import minescript_miner; assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert minescript_miner.geometry_catalog_debug()['version'] == 1; assert minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, 4.8, [0] * 27, []) is None"
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: minescript-miner-windows
+          path: |
+            wheelhouse/*.whl
+            dist/minescript-miner-windows.zip
           if-no-files-found: error

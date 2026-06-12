@@ -12,14 +12,7 @@ BUNDLE_NAME = "Minescript-Miner"
 
 
 def python_sources() -> list[Path]:
-    sources = [
-        path
-        for root in (
-            PROJECT_ROOT / "src/minescript_miner",
-            PROJECT_ROOT / "aim",
-        )
-        for path in root.rglob("*.py")
-    ]
+    sources = list((PROJECT_ROOT / "src/minescript_miner").rglob("*.py"))
     return sorted(sources)
 
 

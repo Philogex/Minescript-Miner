@@ -16,15 +16,6 @@ def python_sources() -> list[Path]:
     return sorted(sources)
 
 
-def bundled_native_name(member: str) -> str:
-    path = Path(member)
-
-    if path.suffix == ".pyd":
-        return "_minescript_miner_native.pyd"
-
-    return path.name
-
-
 def native_member(wheel: Path) -> str:
     with zipfile.ZipFile(wheel) as archive:
         members = [
@@ -42,10 +33,23 @@ def native_member(wheel: Path) -> str:
     return members[0]
 
 
+def native_runtime_members(wheel: Path) -> list[str]:
+    with zipfile.ZipFile(wheel) as archive:
+        return sorted(
+            name
+            for name in archive.namelist()
+            if not name.endswith("/")
+            and Path(name).suffix.lower() == ".dll"
+        )
+
+
 def build_bundle(wheel: Path, output: Path) -> None:
     wheel = wheel.resolve(strict=True)
     output = output.resolve()
-    member = native_member(wheel)
+    native_members = [
+        native_member(wheel),
+        *native_runtime_members(wheel),
+    ]
 
     with tempfile.TemporaryDirectory(prefix="minescript-miner-bundle-") as temp_dir:
         bundle = Path(temp_dir) / BUNDLE_NAME
@@ -61,8 +65,15 @@ def build_bundle(wheel: Path, output: Path) -> None:
             shutil.copy2(source, destination)
 
         with zipfile.ZipFile(wheel) as archive:
-            native_path = bundle / bundled_native_name(member)
-            native_path.write_bytes(archive.read(member))
+            destinations: set[str] = set()
+            for member in native_members:
+                native_name = Path(member).name
+                if native_name in destinations:
+                    raise ValueError(
+                        f"Multiple native wheel members map to {native_name}."
+                    )
+                destinations.add(native_name)
+                (bundle / native_name).write_bytes(archive.read(member))
 
         output.parent.mkdir(parents=True, exist_ok=True)
         output.unlink(missing_ok=True)

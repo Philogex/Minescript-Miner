@@ -1,17 +1,56 @@
 import sys
 import types
 import unittest
+from contextlib import nullcontext
 
 
 sys.modules.setdefault(
     "minescript",
-    types.SimpleNamespace(await_loaded_region=lambda *_args: None),
+    types.SimpleNamespace(
+        await_loaded_region=lambda *_args: None,
+        script_loop=nullcontext(),
+    ),
 )
 
 from minescript_miner.minescript import world
 
 
 class PrunedCubeBlocksTest(unittest.TestCase):
+    def test_read_block_region_uses_script_loop(self):
+        calls = []
+        original_get_block_region = getattr(world.m, "get_block_region", None)
+        original_script_loop = getattr(world.m, "script_loop", None)
+
+        class ScriptLoop:
+            def __enter__(self):
+                calls.append("enter")
+
+            def __exit__(self, _exc_type, _exc_value, _traceback):
+                calls.append("exit")
+
+        try:
+            world.m.script_loop = ScriptLoop()
+            world.m.get_block_region = lambda pos1, pos2: calls.append(
+                (pos1, pos2)
+            ) or "region"
+
+            region = world.read_block_region((1, 2, 3), (4, 5, 6))
+        finally:
+            if original_get_block_region is None:
+                del world.m.get_block_region
+            else:
+                world.m.get_block_region = original_get_block_region
+            if original_script_loop is None:
+                del world.m.script_loop
+            else:
+                world.m.script_loop = original_script_loop
+
+        self.assertEqual("region", region)
+        self.assertEqual(
+            ["enter", ((1, 2, 3), (4, 5, 6)), "exit"],
+            calls,
+        )
+
     def test_get_area_preserves_cube_shape_and_fills_air(self):
         calls = []
         original_positions_within_reach = world.positions_within_reach
@@ -68,6 +107,7 @@ class PrunedCubeBlocksTest(unittest.TestCase):
     def test_get_area_records_pipeline_timings(self):
         original_get_block_region = getattr(world.m, "get_block_region", None)
         original_await_loaded_region = world.m.await_loaded_region
+        original_script_loop = world.m.script_loop
 
         class Region:
             min_pos = (0, 0, 0)
@@ -78,6 +118,7 @@ class PrunedCubeBlocksTest(unittest.TestCase):
 
         try:
             world.m.await_loaded_region = lambda *_args: None
+            world.m.script_loop = nullcontext()
             world.m.get_block_region = lambda *_args: Region()
             timings = world.AreaTimings()
             area = world.get_area(
@@ -87,6 +128,7 @@ class PrunedCubeBlocksTest(unittest.TestCase):
             )
         finally:
             world.m.await_loaded_region = original_await_loaded_region
+            world.m.script_loop = original_script_loop
             if original_get_block_region is None:
                 del world.m.get_block_region
             else:

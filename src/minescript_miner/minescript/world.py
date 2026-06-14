@@ -25,6 +25,11 @@ def elapsed_ms(start_ns: int) -> float:
     return (time.perf_counter_ns() - start_ns) / 1_000_000.0
 
 
+def read_block_region(pos1: BlockPos, pos2: BlockPos):
+    with m.script_loop:
+        return m.get_block_region(pos1, pos2)
+
+
 def fixed_cube_bounds(
     position: Tuple[float, float, float],
     reach: float = 4.8,
@@ -55,7 +60,7 @@ def read_region_blocks(
     if await_region:
         m.await_loaded_region(min_pos[0], min_pos[2], max_pos[0], max_pos[2])
 
-    region = m.get_block_region(min_pos, max_pos)
+    region = read_block_region(min_pos, max_pos)
     return region.min_pos, region.max_pos, tuple(region.blocks)
 
 
@@ -134,7 +139,7 @@ def read_blocks_region_prune(
 
     pos1, pos2 = bounds_for_positions(positions)
     read_start = time.perf_counter_ns() if timings is not None else 0
-    region = m.get_block_region(pos1, pos2)
+    region = read_block_region(pos1, pos2)
     if timings is not None:
         timings.region_read_ms = elapsed_ms(read_start)
 

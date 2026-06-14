@@ -44,11 +44,39 @@ jobs:
       - name: Build package and run tests
         run: scripts/run-tests.sh
 
+  windows-build-test:
+    name: Test Windows native build
+    runs-on: windows-2022
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pip build
+
+      - name: Build wheel
+        run: python -m build --wheel --outdir wheelhouse
+
+      - name: Verify native extension
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem wheelhouse/*.whl | Select-Object -First 1
+          python -m pip install --no-deps --target build/wheel-check $wheel.FullName
+          python -I -c "import sys; sys.path.insert(0, 'build/wheel-check'); import _minescript_miner_native as native; assert native.hello() == 'hello from native extension'; assert native.geometry_catalog_debug()['version'] == 1"
+
   linux-wheel:
     name: Build manylinux wheel
     if: startsWith(github.ref, 'refs/tags/')
     needs:
       - test
+      - windows-build-test
       - performance
     runs-on: ubuntu-24.04
 
@@ -96,6 +124,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     needs:
       - test
+      - windows-build-test
       - performance
     runs-on: windows-2022
 

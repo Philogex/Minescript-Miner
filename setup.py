@@ -23,7 +23,7 @@ native_sources = [
 ]
 
 native_compile_args = (
-    ["/std:c++17", "/EHsc"]
+    ["/std:c++17", "/EHsc", "/bigobj"]
     if os.name == "nt"
     else ["-std=c++17"]
 )

@@ -1,4 +1,6 @@
 import math
+import time
+from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import minescript as m
@@ -7,6 +9,20 @@ import minescript as m
 BlockPos = Tuple[int, int, int]
 BlockSample = Tuple[BlockPos, Optional[str]]
 AIR_BLOCK = "minecraft:air"
+
+
+@dataclass
+class AreaTimings:
+    await_region_ms: float = 0.0
+    prune_positions_ms: float = 0.0
+    region_read_ms: float = 0.0
+    region_extract_ms: float = 0.0
+    cube_rebuild_ms: float = 0.0
+    total_ms: float = 0.0
+
+
+def elapsed_ms(start_ns: int) -> float:
+    return (time.perf_counter_ns() - start_ns) / 1_000_000.0
 
 
 def fixed_cube_bounds(
@@ -108,22 +124,34 @@ def bounds_for_positions(positions: List[List[int]]) -> Tuple[BlockPos, BlockPos
     return (min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs))
 
 
-def read_blocks_region_prune(positions: List[List[int]]) -> List[Optional[str]]:
+def read_blocks_region_prune(
+    positions: List[List[int]],
+    *,
+    timings: Optional[AreaTimings] = None,
+) -> List[Optional[str]]:
     if not positions:
         return []
 
     pos1, pos2 = bounds_for_positions(positions)
+    read_start = time.perf_counter_ns() if timings is not None else 0
     region = m.get_block_region(pos1, pos2)
+    if timings is not None:
+        timings.region_read_ms = elapsed_ms(read_start)
+
+    extract_start = time.perf_counter_ns() if timings is not None else 0
     min_x, min_y, min_z = region.min_pos
     x_length = region.x_length
     z_length = region.z_length
     plane_length = x_length * z_length
     blocks = region.blocks
 
-    return [
+    selected_blocks = [
         blocks[(x - min_x) + (z - min_z) * x_length + (y - min_y) * plane_length]
         for x, y, z in positions
     ]
+    if timings is not None:
+        timings.region_extract_ms = elapsed_ms(extract_start)
+    return selected_blocks
 
 
 def get_area(
@@ -132,19 +160,36 @@ def get_area(
     pitch_range: Tuple[float, float] = (-90.0, 90.0),
     *,
     await_region: bool = True,
+    timings: Optional[AreaTimings] = None,
 ) -> List[BlockSample]:
+    total_start = time.perf_counter_ns() if timings is not None else 0
     min_pos, max_pos = fixed_cube_bounds(position, reach)
     if await_region:
+        await_start = time.perf_counter_ns() if timings is not None else 0
         m.await_loaded_region(min_pos[0], min_pos[2], max_pos[0], max_pos[2])
+        if timings is not None:
+            timings.await_region_ms = elapsed_ms(await_start)
 
+    prune_start = time.perf_counter_ns() if timings is not None else 0
     positions = positions_within_reach(position, reach, pitch_range)
-    block_strings = read_blocks_region_prune(positions)
+    if timings is not None:
+        timings.prune_positions_ms = elapsed_ms(prune_start)
+
+    if timings is None:
+        block_strings = read_blocks_region_prune(positions)
+    else:
+        block_strings = read_blocks_region_prune(positions, timings=timings)
+    rebuild_start = time.perf_counter_ns() if timings is not None else 0
     reachable_blocks = {
         (pos[0], pos[1], pos[2]): (block_string or AIR_BLOCK)
         for pos, block_string in zip(positions, block_strings)
     }
 
-    return [
+    area = [
         (pos, reachable_blocks.get(pos, AIR_BLOCK))
         for pos in cube_positions(min_pos, max_pos)
     ]
+    if timings is not None:
+        timings.cube_rebuild_ms = elapsed_ms(rebuild_start)
+        timings.total_ms = elapsed_ms(total_start)
+    return area

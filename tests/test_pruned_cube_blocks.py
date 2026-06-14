@@ -65,6 +65,41 @@ class PrunedCubeBlocksTest(unittest.TestCase):
         self.assertIn((2, 0, 0), positions)
         self.assertNotIn((-2, 0, 0), positions)
 
+    def test_get_area_records_pipeline_timings(self):
+        original_get_block_region = getattr(world.m, "get_block_region", None)
+        original_await_loaded_region = world.m.await_loaded_region
+
+        class Region:
+            min_pos = (0, 0, 0)
+            max_pos = (0, 0, 0)
+            x_length = 1
+            z_length = 1
+            blocks = ["minecraft:stone"]
+
+        try:
+            world.m.await_loaded_region = lambda *_args: None
+            world.m.get_block_region = lambda *_args: Region()
+            timings = world.AreaTimings()
+            area = world.get_area(
+                (0.5, 0.5, 0.5),
+                reach=0.1,
+                timings=timings,
+            )
+        finally:
+            world.m.await_loaded_region = original_await_loaded_region
+            if original_get_block_region is None:
+                del world.m.get_block_region
+            else:
+                world.m.get_block_region = original_get_block_region
+
+        self.assertEqual(27, len(area))
+        self.assertGreaterEqual(timings.await_region_ms, 0.0)
+        self.assertGreaterEqual(timings.prune_positions_ms, 0.0)
+        self.assertGreaterEqual(timings.region_read_ms, 0.0)
+        self.assertGreaterEqual(timings.region_extract_ms, 0.0)
+        self.assertGreaterEqual(timings.cube_rebuild_ms, 0.0)
+        self.assertGreaterEqual(timings.total_ms, timings.region_read_ms)
+
 
 if __name__ == "__main__":
     unittest.main()

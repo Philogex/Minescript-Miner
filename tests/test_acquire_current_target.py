@@ -135,6 +135,53 @@ class AcquireCurrentTargetTest(unittest.TestCase):
         self.assertIsNone(result)
         self.assertFalse(native_called)
 
+    def test_acquire_current_target_records_python_and_native_timings(self):
+        original_get_area = io.get_area
+        original_acquire_target = io.acquire_target
+
+        def fake_get_area(
+            position,
+            reach,
+            *,
+            await_region=True,
+            timings=None,
+        ):
+            if timings is not None:
+                timings.total_ms = 1.0
+            return [
+                ((index, 0, 0), "minecraft:stone")
+                for index in range(27)
+            ]
+
+        def fake_acquire_target(*_args):
+            return 0.0, 0.0
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_config = Path(temp_dir) / "targets.txt"
+            target_config.write_text("minecraft:stone\n", encoding="utf-8")
+            timings = io.ScanTimings()
+            try:
+                io.get_area = fake_get_area
+                io.acquire_target = fake_acquire_target
+                result = io.acquire_current_target(
+                    (0.5, 0.5, 0.5),
+                    (90.0, 10.0),
+                    reach=0.5,
+                    target_config=target_config,
+                    timings=timings,
+                )
+            finally:
+                io.get_area = original_get_area
+                io.acquire_target = original_acquire_target
+
+        self.assertEqual((0.0, 0.0), result)
+        self.assertEqual(1.0, timings.area.total_ms)
+        self.assertGreaterEqual(timings.target_config_ms, 0.0)
+        self.assertGreaterEqual(timings.target_match_ms, 0.0)
+        self.assertGreaterEqual(timings.shape_encode_ms, 0.0)
+        self.assertGreaterEqual(timings.native_call_ms, 0.0)
+        self.assertGreaterEqual(timings.total_ms, timings.native_call_ms)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,7 +9,7 @@ description = "Visibility scanning helpers for Minescript."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
-license-files = ["LICENSE"]
+license-files = ["LICENSE", "third_party/boost/LICENSE_1_0.txt"]
 
 [tool.cibuildwheel]
 build = "cp39-*"
@@ -19,7 +19,6 @@ test-command = "python -c \"import _minescript_miner_native as native; import mi
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]
 manylinux-x86_64-image = "manylinux_2_28"
-before-build = "yum install -y boost-devel"
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]

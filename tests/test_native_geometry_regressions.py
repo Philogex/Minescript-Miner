@@ -5,16 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
-def boost_include_dir():
-    configured = os.environ.get("BOOST_INCLUDEDIR")
-    candidates = [configured, "/usr/local/include", "/usr/include"]
-    for candidate in candidates:
-        if candidate and (
-            Path(candidate) / "boost/multiprecision/cpp_int.hpp"
-        ).is_file():
-            return Path(candidate)
-    return None
+from tests.native_build_support import BOOST_INCLUDE
 
 
 class NativeGeometryRegressionTest(unittest.TestCase):
@@ -23,12 +14,6 @@ class NativeGeometryRegressionTest(unittest.TestCase):
         compiler = shutil.which(os.environ.get("CXX", "c++"))
         if compiler is None:
             raise unittest.SkipTest("No C++ compiler available")
-        boost_include = boost_include_dir()
-        if boost_include is None:
-            raise unittest.SkipTest(
-                "Boost headers unavailable; install boost-devel or set BOOST_INCLUDEDIR"
-            )
-
         cls.project_root = Path(__file__).resolve().parents[1]
         cls.temp_dir = tempfile.TemporaryDirectory(
             prefix="minescript-geometry-regression-test-"
@@ -45,7 +30,7 @@ class NativeGeometryRegressionTest(unittest.TestCase):
                 "-I",
                 str(cls.project_root / "native/include"),
                 "-I",
-                str(boost_include),
+                str(BOOST_INCLUDE),
                 str(
                     cls.project_root
                     / "native/tests/geometry_regression_test.cpp"

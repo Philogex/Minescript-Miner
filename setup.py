@@ -34,11 +34,7 @@ native_extension = Extension(
     sources=[str(path) for path in native_sources],
     include_dirs=[
         "native/include",
-        *(
-            [os.environ["BOOST_INCLUDEDIR"]]
-            if os.environ.get("BOOST_INCLUDEDIR")
-            else []
-        ),
+        "third_party/boost",
     ],
     language="c++",
     define_macros=[("Py_LIMITED_API", "0x03090000")],

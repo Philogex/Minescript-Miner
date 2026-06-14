@@ -29,6 +29,13 @@ class BuildMinescriptBundleTest(unittest.TestCase):
 
             with zipfile.ZipFile(output) as archive:
                 self.assertEqual(
+                    (
+                        Path(__file__).resolve().parents[1]
+                        / "third_party/boost/LICENSE_1_0.txt"
+                    ).read_bytes(),
+                    archive.read("Minescript-Miner/BOOST_LICENSE_1_0.txt"),
+                )
+                self.assertEqual(
                     b"native extension",
                     archive.read(
                         "Minescript-Miner/_minescript_miner_native.pyd"

@@ -1,0 +1,3 @@
+recursive-include native/include *.hpp
+include tests/native_build_support.py
+recursive-include third_party/boost *.h *.hpp *.md *.txt VERSION

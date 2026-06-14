@@ -17,20 +17,9 @@ else
     )
 fi
 
-if [[ -n "${BOOST_INCLUDEDIR:-}" ]]; then
-    BOOST_INCLUDE="${BOOST_INCLUDEDIR}"
-else
-    BOOST_INCLUDE=""
-    for candidate in /usr/local/include /usr/include; do
-        if [[ -f "${candidate}/boost/multiprecision/cpp_int.hpp" ]]; then
-            BOOST_INCLUDE="${candidate}"
-            break
-        fi
-    done
-fi
-
-if [[ -z "${BOOST_INCLUDE}" ]]; then
-    echo "Boost headers not found; set BOOST_INCLUDEDIR." >&2
+BOOST_INCLUDE="$(pwd)/third_party/boost"
+if [[ ! -f "${BOOST_INCLUDE}/boost/multiprecision/cpp_int.hpp" ]]; then
+    echo "Vendored Boost headers not found at ${BOOST_INCLUDE}." >&2
     exit 1
 fi
 

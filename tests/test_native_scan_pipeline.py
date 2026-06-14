@@ -5,16 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
-def boost_include_dir():
-    configured = os.environ.get("BOOST_INCLUDEDIR")
-    candidates = [configured, "/usr/local/include", "/usr/include"]
-    for candidate in candidates:
-        if candidate and (
-            Path(candidate) / "boost/multiprecision/cpp_int.hpp"
-        ).is_file():
-            return Path(candidate)
-    return None
+from tests.native_build_support import BOOST_INCLUDE
 
 
 class NativeScanPipelineTest(unittest.TestCase):
@@ -22,12 +13,6 @@ class NativeScanPipelineTest(unittest.TestCase):
         compiler = shutil.which(os.environ.get("CXX", "c++"))
         if compiler is None:
             self.skipTest("No C++ compiler available")
-        boost_include = boost_include_dir()
-        if boost_include is None:
-            self.skipTest(
-                "Boost headers unavailable; install boost-devel or set BOOST_INCLUDEDIR"
-            )
-
         project_root = Path(__file__).resolve().parents[1]
         fixtures = sorted((project_root / "native/tests/fixtures").glob("*.scan"))
         self.assertTrue(fixtures)
@@ -46,7 +31,7 @@ class NativeScanPipelineTest(unittest.TestCase):
                     "-I",
                     str(project_root / "native/tests"),
                     "-I",
-                    str(boost_include),
+                    str(BOOST_INCLUDE),
                     str(project_root / "native/tests/scan_pipeline_test.cpp"),
                     str(project_root / "native/tests/scan_fixture.cpp"),
                     str(project_root / "native/src/angle.cpp"),

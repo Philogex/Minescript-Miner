@@ -18,20 +18,9 @@ if ! command -v callgrind_annotate >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ -n "${BOOST_INCLUDEDIR:-}" ]]; then
-    BOOST_INCLUDE="${BOOST_INCLUDEDIR}"
-else
-    BOOST_INCLUDE=""
-    for candidate in /usr/local/include /usr/include; do
-        if [[ -f "${candidate}/boost/version.hpp" ]]; then
-            BOOST_INCLUDE="${candidate}"
-            break
-        fi
-    done
-fi
-
-if [[ -z "${BOOST_INCLUDE}" ]]; then
-    echo "Boost headers not found; install Boost or set BOOST_INCLUDEDIR." >&2
+BOOST_INCLUDE="$(pwd)/third_party/boost"
+if [[ ! -f "${BOOST_INCLUDE}/boost/version.hpp" ]]; then
+    echo "Vendored Boost headers not found at ${BOOST_INCLUDE}." >&2
     exit 1
 fi
 
@@ -59,7 +48,6 @@ ANNOTATE_OUTPUT="${OUTPUT_DIR}/callgrind-annotate.txt"
 RUN_OUTPUT="${OUTPUT_DIR}/benchmark-output.txt"
 REPORT_OUTPUT="${OUTPUT_DIR}/performance-report.json"
 
-BOOST_INCLUDEDIR="${BOOST_INCLUDE}" \
 PROFILE_CXXFLAGS="${CXXFLAGS}" \
 PROFILE_CPPFLAGS="-DMINESCRIPT_MINER_CALLGRIND -I${VALGRIND_INCLUDE}" \
 CXX="${CXX}" \

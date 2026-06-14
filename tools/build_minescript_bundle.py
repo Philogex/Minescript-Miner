@@ -57,6 +57,10 @@ def build_bundle(wheel: Path, output: Path) -> None:
 
         for relative in ("miner.py", "targets.txt", "LICENSE"):
             shutil.copy2(PROJECT_ROOT / relative, bundle / relative)
+        shutil.copy2(
+            PROJECT_ROOT / "third_party/boost/LICENSE_1_0.txt",
+            bundle / "BOOST_LICENSE_1_0.txt",
+        )
 
         for source in python_sources():
             relative = source.relative_to(PROJECT_ROOT)

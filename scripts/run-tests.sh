@@ -11,24 +11,11 @@ if ! command -v "${CXX_BIN}" >/dev/null 2>&1; then
     exit 1
 fi
 
-if [[ -n "${BOOST_INCLUDEDIR:-}" ]]; then
-    BOOST_INCLUDE="${BOOST_INCLUDEDIR}"
-else
-    BOOST_INCLUDE=""
-    for candidate in /usr/local/include /usr/include; do
-        if [[ -f "${candidate}/boost/multiprecision/cpp_int.hpp" ]]; then
-            BOOST_INCLUDE="${candidate}"
-            break
-        fi
-    done
-fi
-
-if [[ -z "${BOOST_INCLUDE}" ]]; then
-    echo "Boost headers not found; install Boost or set BOOST_INCLUDEDIR." >&2
+BOOST_INCLUDE="$(pwd)/third_party/boost"
+if [[ ! -f "${BOOST_INCLUDE}/boost/multiprecision/cpp_int.hpp" ]]; then
+    echo "Vendored Boost headers not found at ${BOOST_INCLUDE}." >&2
     exit 1
 fi
-
-export BOOST_INCLUDEDIR="${BOOST_INCLUDE}"
 
 rm -rf build dist
 "${PYTHON_BIN}" -m build --wheel --outdir dist

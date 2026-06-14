@@ -36,7 +36,7 @@ jobs:
       - name: Install native build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes g++ libboost-dev
+          sudo apt-get install --yes g++
 
       - name: Install Python build dependencies
         run: python -m pip install --upgrade pip build
@@ -109,12 +109,6 @@ jobs:
           python-version: "3.12"
           cache: pip
 
-      - name: Install Boost headers
-        shell: pwsh
-        run: |
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install boost-integer:x64-windows boost-multiprecision:x64-windows boost-rational:x64-windows
-          "BOOST_INCLUDEDIR=$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\include" >> $env:GITHUB_ENV
-
       - name: Install cibuildwheel
         run: python -m pip install --upgrade pip cibuildwheel abi3audit
 
@@ -184,7 +178,7 @@ jobs:
       - name: Install profiling dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes g++ libboost-dev valgrind
+          sudo apt-get install --yes g++ valgrind
 
       - name: Prepare release tag
         id: release

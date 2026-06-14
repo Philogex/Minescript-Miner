@@ -4,6 +4,8 @@ import time
 
 import minescript as m
 
+from minescript_miner.minescript.runtime import query
+
 
 def ease_in_out(t: float) -> float:
     if t < 1.0:
@@ -18,7 +20,7 @@ def smooth_rotate_to(
     duration: float,
     step: float = 0.02,
 ) -> None:
-    yaw_start, pitch_start = m.player_orientation()
+    yaw_start, pitch_start = query(m.player_orientation)
     yaw_delta = ((target_yaw - yaw_start + 180.0) % 360.0) - 180.0
     pitch_delta = target_pitch - pitch_start
 

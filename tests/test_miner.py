@@ -2,6 +2,7 @@ import importlib.util
 import sys
 import types
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 
 
@@ -13,12 +14,16 @@ class MinerTest(unittest.TestCase):
         minescript = sys.modules.setdefault(
             "minescript",
             types.SimpleNamespace(
-                script_loop=object(),
+                script_loop=nullcontext(),
                 EventType=types.SimpleNamespace(KEY="key"),
                 player_press_attack=lambda _pressed: None,
             ),
         )
-        minescript.script_loop = getattr(minescript, "script_loop", object())
+        minescript.script_loop = getattr(
+            minescript,
+            "script_loop",
+            nullcontext(),
+        )
         minescript.EventType = getattr(
             minescript,
             "EventType",

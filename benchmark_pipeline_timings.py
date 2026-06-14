@@ -20,6 +20,7 @@ for path in (PROJECT_DIR, SRC_DIR):
         sys.path.insert(0, path_string)
 
 from minescript_miner.minescript.io import ScanTimings, acquire_current_target
+from minescript_miner.minescript.runtime import query
 
 
 REACH = 4.8
@@ -56,8 +57,8 @@ def timing_values(timing: ScanTimings) -> dict[str, float]:
 
 
 def scan(*, await_region: bool) -> ScanTimings:
-    px, py, pz = m.player_position()
-    yaw, pitch = m.player_orientation()
+    px, py, pz = query(m.player_position)
+    yaw, pitch = query(m.player_orientation)
     timings = ScanTimings()
     acquire_current_target(
         (px, py + 1.62, pz),

@@ -5,6 +5,8 @@ from typing import List, Optional, Tuple
 
 import minescript as m
 
+from minescript_miner.minescript.runtime import query
+
 
 BlockPos = Tuple[int, int, int]
 BlockSample = Tuple[BlockPos, Optional[str]]
@@ -26,8 +28,7 @@ def elapsed_ms(start_ns: int) -> float:
 
 
 def read_block_region(pos1: BlockPos, pos2: BlockPos):
-    with m.script_loop:
-        return m.get_block_region(pos1, pos2)
+    return query(m.get_block_region, pos1, pos2)
 
 
 def fixed_cube_bounds(
@@ -58,7 +59,13 @@ def read_region_blocks(
 ) -> Tuple[BlockPos, BlockPos, Tuple[Optional[str], ...]]:
     min_pos, max_pos = fixed_cube_bounds(position, reach)
     if await_region:
-        m.await_loaded_region(min_pos[0], min_pos[2], max_pos[0], max_pos[2])
+        query(
+            m.await_loaded_region,
+            min_pos[0],
+            min_pos[2],
+            max_pos[0],
+            max_pos[2],
+        )
 
     region = read_block_region(min_pos, max_pos)
     return region.min_pos, region.max_pos, tuple(region.blocks)
@@ -171,7 +178,13 @@ def get_area(
     min_pos, max_pos = fixed_cube_bounds(position, reach)
     if await_region:
         await_start = time.perf_counter_ns() if timings is not None else 0
-        m.await_loaded_region(min_pos[0], min_pos[2], max_pos[0], max_pos[2])
+        query(
+            m.await_loaded_region,
+            min_pos[0],
+            min_pos[2],
+            max_pos[0],
+            max_pos[2],
+        )
         if timings is not None:
             timings.await_region_ms = elapsed_ms(await_start)
 

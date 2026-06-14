@@ -24,6 +24,7 @@ from minescript_miner.minescript.io import (
     block_id_literal,
     load_target_blocks,
 )
+from minescript_miner.minescript.runtime import query
 
 
 TOGGLE_KEY = "o"
@@ -64,9 +65,9 @@ def targeted_block_is_configured(targeted_block, target_blocks) -> bool:
 
 
 def mine_targeted_block(target_blocks) -> None:
-    targeted = m.player_get_targeted_block(REACH)
+    targeted = query(m.player_get_targeted_block, REACH)
     if not targeted_block_is_configured(targeted, target_blocks):
-        extended_target = m.player_get_targeted_block(20.0)
+        extended_target = query(m.player_get_targeted_block, 20.0)
         targeted_type = None if targeted is None else targeted.type
         extended_description = (
             None
@@ -84,7 +85,7 @@ def mine_targeted_block(target_blocks) -> None:
     m.player_press_attack(True)
     try:
         while active.is_set():
-            current = m.player_get_targeted_block(REACH)
+            current = query(m.player_get_targeted_block, REACH)
             if current is None:
                 break
             if tuple(current.position) != target_position:
@@ -111,8 +112,8 @@ def run() -> None:
             if not active.wait(timeout=IDLE_DELAY):
                 continue
 
-            px, py, pz = m.player_position()
-            yaw, pitch = m.player_orientation()
+            px, py, pz = query(m.player_position)
+            yaw, pitch = query(m.player_orientation)
             start = time.perf_counter()
             target_orientation = acquire_current_target(
                 (px, py + 1.62, pz),

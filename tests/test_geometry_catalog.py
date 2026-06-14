@@ -113,6 +113,35 @@ class GeometryCatalogTest(unittest.TestCase):
             ),
         )
 
+    def test_native_logging_can_be_disabled(self):
+        original_log_setting = os.environ.get("MINESCRIPT_MINER_NATIVE_LOG")
+        original_working_directory = Path.cwd()
+
+        with tempfile.TemporaryDirectory(prefix="minescript-miner-no-log-") as temp_dir:
+            temp_path = Path(temp_dir)
+            os.environ["MINESCRIPT_MINER_NATIVE_LOG"] = "off"
+            os.chdir(temp_path)
+            try:
+                self.assertIsNone(
+                    acquire_target(
+                        (0.5, 64.5, 0.5),
+                        (90.0, 10.0),
+                        SHAPE_CATALOG_VERSION,
+                        3,
+                        4.8,
+                        [SHAPE_ID_BY_NAME["empty"]] * 27,
+                        [],
+                    ),
+                )
+            finally:
+                os.chdir(original_working_directory)
+                if original_log_setting is None:
+                    os.environ.pop("MINESCRIPT_MINER_NATIVE_LOG", None)
+                else:
+                    os.environ["MINESCRIPT_MINER_NATIVE_LOG"] = original_log_setting
+
+            self.assertEqual([], list(temp_path.iterdir()))
+
     def test_native_acquire_target_builds_sorted_target_face_candidates(self):
         original_log_path = os.environ.get("MINESCRIPT_MINER_NATIVE_LOG")
 

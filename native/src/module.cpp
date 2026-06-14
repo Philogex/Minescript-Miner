@@ -216,15 +216,24 @@ static bool parse_uint16_values(
     return true;
 }
 
-static std::string log_path() {
-    const char *override_path = std::getenv("MINESCRIPT_MINER_NATIVE_LOG");
-    if (override_path != nullptr && override_path[0] != '\0') {
-        return std::string(override_path);
+static std::string configured_log_path() {
+    const char *setting = std::getenv("MINESCRIPT_MINER_NATIVE_LOG");
+    if (setting == nullptr || setting[0] == '\0') {
+        return {};
     }
-    return "minescript_miner_native_scan.log";
+
+    const std::string value(setting);
+    if (value == "0" || value == "false" || value == "off") {
+        return {};
+    }
+    if (value == "1" || value == "true" || value == "on") {
+        return "minescript_miner_native_scan.log";
+    }
+    return value;
 }
 
 static void log_scan_input(
+    const std::string &path,
     const double (&position)[3],
     const double (&orientation)[2],
     int shape_catalog_version,
@@ -238,7 +247,7 @@ static void log_scan_input(
     double returned_yaw,
     double returned_pitch
 ) {
-    std::ofstream log(log_path(), std::ios::app);
+    std::ofstream log(path, std::ios::app);
     if (!log) {
         return;
     }
@@ -505,7 +514,12 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     const minescript_miner::Vec3 eye{position[0], position[1], position[2]};
     const minescript_miner::Vec3 look_dir =
         minescript_miner::look_direction_from_yaw_pitch(orientation[0], orientation[1]);
-    const auto geometry_start = std::chrono::steady_clock::now();
+    const std::string native_log_path = configured_log_path();
+    const bool log_native_scan = !native_log_path.empty();
+    std::chrono::steady_clock::time_point geometry_start;
+    if (log_native_scan) {
+        geometry_start = std::chrono::steady_clock::now();
+    }
     const minescript_miner::ScanRegionGeometry scan_geometry =
         minescript_miner::build_scan_region_geometry(
             shape_ids,
@@ -515,7 +529,10 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
             side,
             reach
         );
-    const auto geometry_end = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point geometry_end;
+    if (log_native_scan) {
+        geometry_end = std::chrono::steady_clock::now();
+    }
 
     const minescript_miner::BranchBoundResult solve_result =
         minescript_miner::solve_visible_target(
@@ -524,7 +541,10 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
             look_dir,
             reach
         );
-    const auto solve_end = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point solve_end;
+    if (log_native_scan) {
+        solve_end = std::chrono::steady_clock::now();
+    }
 
     double returned_yaw = orientation[0];
     double returned_pitch = orientation[1];
@@ -535,25 +555,28 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         returned_pitch = target_orientation.pitch;
     }
 
-    const double geometry_ms =
-        std::chrono::duration<double, std::milli>(geometry_end - geometry_start).count();
-    const double solve_ms =
-        std::chrono::duration<double, std::milli>(solve_end - geometry_end).count();
+    if (log_native_scan) {
+        const double geometry_ms =
+            std::chrono::duration<double, std::milli>(geometry_end - geometry_start).count();
+        const double solve_ms =
+            std::chrono::duration<double, std::milli>(solve_end - geometry_end).count();
 
-    log_scan_input(
-        position,
-        orientation,
-        shape_catalog_version,
-        shape_ids,
-        target_indices,
-        scan_geometry,
-        solve_result,
-        side,
-        geometry_ms,
-        solve_ms,
-        returned_yaw,
-        returned_pitch
-    );
+        log_scan_input(
+            native_log_path,
+            position,
+            orientation,
+            shape_catalog_version,
+            shape_ids,
+            target_indices,
+            scan_geometry,
+            solve_result,
+            side,
+            geometry_ms,
+            solve_ms,
+            returned_yaw,
+            returned_pitch
+        );
+    }
     if (!solve_result.found) {
         Py_RETURN_NONE;
     }

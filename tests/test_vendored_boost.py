@@ -7,7 +7,7 @@ class VendoredBoostTest(unittest.TestCase):
     def test_version_and_required_files_are_pinned(self):
         root = Path(__file__).resolve().parents[1] / "third_party/boost"
 
-        self.assertEqual("1.91.0", (root / "VERSION").read_text().strip())
+        self.assertEqual("1.91.0", (root / "BOOST_VERSION").read_text().strip())
         self.assertTrue((root / "LICENSE_1_0.txt").is_file())
         self.assertTrue((root / "boost/multiprecision/cpp_int.hpp").is_file())
         self.assertTrue((root / "boost/rational.hpp").is_file())

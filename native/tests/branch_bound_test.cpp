@@ -6,6 +6,25 @@
 
 namespace {
 
+constexpr std::int32_t from_sixteenths(std::int32_t value) {
+    static_assert(
+        minescript_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
+    );
+    return value * (minescript_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
+}
+
+constexpr minescript_miner::WorldPoint point_from_sixteenths(
+    std::int32_t x,
+    std::int32_t y,
+    std::int32_t z
+) {
+    return {
+        from_sixteenths(x),
+        from_sixteenths(y),
+        from_sixteenths(z),
+    };
+}
+
 minescript_miner::WorldFace z_face(
     std::int32_t min_x,
     std::int32_t min_y,
@@ -14,13 +33,13 @@ minescript_miner::WorldFace z_face(
     std::int32_t z
 ) {
     using namespace minescript_miner;
-    const WorldRectFace16 face{
+    const WorldRectFace face{
         PlaneAxis::Z,
         -1,
-        {min_x, min_y, z},
-        {max_x, min_y, z},
-        {max_x, max_y, z},
-        {min_x, max_y, z},
+        point_from_sixteenths(min_x, min_y, z),
+        point_from_sixteenths(max_x, min_y, z),
+        point_from_sixteenths(max_x, max_y, z),
+        point_from_sixteenths(min_x, max_y, z),
     };
     return {face, face_center(face)};
 }

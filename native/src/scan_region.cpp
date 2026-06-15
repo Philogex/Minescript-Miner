@@ -24,32 +24,63 @@ static_assert(index_to_block_pos(26, 3, {10, 64, -4}).x == 11);
 static_assert(index_to_block_pos(26, 3, {10, 64, -4}).y == 65);
 static_assert(index_to_block_pos(26, 3, {10, 64, -4}).z == -3);
 
-constexpr RectFace16 X_FACE{PlaneAxis::X, 8, 2, 6, 3, 7, 1};
-constexpr WorldRectFace16 X_WORLD = face_to_world(X_FACE, {10, 64, -4});
-static_assert(X_WORLD.p0.x == 168);
-static_assert(X_WORLD.p0.y == 1026);
-static_assert(X_WORLD.p0.z == -61);
-static_assert(X_WORLD.p2.x == 168);
-static_assert(X_WORLD.p2.y == 1030);
-static_assert(X_WORLD.p2.z == -57);
+static_assert(GEOMETRY_UNITS_PER_BLOCK % 16 == 0);
+constexpr std::uint8_t local_sixteenth(std::int32_t value) {
+    return static_cast<std::uint8_t>(
+        value * GEOMETRY_UNITS_PER_BLOCK / 16
+    );
+}
 
-constexpr RectFace16 Y_FACE{PlaneAxis::Y, 8, 2, 6, 3, 7, 1};
-constexpr WorldRectFace16 Y_WORLD = face_to_world(Y_FACE, {10, 64, -4});
-static_assert(Y_WORLD.p0.x == 162);
-static_assert(Y_WORLD.p0.y == 1032);
-static_assert(Y_WORLD.p0.z == -61);
-static_assert(Y_WORLD.p2.x == 166);
-static_assert(Y_WORLD.p2.y == 1032);
-static_assert(Y_WORLD.p2.z == -57);
+constexpr LocalRectFace X_FACE{
+    PlaneAxis::X,
+    local_sixteenth(8),
+    local_sixteenth(2),
+    local_sixteenth(6),
+    local_sixteenth(3),
+    local_sixteenth(7),
+    1,
+};
+constexpr WorldRectFace X_WORLD = face_to_world(X_FACE, {10, 64, -4});
+static_assert(X_WORLD.p0.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(X_WORLD.p0.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(2));
+static_assert(X_WORLD.p0.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(3));
+static_assert(X_WORLD.p2.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(X_WORLD.p2.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(6));
+static_assert(X_WORLD.p2.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(7));
 
-constexpr RectFace16 Z_FACE{PlaneAxis::Z, 8, 2, 6, 3, 7, 1};
-constexpr WorldRectFace16 Z_WORLD = face_to_world(Z_FACE, {10, 64, -4});
-static_assert(Z_WORLD.p0.x == 162);
-static_assert(Z_WORLD.p0.y == 1027);
-static_assert(Z_WORLD.p0.z == -56);
-static_assert(Z_WORLD.p2.x == 166);
-static_assert(Z_WORLD.p2.y == 1031);
-static_assert(Z_WORLD.p2.z == -56);
+constexpr LocalRectFace Y_FACE{
+    PlaneAxis::Y,
+    local_sixteenth(8),
+    local_sixteenth(2),
+    local_sixteenth(6),
+    local_sixteenth(3),
+    local_sixteenth(7),
+    1,
+};
+constexpr WorldRectFace Y_WORLD = face_to_world(Y_FACE, {10, 64, -4});
+static_assert(Y_WORLD.p0.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(2));
+static_assert(Y_WORLD.p0.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(Y_WORLD.p0.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(3));
+static_assert(Y_WORLD.p2.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(6));
+static_assert(Y_WORLD.p2.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(Y_WORLD.p2.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(7));
+
+constexpr LocalRectFace Z_FACE{
+    PlaneAxis::Z,
+    local_sixteenth(8),
+    local_sixteenth(2),
+    local_sixteenth(6),
+    local_sixteenth(3),
+    local_sixteenth(7),
+    1,
+};
+constexpr WorldRectFace Z_WORLD = face_to_world(Z_FACE, {10, 64, -4});
+static_assert(Z_WORLD.p0.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(2));
+static_assert(Z_WORLD.p0.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(3));
+static_assert(Z_WORLD.p0.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(Z_WORLD.p2.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(6));
+static_assert(Z_WORLD.p2.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(7));
+static_assert(Z_WORLD.p2.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
 
 namespace {
 
@@ -61,9 +92,9 @@ double axis_distance(double value, double minimum, double maximum) {
     return std::max({minimum - value, 0.0, value - maximum});
 }
 
-bool face_within_reach(const WorldRectFace16 &face, const Vec3 &eye, double reach) {
-    const Vec3 p0 = point16_to_world(face.p0);
-    const Vec3 p2 = point16_to_world(face.p2);
+bool face_within_reach(const WorldRectFace &face, const Vec3 &eye, double reach) {
+    const Vec3 p0 = world_point_to_vec3(face.p0);
+    const Vec3 p2 = world_point_to_vec3(face.p2);
     const double distance_x =
         axis_distance(eye.x, std::min(p0.x, p2.x), std::max(p0.x, p2.x));
     const double distance_y =
@@ -127,8 +158,8 @@ ScanRegionGeometry build_scan_region_geometry(
         const BlockPos block_pos = index_to_block_pos(static_cast<std::uint16_t>(block_index), side, center);
 
         for (std::uint8_t face_index = 0; face_index < shape.face_count; ++face_index) {
-            const RectFace16 &local_face = catalog.faces[shape.face_offset + face_index];
-            const WorldRectFace16 world_rect = face_to_world(local_face, block_pos);
+            const LocalRectFace &local_face = catalog.faces[shape.face_offset + face_index];
+            const WorldRectFace world_rect = face_to_world(local_face, block_pos);
             WorldFace world_face{
                 world_rect,
                 face_center(world_rect),

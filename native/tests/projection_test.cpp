@@ -8,7 +8,26 @@
 
 namespace {
 
-minescript_miner::WorldRectFace16 z_face(
+constexpr std::int32_t from_sixteenths(std::int32_t value) {
+    static_assert(
+        minescript_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
+    );
+    return value * (minescript_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
+}
+
+constexpr minescript_miner::WorldPoint point_from_sixteenths(
+    std::int32_t x,
+    std::int32_t y,
+    std::int32_t z
+) {
+    return {
+        from_sixteenths(x),
+        from_sixteenths(y),
+        from_sixteenths(z),
+    };
+}
+
+minescript_miner::WorldRectFace z_face(
     std::int32_t min_x,
     std::int32_t max_x,
     std::int32_t min_y,
@@ -19,10 +38,10 @@ minescript_miner::WorldRectFace16 z_face(
     return {
         PlaneAxis::Z,
         -1,
-        {min_x, min_y, z},
-        {max_x, min_y, z},
-        {max_x, max_y, z},
-        {min_x, max_y, z},
+        point_from_sixteenths(min_x, min_y, z),
+        point_from_sixteenths(max_x, min_y, z),
+        point_from_sixteenths(max_x, max_y, z),
+        point_from_sixteenths(min_x, max_y, z),
     };
 }
 
@@ -157,13 +176,13 @@ int main() {
         identity_basis,
         0.25
     };
-    const WorldRectFace16 crossing_near{
+    const WorldRectFace crossing_near{
         PlaneAxis::X,
         -1,
-        {16, 0, -16},
-        {16, 16, -16},
-        {16, 16, 16},
-        {16, 0, 16},
+        point_from_sixteenths(16, 0, -16),
+        point_from_sixteenths(16, 16, -16),
+        point_from_sixteenths(16, 16, 16),
+        point_from_sixteenths(16, 0, 16),
     };
     ExactProjectedFace clipped{};
     assert(clipped_projector.project_world_face(

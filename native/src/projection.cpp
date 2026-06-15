@@ -236,10 +236,10 @@ ExactProjector::ExactProjector(
 }
 
 bool ExactProjector::project_world_face(
-    const WorldRectFace16 &face,
+    const WorldRectFace &face,
     ExactProjectedFace &out
 ) {
-    const std::array<WorldPoint16, 4> points{
+    const std::array<WorldPoint, 4> points{
         face.p0,
         face.p1,
         face.p2,
@@ -319,12 +319,12 @@ ExactVec3 ExactProjector::rational_vec3(const Vec3 &value) const {
 }
 
 ExactVec3 ExactProjector::rational_world_point(
-    const WorldPoint16 &point
+    const WorldPoint &point
 ) const {
     return {
-        ExactRational{point.x, 16},
-        ExactRational{point.y, 16},
-        ExactRational{point.z, 16},
+        ExactRational{point.x, GEOMETRY_UNITS_PER_BLOCK},
+        ExactRational{point.y, GEOMETRY_UNITS_PER_BLOCK},
+        ExactRational{point.z, GEOMETRY_UNITS_PER_BLOCK},
     };
 }
 

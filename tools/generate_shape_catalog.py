@@ -47,12 +47,19 @@ def connection_state_key(mask: int, directions: Sequence[str]) -> Tuple[Tuple[st
     )
 
 
-def stair_quadrant(direction: str, side: str, front: bool, y_min: int, y_max: int) -> Box:
-    front_x = half_bounds_1d(direction, front, True)
-    front_z = half_bounds_1d(direction, front, False)
+def stair_quadrant(
+    direction: str,
+    side: str,
+    front: bool,
+    y_min: int,
+    y_max: int,
+    units: int,
+) -> Box:
+    front_x = half_bounds_1d(direction, front, True, units)
+    front_z = half_bounds_1d(direction, front, False, units)
     lateral = lateral_direction(direction, side)
-    lateral_x = half_bounds_1d(lateral, True, True)
-    lateral_z = half_bounds_1d(lateral, True, False)
+    lateral_x = half_bounds_1d(lateral, True, True, units)
+    lateral_z = half_bounds_1d(lateral, True, False, units)
     return (
         max(front_x[0], lateral_x[0]),
         y_min,
@@ -63,15 +70,21 @@ def stair_quadrant(direction: str, side: str, front: bool, y_min: int, y_max: in
     )
 
 
-def half_bounds_1d(direction: str, front: bool, x_axis: bool) -> Tuple[int, int]:
+def half_bounds_1d(
+    direction: str,
+    front: bool,
+    x_axis: bool,
+    units: int,
+) -> Tuple[int, int]:
+    half = units // 2
     if direction == "north":
-        return (0, 16) if x_axis else ((0, 8) if front else (8, 16))
+        return (0, units) if x_axis else ((0, half) if front else (half, units))
     if direction == "south":
-        return (0, 16) if x_axis else ((8, 16) if front else (0, 8))
+        return (0, units) if x_axis else ((half, units) if front else (0, half))
     if direction == "east":
-        return ((8, 16) if front else (0, 8)) if x_axis else (0, 16)
+        return ((half, units) if front else (0, half)) if x_axis else (0, units)
     if direction == "west":
-        return ((0, 8) if front else (8, 16)) if x_axis else (0, 16)
+        return ((0, half) if front else (half, units)) if x_axis else (0, units)
     raise ValueError(f"unknown direction: {direction}")
 
 
@@ -91,14 +104,20 @@ def lateral_direction(direction: str, side: str) -> str:
     return (left if side == "left" else right)[direction]
 
 
-def stair_boxes(direction: str, half: str, stair_shape: str) -> Tuple[Box, ...]:
+def stair_boxes(
+    direction: str,
+    half: str,
+    stair_shape: str,
+    units: int,
+) -> Tuple[Box, ...]:
     boxes: List[Box] = []
-    y_min, y_max = 8, 16
+    half_units = units // 2
+    y_min, y_max = half_units, units
     if half == "bottom":
-        boxes.append((0, 0, 0, 16, 8, 16))
+        boxes.append((0, 0, 0, units, half_units, units))
     else:
-        boxes.append((0, 8, 0, 16, 16, 16))
-        y_min, y_max = 0, 8
+        boxes.append((0, half_units, 0, units, units, units))
+        y_min, y_max = 0, half_units
 
     quadrants = {
         "straight": (("left", True), ("right", True)),
@@ -108,44 +127,53 @@ def stair_boxes(direction: str, half: str, stair_shape: str) -> Tuple[Box, ...]:
         "inner_right": (("left", True), ("right", True), ("right", False)),
     }[stair_shape]
     for side, front in quadrants:
-        boxes.append(stair_quadrant(direction, side, front, y_min, y_max))
+        boxes.append(stair_quadrant(direction, side, front, y_min, y_max, units))
     return tuple(boxes)
 
 
-def connection_boxes(mask: int, center_min: int, center_max: int) -> Tuple[Box, ...]:
-    boxes: List[Box] = [(center_min, 0, center_min, center_max, 16, center_max)]
+def connection_boxes(
+    mask: int,
+    center_min: int,
+    center_max: int,
+    units: int,
+) -> Tuple[Box, ...]:
+    boxes: List[Box] = [(center_min, 0, center_min, center_max, units, center_max)]
     if mask & 1:
-        boxes.append((center_min, 0, 0, center_max, 16, center_min))
+        boxes.append((center_min, 0, 0, center_max, units, center_min))
     if mask & 2:
-        boxes.append((center_max, 0, center_min, 16, 16, center_max))
+        boxes.append((center_max, 0, center_min, units, units, center_max))
     if mask & 4:
-        boxes.append((center_min, 0, center_max, center_max, 16, 16))
+        boxes.append((center_min, 0, center_max, center_max, units, units))
     if mask & 8:
-        boxes.append((0, 0, center_min, center_min, 16, center_max))
+        boxes.append((0, 0, center_min, center_min, units, center_max))
     return tuple(boxes)
 
 
-def button_box(face: str, facing: str, powered: str) -> Box:
-    depth = 1 if powered == "true" else 2
+def button_box(face: str, facing: str, powered: str, units: int) -> Box:
+    if units % 16 != 0:
+        raise ValueError("button geometry requires a multiple of 16 units per block")
+    scale = units // 16
+    depth = scale if powered == "true" else 2 * scale
+    x5, x6, x10, x11 = (value * scale for value in (5, 6, 10, 11))
 
     if face == "floor":
         if facing in ("north", "south"):
-            return 5, 0, 6, 11, depth, 10
-        return 6, 0, 5, 10, depth, 11
+            return x5, 0, x6, x11, depth, x10
+        return x6, 0, x5, x10, depth, x11
 
     if face == "ceiling":
         if facing in ("north", "south"):
-            return 5, 16 - depth, 6, 11, 16, 10
-        return 6, 16 - depth, 5, 10, 16, 11
+            return x5, units - depth, x6, x11, units, x10
+        return x6, units - depth, x5, x10, units, x11
 
     if facing == "north":
-        return 5, 6, 16 - depth, 11, 10, 16
+        return x5, x6, units - depth, x11, x10, units
     if facing == "south":
-        return 5, 6, 0, 11, 10, depth
+        return x5, x6, 0, x11, x10, depth
     if facing == "west":
-        return 16 - depth, 6, 5, 16, 10, 11
+        return units - depth, x6, x5, units, x10, x11
     if facing == "east":
-        return 0, 6, 5, depth, 10, 11
+        return 0, x6, x5, depth, x10, x11
     raise ValueError(f"unknown button facing: {facing}")
 
 
@@ -153,6 +181,9 @@ def expand_shapes(catalog: Dict[str, Any]) -> List[Shape]:
     directions = catalog["directions"]
     halves = catalog["halves"]
     stair_shapes = catalog["stair_shapes"]
+    units = catalog["geometry_units_per_block"]
+    if units <= 0 or units > 255 or units % 2 != 0:
+        raise ValueError("geometry_units_per_block must be an even value in 1..255")
     shapes: List[Shape] = []
 
     for spec in catalog["shapes"]:
@@ -171,7 +202,7 @@ def expand_shapes(catalog: Dict[str, Any]) -> List[Shape]:
                                     half=half,
                                     shape=stair_shape,
                                 ),
-                                stair_boxes(direction, half, stair_shape),
+                                stair_boxes(direction, half, stair_shape, units),
                             )
                         )
         elif spec.get("family") == "connection":
@@ -180,7 +211,7 @@ def expand_shapes(catalog: Dict[str, Any]) -> List[Shape]:
                 shapes.append(
                     Shape(
                         spec["template"].format(connection=connection_name(mask, directions)),
-                        connection_boxes(mask, center_min, center_max),
+                        connection_boxes(mask, center_min, center_max, units),
                     )
                 )
         elif spec.get("family") == "button":
@@ -194,13 +225,34 @@ def expand_shapes(catalog: Dict[str, Any]) -> List[Shape]:
                                     facing=facing,
                                     powered=powered,
                                 ),
-                                (button_box(face, facing, powered),),
+                                (button_box(face, facing, powered, units),),
                             )
                         )
         else:
             raise ValueError(f"unsupported shape spec: {spec}")
 
     return shapes
+
+
+def validate_shapes(shapes: Sequence[Shape], units: int) -> None:
+    seen_names = set()
+    for shape in shapes:
+        if shape.name in seen_names:
+            raise ValueError(f"duplicate shape name: {shape.name}")
+        seen_names.add(shape.name)
+
+        for box in shape.boxes:
+            if len(box) != 6:
+                raise ValueError(f"{shape.name}: expected six AABB coordinates")
+            min_x, min_y, min_z, max_x, max_y, max_z = box
+            if not (
+                0 <= min_x < max_x <= units
+                and 0 <= min_y < max_y <= units
+                and 0 <= min_z < max_z <= units
+            ):
+                raise ValueError(
+                    f"{shape.name}: AABB {box} is outside the 0..{units} grid"
+                )
 
 
 def axis_min(box: Box, axis: str) -> int:
@@ -576,6 +628,7 @@ namespace minescript_miner {{
 inline constexpr int SHAPE_CATALOG_VERSION = {catalog["shape_catalog_version"]};
 inline constexpr int GEOMETRY_CATALOG_VERSION = {catalog["geometry_catalog_version"]};
 inline constexpr int GEOMETRY_SHAPE_CATALOG_VERSION = SHAPE_CATALOG_VERSION;
+inline constexpr std::int32_t GEOMETRY_UNITS_PER_BLOCK = {catalog["geometry_units_per_block"]};
 inline constexpr std::size_t GEOMETRY_SHAPE_COUNT = {len(shapes)};
 inline constexpr std::size_t GEOMETRY_BOX_COUNT = {box_count};
 inline constexpr std::size_t GEOMETRY_FACE_COUNT = {face_count};
@@ -591,7 +644,7 @@ enum class PlaneAxis : std::int32_t {{
     Z = 2,
 }};
 
-struct Aabb16 {{
+struct LocalAabb {{
     std::uint8_t min_x;
     std::uint8_t min_y;
     std::uint8_t min_z;
@@ -600,7 +653,7 @@ struct Aabb16 {{
     std::uint8_t max_z;
 }};
 
-struct RectFace16 {{
+struct LocalRectFace {{
     PlaneAxis axis;
     std::uint8_t coord;
     std::uint8_t u_min;
@@ -618,7 +671,7 @@ struct ShapeGeometry {{
 struct GeometryCatalog {{
     std::array<const char *, GEOMETRY_SHAPE_COUNT> shape_names;
     std::array<ShapeGeometry, GEOMETRY_SHAPE_COUNT> shapes;
-    std::array<RectFace16, GEOMETRY_FACE_COUNT> faces;
+    std::array<LocalRectFace, GEOMETRY_FACE_COUNT> faces;
 }};
 
 const GeometryCatalog &geometry_catalog();
@@ -675,7 +728,7 @@ inline constexpr std::array<ShapeBoxRange, GEOMETRY_SHAPE_COUNT> SHAPE_BOX_RANGE
 {chr(10).join(range_lines)}
 }}}};
 
-inline constexpr std::array<Aabb16, GEOMETRY_BOX_COUNT> SHAPE_BOX_TABLE = {{{{
+inline constexpr std::array<LocalAabb, GEOMETRY_BOX_COUNT> SHAPE_BOX_TABLE = {{{{
 {chr(10).join(box_lines)}
 }}}};
 
@@ -686,6 +739,7 @@ inline constexpr std::array<Aabb16, GEOMETRY_BOX_COUNT> SHAPE_BOX_TABLE = {{{{
 def generate() -> Dict[Path, str]:
     catalog = load_catalog()
     shapes = expand_shapes(catalog)
+    validate_shapes(shapes, catalog["geometry_units_per_block"])
     faces = [faces_for_shape(shape) for shape in shapes]
     box_count = sum(len(shape.boxes) for shape in shapes)
     face_count = sum(len(shape_faces) for shape_faces in faces)

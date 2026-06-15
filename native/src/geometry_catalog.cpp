@@ -16,7 +16,7 @@ struct AxisPair {
 };
 
 struct BoxList {
-    std::array<Aabb16, 5> boxes{};
+    std::array<LocalAabb, 5> boxes{};
     std::uint8_t count = 0;
 };
 
@@ -31,7 +31,7 @@ struct CatalogBuilder {
     std::uint16_t face_count = 0;
 };
 
-constexpr std::uint8_t axis_min(const Aabb16 &b, PlaneAxis axis) {
+constexpr std::uint8_t axis_min(const LocalAabb &b, PlaneAxis axis) {
     switch (axis) {
         case PlaneAxis::X:
             return b.min_x;
@@ -43,7 +43,7 @@ constexpr std::uint8_t axis_min(const Aabb16 &b, PlaneAxis axis) {
     return 0;
 }
 
-constexpr std::uint8_t axis_max(const Aabb16 &b, PlaneAxis axis) {
+constexpr std::uint8_t axis_max(const LocalAabb &b, PlaneAxis axis) {
     switch (axis) {
         case PlaneAxis::X:
             return b.max_x;
@@ -71,7 +71,7 @@ constexpr bool overlaps_1d(std::uint8_t a_min, std::uint8_t a_max, std::uint8_t 
     return a_min < b_max && b_min < a_max;
 }
 
-constexpr void add_box(BoxList &shape, Aabb16 b) {
+constexpr void add_box(BoxList &shape, LocalAabb b) {
     shape.boxes[shape.count] = b;
     ++shape.count;
 }
@@ -110,14 +110,14 @@ constexpr bool midpoint_inside(std::uint8_t min_value, std::uint8_t max_value, s
 }
 
 constexpr bool outside_occupied(
-    const RectFace16 &face,
+    const LocalRectFace &face,
     std::uint16_t u_midpoint_times_2,
     std::uint16_t v_midpoint_times_2,
     const BoxList &shape
 ) {
     const AxisPair axes = uv_axes(face.axis);
     for (std::uint8_t i = 0; i < shape.count; ++i) {
-        const Aabb16 &b = shape.boxes[i];
+        const LocalAabb &b = shape.boxes[i];
         const bool crosses_face =
             face.normal_sign > 0
                 ? axis_min(b, face.axis) <= face.coord && axis_max(b, face.axis) > face.coord
@@ -134,12 +134,12 @@ constexpr bool outside_occupied(
     return false;
 }
 
-constexpr void add_face(CatalogBuilder &builder, RectFace16 face) {
+constexpr void add_face(CatalogBuilder &builder, LocalRectFace face) {
     builder.catalog.faces[builder.face_count] = face;
     ++builder.face_count;
 }
 
-constexpr void add_face_cells(CatalogBuilder &builder, const RectFace16 &face, const BoxList &shape) {
+constexpr void add_face_cells(CatalogBuilder &builder, const LocalRectFace &face, const BoxList &shape) {
     const AxisPair axes = uv_axes(face.axis);
     SplitList u_splits{};
     SplitList v_splits{};
@@ -149,7 +149,7 @@ constexpr void add_face_cells(CatalogBuilder &builder, const RectFace16 &face, c
     v_splits.values[v_splits.count++] = face.v_max;
 
     for (std::uint8_t i = 0; i < shape.count; ++i) {
-        const Aabb16 &b = shape.boxes[i];
+        const LocalAabb &b = shape.boxes[i];
         if (axis_min(b, face.axis) > face.coord || axis_max(b, face.axis) < face.coord) {
             continue;
         }
@@ -193,7 +193,7 @@ constexpr void add_face_cells(CatalogBuilder &builder, const RectFace16 &face, c
     }
 }
 
-constexpr void add_box_faces(CatalogBuilder &builder, const Aabb16 &b, const BoxList &shape) {
+constexpr void add_box_faces(CatalogBuilder &builder, const LocalAabb &b, const BoxList &shape) {
     add_face_cells(builder, {PlaneAxis::X, b.min_x, b.min_y, b.max_y, b.min_z, b.max_z, -1}, shape);
     add_face_cells(builder, {PlaneAxis::X, b.max_x, b.min_y, b.max_y, b.min_z, b.max_z, 1}, shape);
     add_face_cells(builder, {PlaneAxis::Y, b.min_y, b.min_x, b.max_x, b.min_z, b.max_z, -1}, shape);

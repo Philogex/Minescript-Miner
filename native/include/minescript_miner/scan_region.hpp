@@ -21,23 +21,23 @@ struct BlockPos {
     std::int32_t z = 0;
 };
 
-struct WorldPoint16 {
+struct WorldPoint {
     std::int32_t x = 0;
     std::int32_t y = 0;
     std::int32_t z = 0;
 };
 
-struct WorldRectFace16 {
+struct WorldRectFace {
     PlaneAxis axis = PlaneAxis::X;
     std::int8_t normal_sign = 0;
-    WorldPoint16 p0{};
-    WorldPoint16 p1{};
-    WorldPoint16 p2{};
-    WorldPoint16 p3{};
+    WorldPoint p0{};
+    WorldPoint p1{};
+    WorldPoint p2{};
+    WorldPoint p3{};
 };
 
 struct WorldFace {
-    WorldRectFace16 face{};
+    WorldRectFace face{};
     Vec3 center{};
 };
 
@@ -74,58 +74,64 @@ constexpr BlockPos index_to_block_pos(std::uint16_t index, std::int32_t side, Bl
     return {min_pos.x + offset.x, min_pos.y + offset.y, min_pos.z + offset.z};
 }
 
-constexpr std::int32_t world16(std::int32_t block_coord, std::uint8_t local_coord) {
-    return block_coord * 16 + static_cast<std::int32_t>(local_coord);
+constexpr std::int32_t world_grid_coordinate(
+    std::int32_t block_coord,
+    std::uint8_t local_coord
+) {
+    return block_coord * GEOMETRY_UNITS_PER_BLOCK +
+           static_cast<std::int32_t>(local_coord);
 }
 
 // Does not consider non AABB shapes
-constexpr WorldRectFace16 face_to_world(const RectFace16 &face, BlockPos block_pos) {
+constexpr WorldRectFace face_to_world(const LocalRectFace &face, BlockPos block_pos) {
     switch (face.axis) {
         case PlaneAxis::X: {
-            const std::int32_t x = world16(block_pos.x, face.coord);
-            const std::int32_t y0 = world16(block_pos.y, face.u_min);
-            const std::int32_t y1 = world16(block_pos.y, face.u_max);
-            const std::int32_t z0 = world16(block_pos.z, face.v_min);
-            const std::int32_t z1 = world16(block_pos.z, face.v_max);
+            const std::int32_t x = world_grid_coordinate(block_pos.x, face.coord);
+            const std::int32_t y0 = world_grid_coordinate(block_pos.y, face.u_min);
+            const std::int32_t y1 = world_grid_coordinate(block_pos.y, face.u_max);
+            const std::int32_t z0 = world_grid_coordinate(block_pos.z, face.v_min);
+            const std::int32_t z1 = world_grid_coordinate(block_pos.z, face.v_max);
             return {face.axis, face.normal_sign, {x, y0, z0}, {x, y1, z0}, {x, y1, z1}, {x, y0, z1}};
         }
         case PlaneAxis::Y: {
-            const std::int32_t y = world16(block_pos.y, face.coord);
-            const std::int32_t x0 = world16(block_pos.x, face.u_min);
-            const std::int32_t x1 = world16(block_pos.x, face.u_max);
-            const std::int32_t z0 = world16(block_pos.z, face.v_min);
-            const std::int32_t z1 = world16(block_pos.z, face.v_max);
+            const std::int32_t y = world_grid_coordinate(block_pos.y, face.coord);
+            const std::int32_t x0 = world_grid_coordinate(block_pos.x, face.u_min);
+            const std::int32_t x1 = world_grid_coordinate(block_pos.x, face.u_max);
+            const std::int32_t z0 = world_grid_coordinate(block_pos.z, face.v_min);
+            const std::int32_t z1 = world_grid_coordinate(block_pos.z, face.v_max);
             return {face.axis, face.normal_sign, {x0, y, z0}, {x1, y, z0}, {x1, y, z1}, {x0, y, z1}};
         }
         case PlaneAxis::Z: {
-            const std::int32_t z = world16(block_pos.z, face.coord);
-            const std::int32_t x0 = world16(block_pos.x, face.u_min);
-            const std::int32_t x1 = world16(block_pos.x, face.u_max);
-            const std::int32_t y0 = world16(block_pos.y, face.v_min);
-            const std::int32_t y1 = world16(block_pos.y, face.v_max);
+            const std::int32_t z = world_grid_coordinate(block_pos.z, face.coord);
+            const std::int32_t x0 = world_grid_coordinate(block_pos.x, face.u_min);
+            const std::int32_t x1 = world_grid_coordinate(block_pos.x, face.u_max);
+            const std::int32_t y0 = world_grid_coordinate(block_pos.y, face.v_min);
+            const std::int32_t y1 = world_grid_coordinate(block_pos.y, face.v_max);
             return {face.axis, face.normal_sign, {x0, y0, z}, {x1, y0, z}, {x1, y1, z}, {x0, y1, z}};
         }
     }
     return {};
 }
 
-constexpr Vec3 point16_to_world(WorldPoint16 point) {
+constexpr Vec3 world_point_to_vec3(WorldPoint point) {
     return {
-        static_cast<double>(point.x) / 16.0,
-        static_cast<double>(point.y) / 16.0,
-        static_cast<double>(point.z) / 16.0,
+        static_cast<double>(point.x) / GEOMETRY_UNITS_PER_BLOCK,
+        static_cast<double>(point.y) / GEOMETRY_UNITS_PER_BLOCK,
+        static_cast<double>(point.z) / GEOMETRY_UNITS_PER_BLOCK,
     };
 }
 
-constexpr Vec3 face_center(const WorldRectFace16 &face) {
+constexpr Vec3 face_center(const WorldRectFace &face) {
+    constexpr double center_denominator =
+        2.0 * static_cast<double>(GEOMETRY_UNITS_PER_BLOCK);
     return {
-        static_cast<double>(face.p0.x + face.p2.x) / 32.0,
-        static_cast<double>(face.p0.y + face.p2.y) / 32.0,
-        static_cast<double>(face.p0.z + face.p2.z) / 32.0,
+        static_cast<double>(face.p0.x + face.p2.x) / center_denominator,
+        static_cast<double>(face.p0.y + face.p2.y) / center_denominator,
+        static_cast<double>(face.p0.z + face.p2.z) / center_denominator,
     };
 }
 
-constexpr Vec3 face_normal(const WorldRectFace16 &face) {
+constexpr Vec3 face_normal(const WorldRectFace &face) {
     switch (face.axis) {
         case PlaneAxis::X:
             return {static_cast<double>(face.normal_sign), 0.0, 0.0};

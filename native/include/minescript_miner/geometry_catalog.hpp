@@ -9,9 +9,10 @@
 
 namespace minescript_miner {
 
-inline constexpr int SHAPE_CATALOG_VERSION = 2;
-inline constexpr int GEOMETRY_CATALOG_VERSION = 2;
+inline constexpr int SHAPE_CATALOG_VERSION = 3;
+inline constexpr int GEOMETRY_CATALOG_VERSION = 3;
 inline constexpr int GEOMETRY_SHAPE_CATALOG_VERSION = SHAPE_CATALOG_VERSION;
+inline constexpr std::int32_t GEOMETRY_UNITS_PER_BLOCK = 32;
 inline constexpr std::size_t GEOMETRY_SHAPE_COUNT = 106;
 inline constexpr std::size_t GEOMETRY_BOX_COUNT = 249;
 inline constexpr std::size_t GEOMETRY_FACE_COUNT = 1246;
@@ -27,7 +28,7 @@ enum class PlaneAxis : std::int32_t {
     Z = 2,
 };
 
-struct Aabb16 {
+struct LocalAabb {
     std::uint8_t min_x;
     std::uint8_t min_y;
     std::uint8_t min_z;
@@ -36,7 +37,7 @@ struct Aabb16 {
     std::uint8_t max_z;
 };
 
-struct RectFace16 {
+struct LocalRectFace {
     PlaneAxis axis;
     std::uint8_t coord;
     std::uint8_t u_min;
@@ -54,7 +55,7 @@ struct ShapeGeometry {
 struct GeometryCatalog {
     std::array<const char *, GEOMETRY_SHAPE_COUNT> shape_names;
     std::array<ShapeGeometry, GEOMETRY_SHAPE_COUNT> shapes;
-    std::array<RectFace16, GEOMETRY_FACE_COUNT> faces;
+    std::array<LocalRectFace, GEOMETRY_FACE_COUNT> faces;
 };
 
 const GeometryCatalog &geometry_catalog();

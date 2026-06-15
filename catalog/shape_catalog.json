@@ -1,7 +1,8 @@
 {
-  "shape_catalog_version": 2,
-  "block_shape_mapping_version": 2,
-  "geometry_catalog_version": 2,
+  "shape_catalog_version": 3,
+  "block_shape_mapping_version": 3,
+  "geometry_catalog_version": 3,
+  "geometry_units_per_block": 32,
   "directions": ["north", "east", "south", "west"],
   "halves": ["bottom", "top"],
   "stair_shapes": ["straight", "inner_left", "inner_right", "outer_left", "outer_right"],
@@ -224,9 +225,9 @@
   },
   "shapes": [
     {"name": "empty", "kind": "empty"},
-    {"name": "full_cube", "boxes": [[0, 0, 0, 16, 16, 16]]},
-    {"name": "slab_bottom", "boxes": [[0, 0, 0, 16, 8, 16]]},
-    {"name": "slab_top", "boxes": [[0, 8, 0, 16, 16, 16]]},
+    {"name": "full_cube", "boxes": [[0, 0, 0, 32, 32, 32]]},
+    {"name": "slab_bottom", "boxes": [[0, 0, 0, 32, 16, 32]]},
+    {"name": "slab_top", "boxes": [[0, 16, 0, 32, 32, 32]]},
     {
       "family": "stairs",
       "template": "stairs_{facing}_{half}_{shape}"
@@ -234,19 +235,19 @@
     {
       "family": "connection",
       "template": "pane_{connection}",
-      "center": [7, 9]
+      "center": [14, 18]
     },
     {
       "family": "connection",
       "template": "fence_{connection}",
-      "center": [6, 10]
+      "center": [12, 20]
     },
-    {"name": "carpet", "boxes": [[0, 0, 0, 16, 1, 16]]},
-    {"name": "torch", "boxes": [[6, 0, 6, 10, 10, 10]]},
-    {"name": "ladder_north", "boxes": [[0, 0, 13, 16, 16, 16]]},
-    {"name": "ladder_east", "boxes": [[0, 0, 0, 3, 16, 16]]},
-    {"name": "ladder_south", "boxes": [[0, 0, 0, 16, 16, 3]]},
-    {"name": "ladder_west", "boxes": [[13, 0, 0, 16, 16, 16]]},
+    {"name": "carpet", "boxes": [[0, 0, 0, 32, 2, 32]]},
+    {"name": "torch", "boxes": [[12, 0, 12, 20, 20, 20]]},
+    {"name": "ladder_north", "boxes": [[0, 0, 26, 32, 32, 32]]},
+    {"name": "ladder_east", "boxes": [[0, 0, 0, 6, 32, 32]]},
+    {"name": "ladder_south", "boxes": [[0, 0, 0, 32, 32, 6]]},
+    {"name": "ladder_west", "boxes": [[26, 0, 0, 32, 32, 32]]},
     {
       "family": "button",
       "template": "button_{face}_{facing}_{powered}",

@@ -74,8 +74,8 @@ conservative.
 
 ## Exact Projection
 
-- World catalog coordinates enter the exact path directly as integer
-  sixteenths.
+- World catalog coordinates enter the exact path directly as integer grid
+  units, with the generated catalog defining the units per block.
 - Eye and view-basis components are imported exactly from their represented
   IEEE 754 values. The exact path models the basis actually used by the
   program, not an idealized rotation.

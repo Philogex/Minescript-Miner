@@ -46,7 +46,7 @@ public:
     );
 
     bool project_world_face(
-        const WorldRectFace16 &face,
+        const WorldRectFace &face,
         ExactProjectedFace &out
     );
     bool project_world_polygon(
@@ -67,7 +67,7 @@ public:
 
 private:
     ExactVec3 rational_vec3(const Vec3 &value) const;
-    ExactVec3 rational_world_point(const WorldPoint16 &point) const;
+    ExactVec3 rational_world_point(const WorldPoint &point) const;
     ExactViewPoint world_to_view(const ExactVec3 &point) const;
     bool project_view_polygon(
         const ExactViewPoint *points,

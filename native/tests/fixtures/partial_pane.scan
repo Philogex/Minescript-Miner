@@ -1,6 +1,6 @@
 # Sparse native scan fixture. Unlisted blocks use default_shape.
 fixture_version 1
-shape_catalog_version 2
+shape_catalog_version 3
 side 7
 position 0.5 0.5 0.5
 orientation_yaw_pitch 0.0 0.0

@@ -96,21 +96,21 @@ constexpr double inverse_depth_at(const InverseDepthPlane &plane, Point2 point) 
 }
 
 bool project_world_face(
-    const WorldRectFace16 &face,
+    const WorldRectFace &face,
     const Vec3 &eye,
     const ViewBasis &basis,
     ProjectedFace &out
 );
 
 bool make_reachable_world_face_pieces(
-    const WorldRectFace16 &face,
+    const WorldRectFace &face,
     const Vec3 &eye,
     double reach,
     ReachableWorldFacePieces &out
 );
 
 bool project_reachable_world_face(
-    const WorldRectFace16 &face,
+    const WorldRectFace &face,
     const Vec3 &eye,
     const ViewBasis &basis,
     double reach,

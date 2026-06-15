@@ -18,7 +18,38 @@ using minescript_miner::ScanRegionGeometry;
 using minescript_miner::Vec3;
 using minescript_miner::ViewBasis;
 using minescript_miner::WorldFace;
-using minescript_miner::WorldRectFace16;
+using minescript_miner::WorldPoint;
+using minescript_miner::WorldRectFace;
+
+constexpr std::int32_t from_sixteenths(std::int32_t value) {
+    static_assert(
+        minescript_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
+    );
+    return value * (minescript_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
+}
+
+constexpr WorldPoint point_from_sixteenths(
+    std::int32_t x,
+    std::int32_t y,
+    std::int32_t z
+) {
+    return {
+        from_sixteenths(x),
+        from_sixteenths(y),
+        from_sixteenths(z),
+    };
+}
+
+constexpr WorldRectFace face_from_sixteenths(WorldRectFace face) {
+    return {
+        face.axis,
+        face.normal_sign,
+        point_from_sixteenths(face.p0.x, face.p0.y, face.p0.z),
+        point_from_sixteenths(face.p1.x, face.p1.y, face.p1.z),
+        point_from_sixteenths(face.p2.x, face.p2.y, face.p2.z),
+        point_from_sixteenths(face.p3.x, face.p3.y, face.p3.z),
+    };
+}
 
 WorldFace z_face(
     std::int32_t min_x,
@@ -27,18 +58,19 @@ WorldFace z_face(
     std::int32_t max_y,
     std::int32_t z
 ) {
-    const WorldRectFace16 face{
+    const WorldRectFace face{
         PlaneAxis::Z,
         -1,
-        {min_x, min_y, z},
-        {max_x, min_y, z},
-        {max_x, max_y, z},
-        {min_x, max_y, z},
+        point_from_sixteenths(min_x, min_y, z),
+        point_from_sixteenths(max_x, min_y, z),
+        point_from_sixteenths(max_x, max_y, z),
+        point_from_sixteenths(min_x, max_y, z),
     };
     return {face, minescript_miner::face_center(face)};
 }
 
-WorldFace world_face(WorldRectFace16 face) {
+WorldFace world_face(WorldRectFace face) {
+    face = face_from_sixteenths(face);
     return {face, minescript_miner::face_center(face)};
 }
 
@@ -67,13 +99,13 @@ bool near_plane_regression() {
         {0.0, 1.0, 0.0},
         {0.0, 0.0, 1.0},
     };
-    const WorldRectFace16 crossing_face{
+    const WorldRectFace crossing_face{
         PlaneAxis::X,
         -1,
-        {8, -8, -16},
-        {8, -8, 48},
-        {8, 8, 48},
-        {8, 8, -16},
+        point_from_sixteenths(8, -8, -16),
+        point_from_sixteenths(8, -8, 48),
+        point_from_sixteenths(8, 8, 48),
+        point_from_sixteenths(8, 8, -16),
     };
 
     minescript_miner::ProjectedFace projection{};
@@ -110,13 +142,13 @@ bool near_plane_regression() {
         {0.0, 1.0, 0.0},
         {inverse_sqrt_two, 0.0, inverse_sqrt_two},
     };
-    const WorldRectFace16 one_corner_behind{
+    const WorldRectFace one_corner_behind{
         PlaneAxis::Y,
         1,
-        {-16, 0, -16},
-        {16, 0, -16},
-        {16, 0, 16},
-        {-16, 0, 16},
+        point_from_sixteenths(-16, 0, -16),
+        point_from_sixteenths(16, 0, -16),
+        point_from_sixteenths(16, 0, 16),
+        point_from_sixteenths(-16, 0, 16),
     };
     const Vec3 diagonal_eye{-0.5, 0.5, -0.5};
     if (!minescript_miner::project_world_face(
@@ -237,14 +269,14 @@ bool float_camera_edge_clearance_regression() {
         88.62,
         0.37818589477571585,
     };
-    const WorldRectFace16 face{
+    const WorldRectFace face = face_from_sixteenths({
         PlaneAxis::Y,
         -1,
         {-64, 1456, -48},
         {-48, 1456, -48},
         {-48, 1456, -32},
         {-64, 1456, -32},
-    };
+    });
     ScanRegionGeometry geometry{};
     geometry.world_faces.push_back({
         face,

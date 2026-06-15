@@ -10,8 +10,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
 
-SHAPE_CATALOG_VERSION = 2
-BLOCK_SHAPE_MAPPING_VERSION = 2
+SHAPE_CATALOG_VERSION = 3
+BLOCK_SHAPE_MAPPING_VERSION = 3
 CATALOG_VERSION = SHAPE_CATALOG_VERSION
 MAX_CUBE_SIDE = 39
 

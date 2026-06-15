@@ -223,9 +223,9 @@ bool convex_hull(ReachPolygon points, ReachPolygon &out) {
     return true;
 }
 
-LocalFace make_local_face(const WorldRectFace16 &face, const Vec3 &eye) {
-    const Vec3 p0 = point16_to_world(face.p0);
-    const Vec3 p2 = point16_to_world(face.p2);
+LocalFace make_local_face(const WorldRectFace &face, const Vec3 &eye) {
+    const Vec3 p0 = world_point_to_vec3(face.p0);
+    const Vec3 p2 = world_point_to_vec3(face.p2);
     switch (face.axis) {
         case PlaneAxis::X:
             return {
@@ -316,7 +316,7 @@ bool append_edge_circle_intersections(
 }
 
 bool make_reachable_face_polygon(
-    const WorldRectFace16 &face,
+    const WorldRectFace &face,
     const Vec3 &eye,
     double reach,
     ReachPolygon &out,
@@ -514,24 +514,24 @@ bool make_inverse_depth_plane(
 }
 
 bool project_world_face(
-    const WorldRectFace16 &face,
+    const WorldRectFace &face,
     const Vec3 &eye,
     const ViewBasis &basis,
     ProjectedFace &out
 ) {
-    const std::array<WorldPoint16, 4> world_points{face.p0, face.p1, face.p2, face.p3};
+    const std::array<WorldPoint, 4> world_points{face.p0, face.p1, face.p2, face.p3};
     ViewPolygon view_polygon{};
     view_polygon.count = static_cast<std::uint8_t>(world_points.size());
 
     for (std::size_t i = 0; i < world_points.size(); ++i) {
         view_polygon.points[i] =
-            world_to_view(point16_to_world(world_points[i]), eye, basis);
+            world_to_view(world_point_to_vec3(world_points[i]), eye, basis);
     }
     return project_view_polygon(view_polygon, out);
 }
 
 bool make_reachable_world_face_pieces(
-    const WorldRectFace16 &face,
+    const WorldRectFace &face,
     const Vec3 &eye,
     double reach,
     ReachableWorldFacePieces &out
@@ -551,10 +551,10 @@ bool make_reachable_world_face_pieces(
 
     if (full_face) {
         WorldFacePolygon &polygon = out.faces[0];
-        polygon.points[0] = point16_to_world(face.p0);
-        polygon.points[1] = point16_to_world(face.p1);
-        polygon.points[2] = point16_to_world(face.p2);
-        polygon.points[3] = point16_to_world(face.p3);
+        polygon.points[0] = world_point_to_vec3(face.p0);
+        polygon.points[1] = world_point_to_vec3(face.p1);
+        polygon.points[2] = world_point_to_vec3(face.p2);
+        polygon.points[3] = world_point_to_vec3(face.p3);
         polygon.count = 4;
         out.count = 1;
         return true;
@@ -579,7 +579,7 @@ bool make_reachable_world_face_pieces(
 }
 
 bool project_reachable_world_face(
-    const WorldRectFace16 &face,
+    const WorldRectFace &face,
     const Vec3 &eye,
     const ViewBasis &basis,
     double reach,

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import sys
 from dataclasses import dataclass
@@ -124,6 +125,30 @@ def connection_boxes(mask: int, center_min: int, center_max: int) -> Tuple[Box, 
     return tuple(boxes)
 
 
+def button_box(face: str, facing: str, powered: str) -> Box:
+    depth = 1 if powered == "true" else 2
+
+    if face == "floor":
+        if facing in ("north", "south"):
+            return 5, 0, 6, 11, depth, 10
+        return 6, 0, 5, 10, depth, 11
+
+    if face == "ceiling":
+        if facing in ("north", "south"):
+            return 5, 16 - depth, 6, 11, 16, 10
+        return 6, 16 - depth, 5, 10, 16, 11
+
+    if facing == "north":
+        return 5, 6, 16 - depth, 11, 10, 16
+    if facing == "south":
+        return 5, 6, 0, 11, 10, depth
+    if facing == "west":
+        return 16 - depth, 6, 5, 16, 10, 11
+    if facing == "east":
+        return 0, 6, 5, depth, 10, 11
+    raise ValueError(f"unknown button facing: {facing}")
+
+
 def expand_shapes(catalog: Dict[str, Any]) -> List[Shape]:
     directions = catalog["directions"]
     halves = catalog["halves"]
@@ -158,6 +183,20 @@ def expand_shapes(catalog: Dict[str, Any]) -> List[Shape]:
                         connection_boxes(mask, center_min, center_max),
                     )
                 )
+        elif spec.get("family") == "button":
+            for face in spec["faces"]:
+                for facing in directions:
+                    for powered in ("true", "false"):
+                        shapes.append(
+                            Shape(
+                                spec["template"].format(
+                                    face=face,
+                                    facing=facing,
+                                    powered=powered,
+                                ),
+                                (button_box(face, facing, powered),),
+                            )
+                        )
         else:
             raise ValueError(f"unsupported shape spec: {spec}")
 
@@ -284,17 +323,43 @@ def state_key(properties: Dict[str, str]) -> Tuple[Tuple[str, str], ...]:
     return tuple(sorted(properties.items()))
 
 
+def resolve_blocks(catalog: Dict[str, Any], spec: Dict[str, Any]) -> List[str]:
+    if "block" in spec:
+        return [spec["block"]]
+    if "blocks" in spec:
+        return list(spec["blocks"])
+    if "block_group" in spec:
+        return list(catalog["block_groups"][spec["block_group"]])
+    raise ValueError(f"block mapping has no block source: {spec}")
+
+
+def resolve_state_values(catalog: Dict[str, Any], spec: Dict[str, Any]) -> Iterable[Dict[str, str]]:
+    state_values = spec["state_values"]
+    property_names = tuple(state_values)
+    value_lists = []
+    for property_name in property_names:
+        values = state_values[property_name]
+        if isinstance(values, str):
+            if not values.startswith("$"):
+                raise ValueError(f"state value reference must start with '$': {values}")
+            values = catalog[values[1:]]
+        value_lists.append(values)
+
+    for values in itertools.product(*value_lists):
+        yield dict(zip(property_names, values))
+
+
 def expand_block_mappings(catalog: Dict[str, Any], shape_ids: Dict[str, int]) -> Tuple[Dict[Tuple[str, Tuple[Tuple[str, str], ...]], int], Dict[str, Tuple[str, ...]]]:
     directions = catalog["directions"]
-    halves = catalog["halves"]
-    stair_shapes = catalog["stair_shapes"]
     mapping: Dict[Tuple[str, Tuple[Tuple[str, str], ...]], int] = {}
     relevant: Dict[str, Tuple[str, ...]] = {}
 
     for spec in catalog["block_mappings"]:
-        blocks = spec["blocks"] if "blocks" in spec else [spec["block"]]
+        blocks = resolve_blocks(catalog, spec)
         properties = tuple(spec["properties"])
         for block in blocks:
+            if block in relevant:
+                raise ValueError(f"duplicate block mapping: {block}")
             relevant[block] = properties
 
         if "states" in spec:
@@ -303,16 +368,9 @@ def expand_block_mappings(catalog: Dict[str, Any], shape_ids: Dict[str, int]) ->
                     mapping[(block, state_key(state["properties"]))] = shape_ids[state["shape"]]
         elif "shape_template" in spec:
             for block in blocks:
-                for facing in directions:
-                    for half in halves:
-                        for stair_shape in stair_shapes:
-                            properties_dict = {
-                                "facing": facing,
-                                "half": half,
-                                "shape": stair_shape,
-                            }
-                            shape_name = spec["shape_template"].format(**properties_dict)
-                            mapping[(block, state_key(properties_dict))] = shape_ids[shape_name]
+                for properties_dict in resolve_state_values(catalog, spec):
+                    shape_name = spec["shape_template"].format(**properties_dict)
+                    mapping[(block, state_key(properties_dict))] = shape_ids[shape_name]
         elif "connection_template" in spec:
             for block in blocks:
                 for mask in range(16):

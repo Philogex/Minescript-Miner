@@ -1,5 +1,6 @@
 import math
 import os
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -58,6 +59,53 @@ class GeometryCatalogTest(unittest.TestCase):
                 self.assertEqual(
                     SHAPE_ID_BY_NAME[shape_name],
                     DEFAULT_CATALOG.shape_id(block_state),
+                )
+
+    def test_every_configured_block_variant_maps_to_its_shared_shape_family(self):
+        project_root = Path(__file__).resolve().parents[1]
+        catalog = json.loads(
+            (project_root / "catalog" / "shape_catalog.json").read_text(encoding="utf-8")
+        )
+        groups = catalog["block_groups"]
+
+        family_cases = {
+            "slabs": ("[type=bottom]", "slab_bottom"),
+            "stairs": (
+                "[facing=east,half=top,shape=outer_left]",
+                "stairs_east_top_outer_left",
+            ),
+            "panes": (
+                "[north=true,east=false,south=false,west=false]",
+                "pane_north",
+            ),
+            "fences": (
+                "[north=false,east=true,south=false,west=false]",
+                "fence_east",
+            ),
+            "carpets": ("", "carpet"),
+            "buttons": (
+                "[face=wall,facing=west,powered=true]",
+                "button_wall_west_true",
+            ),
+            "standing_torches": ("[lit=true]", "torch"),
+        }
+
+        for group_name, (state, shape_name) in family_cases.items():
+            expected_shape_id = SHAPE_ID_BY_NAME[shape_name]
+            for block_id in groups[group_name]:
+                with self.subTest(group=group_name, block=block_id):
+                    self.assertEqual(
+                        expected_shape_id,
+                        DEFAULT_CATALOG.shape_id(f"{block_id}{state}"),
+                    )
+
+        for facing in ("north", "east", "south", "west"):
+            with self.subTest(block="minecraft:ladder", facing=facing):
+                self.assertEqual(
+                    SHAPE_ID_BY_NAME[f"ladder_{facing}"],
+                    DEFAULT_CATALOG.shape_id(
+                        f"minecraft:ladder[facing={facing},waterlogged=false]"
+                    ),
                 )
 
     def test_python_encoder_rejects_cube_sides_above_uint16_index_limit(self):

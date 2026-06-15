@@ -9,12 +9,12 @@
 
 namespace minescript_miner {
 
-inline constexpr int SHAPE_CATALOG_VERSION = 1;
-inline constexpr int GEOMETRY_CATALOG_VERSION = 1;
+inline constexpr int SHAPE_CATALOG_VERSION = 2;
+inline constexpr int GEOMETRY_CATALOG_VERSION = 2;
 inline constexpr int GEOMETRY_SHAPE_CATALOG_VERSION = SHAPE_CATALOG_VERSION;
-inline constexpr std::size_t GEOMETRY_SHAPE_COUNT = 76;
-inline constexpr std::size_t GEOMETRY_BOX_COUNT = 219;
-inline constexpr std::size_t GEOMETRY_FACE_COUNT = 1066;
+inline constexpr std::size_t GEOMETRY_SHAPE_COUNT = 106;
+inline constexpr std::size_t GEOMETRY_BOX_COUNT = 249;
+inline constexpr std::size_t GEOMETRY_FACE_COUNT = 1246;
 
 inline constexpr std::int32_t SHAPE_EMPTY = 0;
 inline constexpr std::int32_t SHAPE_FULL_CUBE = 1;

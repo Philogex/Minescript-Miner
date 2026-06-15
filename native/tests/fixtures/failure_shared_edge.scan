@@ -1,7 +1,7 @@
 # Recorded from the current Minecraft world.
 # Unlisted blocks use default_shape. Order is x fastest, then z, then y.
 fixture_version 1
-shape_catalog_version 1
+shape_catalog_version 2
 side 11
 position -5.158089904436103 91.26310893673975 -1.5257497903607198
 orientation_yaw_pitch 126.32819 -34.913067

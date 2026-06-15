@@ -7,6 +7,8 @@ import unittest
 import venv
 from pathlib import Path
 
+from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION
+
 
 class NativeWheelTest(unittest.TestCase):
     def test_built_wheel_exports_hello(self):
@@ -67,11 +69,12 @@ class NativeWheelTest(unittest.TestCase):
                     (
                         "import _minescript_miner_native as native; "
                         "import minescript_miner; "
+                        "version = minescript_miner.geometry_catalog_debug()['version']; "
                         "print(native.hello()); "
                         "print(minescript_miner.hello()); "
-                        "print(minescript_miner.geometry_catalog_debug()['version']); "
-                        "print(native.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, 4.8, [0] * 27, [])); "
-                        "print(minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, 4.8, [0] * 27, []))"
+                        "print(version); "
+                        "print(native.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), version, 3, 4.8, [0] * 27, [])); "
+                        "print(minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), version, 3, 4.8, [0] * 27, []))"
                     ),
                 ],
                 check=True,
@@ -87,7 +90,7 @@ class NativeWheelTest(unittest.TestCase):
                 (
                     "hello from native extension\n"
                     "hello from native extension\n"
-                    "1\n"
+                    f"{SHAPE_CATALOG_VERSION}\n"
                     "None\n"
                     "None"
                 ),

@@ -126,7 +126,79 @@ def build_shape_fixtures() -> List[ShapeFixture]:
             )
         )
 
+    fixtures.extend(
+        [
+            ShapeFixture("white_carpet", "minecraft:white_carpet", _shape_id("carpet")),
+            ShapeFixture("standing_torch", "minecraft:torch", _shape_id("torch")),
+        ]
+    )
+
+    for facing in DIRECTIONS:
+        fixtures.append(
+            ShapeFixture(
+                f"ladder_{facing}",
+                f"minecraft:ladder[facing={facing},waterlogged=false]",
+                _shape_id(f"ladder_{facing}"),
+            )
+        )
+
+    for face in ("floor", "wall", "ceiling"):
+        for facing in DIRECTIONS:
+            for powered in ("true", "false"):
+                name = f"button_{face}_{facing}_{powered}"
+                fixtures.append(
+                    ShapeFixture(
+                        f"oak_{name}",
+                        "minecraft:oak_button["
+                        f"face={face},facing={facing},powered={powered}"
+                        "]",
+                        _shape_id(name),
+                    )
+                )
+
     return fixtures
+
+
+def _block_state_property(block_state: str, property_name: str) -> str | None:
+    if "[" not in block_state:
+        return None
+    properties = block_state.split("[", 1)[1].removesuffix("]")
+    for item in properties.split(","):
+        key, separator, value = item.partition("=")
+        if separator and key == property_name:
+            return value
+    return None
+
+
+def _support_position(fixture: ShapeFixture, pos: BlockPos) -> BlockPos | None:
+    block_id = fixture.block_state.split("[", 1)[0]
+    x, y, z = pos
+    if block_id.endswith("_carpet") or block_id in {
+        "minecraft:torch",
+        "minecraft:soul_torch",
+        "minecraft:redstone_torch",
+        "minecraft:copper_torch",
+    }:
+        return x, y - 1, z
+
+    if block_id == "minecraft:ladder" or block_id.endswith("_button"):
+        face = _block_state_property(fixture.block_state, "face")
+        if face == "floor":
+            return x, y - 1, z
+        if face == "ceiling":
+            return x, y + 1, z
+
+        facing = _block_state_property(fixture.block_state, "facing")
+        offsets = {
+            "north": (0, 0, 1),
+            "east": (-1, 0, 0),
+            "south": (0, 0, -1),
+            "west": (1, 0, 0),
+        }
+        dx, dy, dz = offsets[facing]
+        return x + dx, y + dy, z + dz
+
+    return None
 
 
 def _fixture_positions(
@@ -162,11 +234,16 @@ def build_fixture_area(fixtures: Sequence[ShapeFixture], positions: Sequence[Blo
     m.await_loaded_region(min_pos[0], min_pos[2], max_pos[0], max_pos[2])
     _command(
         "fill "
-        f"{min_pos[0] - 1} {min_pos[1]} {min_pos[2] - 1} "
-        f"{max_pos[0] + 1} {max_pos[1]} {max_pos[2] + 1} "
+        f"{min_pos[0] - 1} {min_pos[1] - 1} {min_pos[2] - 1} "
+        f"{max_pos[0] + 1} {max_pos[1] + 1} {max_pos[2] + 1} "
         "minecraft:air"
     )
     time.sleep(0.1)
+
+    for fixture, pos in zip(fixtures, positions):
+        support = _support_position(fixture, pos)
+        if support is not None:
+            _command(f"setblock {support[0]} {support[1]} {support[2]} minecraft:stone")
 
     for fixture, pos in zip(fixtures, positions):
         x, y, z = pos

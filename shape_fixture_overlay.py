@@ -136,6 +136,36 @@ def boxes_for_shape_name(shape_name: str) -> List[Box]:
     if shape_name.startswith("fence_"):
         connection = shape_name.removeprefix("fence_")
         return _connection_boxes(connection, post_width=4.0 / 16.0, arm_width=4.0 / 16.0)
+    if shape_name == "carpet":
+        return [_box(0.0, 0.0, 0.0, 1.0, 1.0 / 16.0, 1.0)]
+    if shape_name == "torch":
+        return [_box(6.0 / 16.0, 0.0, 6.0 / 16.0, 10.0 / 16.0, 10.0 / 16.0, 10.0 / 16.0)]
+    if shape_name.startswith("ladder_"):
+        direction = shape_name.removeprefix("ladder_")
+        return {
+            "north": [_box(0.0, 0.0, 13.0 / 16.0, 1.0, 1.0, 1.0)],
+            "east": [_box(0.0, 0.0, 0.0, 3.0 / 16.0, 1.0, 1.0)],
+            "south": [_box(0.0, 0.0, 0.0, 1.0, 1.0, 3.0 / 16.0)],
+            "west": [_box(13.0 / 16.0, 0.0, 0.0, 1.0, 1.0, 1.0)],
+        }[direction]
+    if shape_name.startswith("button_"):
+        _, face, facing, powered = shape_name.split("_")
+        depth = 1.0 / 16.0 if powered == "true" else 2.0 / 16.0
+        if face == "floor":
+            if facing in ("north", "south"):
+                return [_box(5 / 16, 0.0, 6 / 16, 11 / 16, depth, 10 / 16)]
+            return [_box(6 / 16, 0.0, 5 / 16, 10 / 16, depth, 11 / 16)]
+        if face == "ceiling":
+            if facing in ("north", "south"):
+                return [_box(5 / 16, 1.0 - depth, 6 / 16, 11 / 16, 1.0, 10 / 16)]
+            return [_box(6 / 16, 1.0 - depth, 5 / 16, 10 / 16, 1.0, 11 / 16)]
+        if facing == "north":
+            return [_box(5 / 16, 6 / 16, 1.0 - depth, 11 / 16, 10 / 16, 1.0)]
+        if facing == "south":
+            return [_box(5 / 16, 6 / 16, 0.0, 11 / 16, 10 / 16, depth)]
+        if facing == "west":
+            return [_box(1.0 - depth, 6 / 16, 5 / 16, 1.0, 10 / 16, 11 / 16)]
+        return [_box(0.0, 6 / 16, 5 / 16, depth, 10 / 16, 11 / 16)]
     return [_box(0.0, 0.0, 0.0, 1.0, 1.0, 1.0)]
 
 

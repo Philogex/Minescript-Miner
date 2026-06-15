@@ -119,7 +119,7 @@ def run() -> None:
                 (px, py + 1.62, pz),
                 (yaw, pitch),
                 REACH,
-                target_config=TARGET_CONFIG,
+                target_blocks=target_blocks,
                 await_region=await_region,
             )
             if LOG_SCAN_TIMINGS:

@@ -12,7 +12,10 @@ for path in (PROJECT_DIR, SRC_DIR):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from minescript_miner.minescript.io import acquire_current_target
+from minescript_miner.minescript.io import (
+    acquire_current_target,
+    load_target_blocks,
+)
 from geometry_catalog_check import assert_geometry_catalog_parity
 
 
@@ -41,7 +44,12 @@ px, py, pz = m.player_position()
 yaw, pitch = m.player_orientation()
 
 m.echo(f"python orientation yaw/pitch: {yaw}, {pitch}")
-direction = acquire_current_target((px, py + 1.62, pz), (yaw, pitch), target_config=TARGET_CONFIG)
+configured_targets = load_target_blocks(TARGET_CONFIG)
+direction = acquire_current_target(
+    (px, py + 1.62, pz),
+    (yaw, pitch),
+    target_blocks=configured_targets,
+)
 m.echo(f"native direction: {direction}")
 
 target_blocks = latest_native_log_value("target_block_count")

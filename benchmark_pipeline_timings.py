@@ -4,6 +4,7 @@ import math
 import os
 import statistics
 import sys
+from functools import partial
 from pathlib import Path
 from typing import Callable
 
@@ -19,7 +20,11 @@ for path in (PROJECT_DIR, SRC_DIR):
     if path_string not in sys.path:
         sys.path.insert(0, path_string)
 
-from minescript_miner.minescript.io import ScanTimings, acquire_current_target
+from minescript_miner.minescript.io import (
+    ScanTimings,
+    acquire_current_target,
+    load_target_blocks,
+)
 from minescript_miner.minescript.runtime import query
 
 
@@ -56,7 +61,7 @@ def timing_values(timing: ScanTimings) -> dict[str, float]:
     }
 
 
-def scan(*, await_region: bool) -> ScanTimings:
+def scan(*, await_region: bool, target_blocks: frozenset[str]) -> ScanTimings:
     px, py, pz = query(m.player_position)
     yaw, pitch = query(m.player_orientation)
     timings = ScanTimings()
@@ -64,7 +69,7 @@ def scan(*, await_region: bool) -> ScanTimings:
         (px, py + 1.62, pz),
         (yaw, pitch),
         REACH,
-        target_config=TARGET_CONFIG,
+        target_blocks=target_blocks,
         await_region=await_region,
         timings=timings,
     )
@@ -107,14 +112,20 @@ def summarize_samples(
 
 
 def run() -> None:
-    initial = scan(await_region=True)
+    target_blocks = load_target_blocks(TARGET_CONFIG)
+    scan_loaded_targets = partial(
+        scan,
+        target_blocks=target_blocks,
+    )
+
+    initial = scan_loaded_targets(await_region=True)
     m.echo(
         "Pipeline initial await_loaded_region: "
         f"{initial.area.await_region_ms:.4f} ms"
     )
 
     samples = collect_samples(
-        scan,
+        scan_loaded_targets,
         warmup_runs=WARMUP_RUNS,
         measured_runs=MEASURED_RUNS,
     )

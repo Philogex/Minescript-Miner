@@ -15,6 +15,37 @@ from minescript_miner.minescript import io
 
 
 class AcquireCurrentTargetTest(unittest.TestCase):
+    def test_acquire_current_target_uses_preloaded_target_blocks(self):
+        original_get_area = io.get_area
+        original_acquire_target = io.acquire_target
+        original_load_target_blocks = io.load_target_blocks
+
+        def fake_get_area(position, reach, *, await_region=True):
+            return [
+                ((index, 0, 0), "minecraft:stone")
+                for index in range(27)
+            ]
+
+        try:
+            io.get_area = fake_get_area
+            io.acquire_target = lambda *_args: (1.0, 2.0)
+            io.load_target_blocks = lambda *_args: self.fail(
+                "target config was read despite preloaded targets"
+            )
+
+            result = io.acquire_current_target(
+                (0.5, 0.5, 0.5),
+                (90.0, 10.0),
+                reach=0.5,
+                target_blocks=frozenset({"minecraft:stone"}),
+            )
+        finally:
+            io.get_area = original_get_area
+            io.acquire_target = original_acquire_target
+            io.load_target_blocks = original_load_target_blocks
+
+        self.assertEqual((1.0, 2.0), result)
+
     def test_acquire_current_target_encodes_blocks_before_native_bridge(self):
         captured = {}
         original_get_area = io.get_area

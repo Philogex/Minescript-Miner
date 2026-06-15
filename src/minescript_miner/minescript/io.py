@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import FrozenSet, List, Optional, Tuple, Union
+from typing import AbstractSet, FrozenSet, List, Optional, Tuple, Union
 
 from minescript_miner.adapter.native_bridge import Orientation, ScanPosition, acquire_target
 from minescript_miner.adapter.shape_catalog import BlockShapeCatalog, DEFAULT_CATALOG
@@ -64,15 +64,17 @@ def acquire_current_target(
     *,
     catalog: BlockShapeCatalog = DEFAULT_CATALOG,
     target_config: Union[str, Path] = DEFAULT_TARGET_CONFIG,
+    target_blocks: Optional[AbstractSet[str]] = None,
     await_region: bool = True,
     timings: Optional[ScanTimings] = None,
 ) -> Optional[Orientation]:
     total_start = time.perf_counter_ns() if timings is not None else 0
     min_pos, max_pos = fixed_cube_bounds(position, reach)
-    config_start = time.perf_counter_ns() if timings is not None else 0
-    target_blocks = load_target_blocks(target_config)
-    if timings is not None:
-        timings.target_config_ms = elapsed_ms(config_start)
+    if target_blocks is None:
+        config_start = time.perf_counter_ns() if timings is not None else 0
+        target_blocks = load_target_blocks(target_config)
+        if timings is not None:
+            timings.target_config_ms = elapsed_ms(config_start)
 
     if timings is None:
         area = get_area(position, reach, await_region=await_region)

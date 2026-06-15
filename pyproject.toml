@@ -14,7 +14,7 @@ license-files = ["LICENSE", "third_party/boost/LICENSE_1_0.txt"]
 [tool.cibuildwheel]
 build = "cp39-*"
 skip = "*-musllinux_*"
-test-command = "python -c \"import _minescript_miner_native as native; import minescript_miner; assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert minescript_miner.geometry_catalog_debug()['version'] == 3; assert native.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 3, 3, 4.8, [0] * 27, []) is None\""
+test-command = "python -c \"import _minescript_miner_native as native; import minescript_miner; from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION; debug = minescript_miner.geometry_catalog_debug(); assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert debug['shape_catalog_version'] == SHAPE_CATALOG_VERSION; assert debug['geometry_catalog_version'] >= SHAPE_CATALOG_VERSION; assert native.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), SHAPE_CATALOG_VERSION, 3, 4.8, [0] * 27, []) is None\""
 
 [tool.cibuildwheel.linux]
 archs = ["x86_64"]

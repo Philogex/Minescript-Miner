@@ -69,7 +69,7 @@ jobs:
         run: |
           $wheel = Get-ChildItem wheelhouse/*.whl | Select-Object -First 1
           python -m pip install --no-deps --target build/wheel-check $wheel.FullName
-          python -I -c "import sys; sys.path.insert(0, 'build/wheel-check'); import _minescript_miner_native as native; assert native.hello() == 'hello from native extension'; assert native.geometry_catalog_debug()['version'] == 1"
+          python -I -c "import sys; sys.path.insert(0, 'build/wheel-check'); import _minescript_miner_native as native; from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION; debug = native.geometry_catalog_debug(); assert native.hello() == 'hello from native extension'; assert debug['shape_catalog_version'] == SHAPE_CATALOG_VERSION; assert debug['geometry_catalog_version'] >= SHAPE_CATALOG_VERSION"
 
   linux-wheel:
     name: Build manylinux wheel
@@ -108,7 +108,7 @@ jobs:
           rm -rf build/bundle-check
           python -m zipfile -e "dist/minescript-miner-linux-${{ steps.release.outputs.tag }}.zip" build/bundle-check
           MINESCRIPT_MINER_NATIVE_LOG=build/bundle-check/native.log \
-            python -I -c "import sys; sys.path[:0] = ['build/bundle-check/Minescript-Miner', 'build/bundle-check/Minescript-Miner/src']; import _minescript_miner_native as native; import minescript_miner; assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert minescript_miner.geometry_catalog_debug()['version'] == 1; assert minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, 4.8, [0] * 27, []) is None"
+            python -I -c "import sys; sys.path[:0] = ['build/bundle-check/Minescript-Miner', 'build/bundle-check/Minescript-Miner/src']; import _minescript_miner_native as native; import minescript_miner; from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION; debug = minescript_miner.geometry_catalog_debug(); assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert debug['shape_catalog_version'] == SHAPE_CATALOG_VERSION; assert debug['geometry_catalog_version'] >= SHAPE_CATALOG_VERSION; assert minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), SHAPE_CATALOG_VERSION, 3, 4.8, [0] * 27, []) is None"
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v6
@@ -162,7 +162,7 @@ jobs:
           Remove-Item -Recurse -Force build/wheel-check -ErrorAction SilentlyContinue
           python -m pip install --no-deps --target build/wheel-check $wheel.FullName
           $env:MINESCRIPT_MINER_NATIVE_LOG = "build/wheel-check/native.log"
-          python -I -c "import sys; sys.path.insert(0, 'build/wheel-check'); import _minescript_miner_native as native; import minescript_miner; assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert minescript_miner.geometry_catalog_debug()['version'] == 1"
+          python -I -c "import sys; sys.path.insert(0, 'build/wheel-check'); import _minescript_miner_native as native; import minescript_miner; from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION; debug = minescript_miner.geometry_catalog_debug(); assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert debug['shape_catalog_version'] == SHAPE_CATALOG_VERSION; assert debug['geometry_catalog_version'] >= SHAPE_CATALOG_VERSION"
 
       - name: Build Minescript bundle
         shell: pwsh
@@ -177,7 +177,7 @@ jobs:
           python -m zipfile -e "dist/minescript-miner-windows-${{ steps.release.outputs.tag }}.zip" build/bundle-check
           $env:MINESCRIPT_MINER_NATIVE_LOG = "build/bundle-check/native.log"
           Get-ChildItem build/bundle-check/Minescript-Miner -Recurse
-          python -I -c "import importlib.machinery, importlib.util, pathlib, sys; root=pathlib.Path('build/bundle-check/Minescript-Miner').resolve(); sys.path[:0] = [str(root), str(root / 'src')]; print(importlib.machinery.EXTENSION_SUFFIXES); print(importlib.util.find_spec('_minescript_miner_native')); import _minescript_miner_native as native; import minescript_miner; assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert minescript_miner.geometry_catalog_debug()['version'] == 1; assert minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), 1, 3, 4.8, [0] * 27, []) is None"
+          python -I -c "import importlib.machinery, importlib.util, pathlib, sys; root=pathlib.Path('build/bundle-check/Minescript-Miner').resolve(); sys.path[:0] = [str(root), str(root / 'src')]; print(importlib.machinery.EXTENSION_SUFFIXES); print(importlib.util.find_spec('_minescript_miner_native')); import _minescript_miner_native as native; import minescript_miner; from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION; debug = minescript_miner.geometry_catalog_debug(); assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert debug['shape_catalog_version'] == SHAPE_CATALOG_VERSION; assert debug['geometry_catalog_version'] >= SHAPE_CATALOG_VERSION; assert minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), SHAPE_CATALOG_VERSION, 3, 4.8, [0] * 27, []) is None"
 
       - name: Upload release artifacts
         if: always()

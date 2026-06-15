@@ -36,7 +36,7 @@ mkdir -p "${DESTINATION}"
     "${DESTINATION}"
 
 cp "${SOURCE}/LICENSE_1_0.txt" "${DESTINATION}/LICENSE_1_0.txt"
-printf '%s\n' "${BOOST_VERSION}" > "${DESTINATION}/VERSION"
+printf '%s\n' "${BOOST_VERSION}" > "${DESTINATION}/BOOST_VERSION"
 cp tools/vendor_boost_README.md "${DESTINATION}/README.md"
 
 echo "Vendored Boost ${BOOST_VERSION} into ${DESTINATION}"

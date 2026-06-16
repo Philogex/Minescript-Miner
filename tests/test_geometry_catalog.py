@@ -235,10 +235,10 @@ class GeometryCatalogTest(unittest.TestCase):
 
             log_text = log_path.read_text(encoding="utf-8")
 
-        self.assertIn("world_face_count: 18", log_text)
+        self.assertIn("world_face_count: 3", log_text)
         self.assertIn("target_face_count: 3", log_text)
         self.assertIn("first_target_block_indices: 10 14 16", log_text)
-        self.assertIn("first_target_face_indices: 16 6 5", log_text)
+        self.assertIn("first_target_face_indices: 2 1 0", log_text)
         self.assertIn(
             "first_target_face_center_angles_rad: 0.000000 1.570796 3.141593",
             log_text,

@@ -11,8 +11,8 @@ default_shape 0
 expect_found 1
 expect_angle_min 1.65
 expect_angle_max 1.66
-expect_world_faces 82560
-expect_target_faces 282
+expect_world_faces 1676
+expect_target_faces 1
 expect_min_clips 1
 
 target 2124 1

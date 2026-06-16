@@ -84,8 +84,61 @@ static_assert(face_p2(Z_WORLD).z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixtee
 
 namespace {
 
-bool face_points_to_eye(const WorldFace &face, const Vec3 &eye) {
-    return dot(face_normal(face.face), eye - face.center) > 0.0;
+constexpr bool offset_inside_cube(BlockOffset offset, std::int32_t side) {
+    return offset.x >= 0 && offset.x < side &&
+           offset.y >= 0 && offset.y < side &&
+           offset.z >= 0 && offset.z < side;
+}
+
+constexpr BlockOffset face_neighbor_offset(const LocalRectFace &face) {
+    switch (face.axis) {
+        case PlaneAxis::X:
+            return {face.normal_sign, 0, 0};
+        case PlaneAxis::Y:
+            return {0, face.normal_sign, 0};
+        case PlaneAxis::Z:
+            return {0, 0, face.normal_sign};
+    }
+    return {};
+}
+
+bool has_internal_full_cube_neighbor_face(
+    UInt16View shape_ids,
+    std::uint16_t block_index,
+    std::int32_t side,
+    const LocalRectFace &face
+) {
+    if (shape_ids[block_index] != SHAPE_FULL_CUBE) {
+        return false;
+    }
+
+    const BlockOffset offset = index_to_offset(block_index, side);
+    const BlockOffset delta = face_neighbor_offset(face);
+    const BlockOffset neighbor{
+        offset.x + delta.x,
+        offset.y + delta.y,
+        offset.z + delta.z,
+    };
+    if (!offset_inside_cube(neighbor, side)) {
+        return false;
+    }
+
+    const std::uint16_t neighbor_index = offset_to_index(neighbor, side);
+    return shape_ids[neighbor_index] == SHAPE_FULL_CUBE;
+}
+
+bool face_points_to_eye(const WorldRectFace &face, const Vec3 &eye) {
+    const double coord =
+        static_cast<double>(face.coord) / GEOMETRY_UNITS_PER_BLOCK;
+    switch (face.axis) {
+        case PlaneAxis::X:
+            return face.normal_sign > 0 ? eye.x > coord : eye.x < coord;
+        case PlaneAxis::Y:
+            return face.normal_sign > 0 ? eye.y > coord : eye.y < coord;
+        case PlaneAxis::Z:
+            return face.normal_sign > 0 ? eye.z > coord : eye.z < coord;
+    }
+    return false;
 }
 
 double axis_distance(double value, double minimum, double maximum) {
@@ -155,11 +208,20 @@ ScanRegionGeometry build_scan_region_geometry(
     for (std::size_t block_index = 0; block_index < shape_ids.size; ++block_index) {
         const std::uint16_t shape_id = shape_ids[block_index];
         const ShapeGeometry &shape = geometry_for_shape(shape_id);
-        const BlockPos block_pos = index_to_block_pos(static_cast<std::uint16_t>(block_index), side, center);
+        const auto block_index16 = static_cast<std::uint16_t>(block_index);
+        const BlockPos block_pos = index_to_block_pos(block_index16, side, center);
 
         for (std::uint8_t face_index = 0; face_index < shape.face_count; ++face_index) {
             const LocalRectFace &local_face = catalog.faces[shape.face_offset + face_index];
+            if (has_internal_full_cube_neighbor_face(shape_ids, block_index16, side, local_face)) {
+                continue;
+            }
+
             const WorldRectFace world_rect = face_to_world(local_face, block_pos);
+            if (!face_points_to_eye(world_rect, eye)) {
+                continue;
+            }
+
             WorldFace world_face{
                 world_rect,
                 face_center(world_rect),
@@ -170,7 +232,6 @@ ScanRegionGeometry build_scan_region_geometry(
             geometry.world_faces.push_back(world_face);
 
             if (target_lookup[block_index] == 0 ||
-                !face_points_to_eye(world_face, eye) ||
                 !face_within_reach(world_rect, eye, reach)) {
                 continue;
             }

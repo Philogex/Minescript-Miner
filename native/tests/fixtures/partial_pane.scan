@@ -13,6 +13,6 @@ target 192 1
 expect_found 1
 expect_angle_min 0.164
 expect_angle_max 0.165
-expect_world_faces 12
+expect_world_faces 2
 expect_target_faces 1
 expect_min_clips 1

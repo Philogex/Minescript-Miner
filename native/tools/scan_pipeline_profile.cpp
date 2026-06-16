@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -21,6 +22,13 @@ namespace {
 struct ScanInput {
     std::vector<std::uint16_t> shape_ids{};
     std::vector<std::uint16_t> target_indices{};
+};
+
+struct ProfileOptions {
+    std::string fixture_path{};
+    std::size_t iterations = 1;
+    bool random_look = false;
+    std::uint64_t random_seed = 0x4d595df4d0f33173ULL;
 };
 
 ScanInput make_scan_input(const minescript_miner::test::ScanFixture &fixture) {
@@ -72,10 +80,59 @@ std::size_t parse_iterations(const char *value) {
     return static_cast<std::size_t>(iterations);
 }
 
+std::uint64_t parse_seed(const std::string &text) {
+    std::size_t parsed = 0;
+    const unsigned long long seed = std::stoull(text, &parsed);
+    if (parsed != text.size()) {
+        throw std::runtime_error("random-look seed must be an unsigned integer");
+    }
+    return static_cast<std::uint64_t>(seed);
+}
+
+ProfileOptions parse_options(int argc, char **argv) {
+    if (argc < 2) {
+        throw std::runtime_error("missing fixture path");
+    }
+
+    ProfileOptions options{};
+    options.fixture_path = argv[1];
+
+    int option_start = 2;
+    if (option_start < argc && std::string(argv[option_start]).rfind("--", 0) != 0) {
+        options.iterations = parse_iterations(argv[option_start]);
+        ++option_start;
+    }
+
+    for (int index = option_start; index < argc; ++index) {
+        const std::string option(argv[index]);
+        constexpr const char *random_look_prefix = "--random-look=";
+        if (option == "--random-look") {
+            options.random_look = true;
+        } else if (option.rfind(random_look_prefix, 0) == 0) {
+            options.random_look = true;
+            options.random_seed = parse_seed(option.substr(std::string(random_look_prefix).size()));
+        } else {
+            throw std::runtime_error("unknown option: " + option);
+        }
+    }
+
+    return options;
+}
+
+minescript_miner::Vec3 random_unit_direction(std::mt19937_64 &rng) {
+    constexpr double pi = 3.141592653589793238462643383279502884;
+    std::uniform_real_distribution<double> unit(0.0, 1.0);
+    const double z = 2.0 * unit(rng) - 1.0;
+    const double angle = 2.0 * pi * unit(rng);
+    const double radius = std::sqrt(std::max(0.0, 1.0 - z * z));
+    return {radius * std::cos(angle), z, radius * std::sin(angle)};
+}
+
 void validate_result(
     const minescript_miner::test::ScanFixture &fixture,
     const minescript_miner::ScanRegionGeometry &geometry,
-    const minescript_miner::BranchBoundResult &result
+    const minescript_miner::BranchBoundResult &result,
+    bool random_look
 ) {
     if (fixture.has_expect_world_faces &&
         geometry.world_faces.size() != fixture.expect_world_faces) {
@@ -88,11 +145,13 @@ void validate_result(
     if (fixture.has_expect_found && result.found != fixture.expect_found) {
         throw std::runtime_error("unexpected target visibility result");
     }
-    if (fixture.has_expect_min_clips &&
+    if (!random_look &&
+        fixture.has_expect_min_clips &&
         result.stats.clips_performed < fixture.expect_min_clips) {
         throw std::runtime_error("solver performed fewer clips than expected");
     }
-    if (result.found && fixture.has_expect_angle_range &&
+    if (!random_look &&
+        result.found && fixture.has_expect_angle_range &&
         (result.angle < fixture.expect_angle_min ||
          result.angle > fixture.expect_angle_max)) {
         throw std::runtime_error("result angle is outside the expected range");
@@ -104,17 +163,18 @@ void validate_result(
 int main(int argc, char **argv) {
     using namespace minescript_miner;
 
-    if (argc < 2 || argc > 3) {
-        std::cerr << "usage: " << argv[0] << " FIXTURE [ITERATIONS]\n";
+    if (argc < 2) {
+        std::cerr << "usage: " << argv[0] << " FIXTURE [ITERATIONS] [--random-look[=SEED]]\n";
         return 2;
     }
 
     try {
-        const test::ScanFixture fixture = test::load_scan_fixture(argv[1]);
+        const ProfileOptions options = parse_options(argc, argv);
+        const test::ScanFixture fixture = test::load_scan_fixture(options.fixture_path);
         const ScanInput input = make_scan_input(fixture);
-        const std::size_t iterations = argc == 3 ? parse_iterations(argv[2]) : 1;
         const Vec3 look_direction =
             look_direction_from_yaw_pitch(fixture.yaw, fixture.pitch);
+        std::mt19937_64 rng(options.random_seed);
 
         BranchBoundResult last_result{};
         std::size_t last_world_faces = 0;
@@ -125,22 +185,25 @@ int main(int argc, char **argv) {
         CALLGRIND_START_INSTRUMENTATION;
         CALLGRIND_ZERO_STATS;
 #endif
-        for (std::size_t iteration = 0; iteration < iterations; ++iteration) {
+        for (std::size_t iteration = 0; iteration < options.iterations; ++iteration) {
+            const Vec3 iteration_look_direction = options.random_look
+                ? random_unit_direction(rng)
+                : look_direction;
             const ScanRegionGeometry geometry = build_scan_region_geometry(
                 input.shape_ids,
                 input.target_indices,
                 fixture.position,
-                look_direction,
+                iteration_look_direction,
                 fixture.side,
                 fixture.reach
             );
             last_result = solve_visible_target(
                 geometry,
                 fixture.position,
-                look_direction,
+                iteration_look_direction,
                 fixture.reach
             );
-            validate_result(fixture, geometry, last_result);
+            validate_result(fixture, geometry, last_result, options.random_look);
 
             last_world_faces = geometry.world_faces.size();
             last_target_faces = geometry.target_faces.size();
@@ -158,7 +221,8 @@ int main(int argc, char **argv) {
         }
 
         std::cout
-            << "iterations=" << iterations
+            << "iterations=" << options.iterations
+            << " random_look=" << options.random_look
             << " world_faces=" << last_world_faces
             << " target_faces=" << last_target_faces
             << " found=" << last_result.found

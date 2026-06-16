@@ -4,6 +4,7 @@
 #include "minescript_miner/projection.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -32,6 +33,13 @@ struct Bounds3 {
     double max_x = 0.0;
     double max_y = 0.0;
     double max_z = 0.0;
+};
+
+struct ViewFaceBounds {
+    Bounds2 bounds{};
+    double min_forward = std::numeric_limits<double>::infinity();
+    double max_forward = -std::numeric_limits<double>::infinity();
+    bool projectable = false;
 };
 
 enum class OccluderState : std::uint8_t {
@@ -405,6 +413,110 @@ bool face_intersects_bounds(
            min_z <= bounds.max_z;
 }
 
+std::array<Vec3, 4> face_corners(const WorldRectFace &face) {
+    return {
+        world_point_to_vec3(face_p0(face)),
+        world_point_to_vec3(face_p1(face)),
+        world_point_to_vec3(face_p2(face)),
+        world_point_to_vec3(face_p3(face)),
+    };
+}
+
+Bounds2 expanded_bounds(Bounds2 bounds) {
+    bounds.min_x = std::nextafter(
+        bounds.min_x,
+        -std::numeric_limits<double>::infinity()
+    );
+    bounds.min_y = std::nextafter(
+        bounds.min_y,
+        -std::numeric_limits<double>::infinity()
+    );
+    bounds.max_x = std::nextafter(
+        bounds.max_x,
+        std::numeric_limits<double>::infinity()
+    );
+    bounds.max_y = std::nextafter(
+        bounds.max_y,
+        std::numeric_limits<double>::infinity()
+    );
+    return bounds;
+}
+
+ViewFaceBounds face_view_bounds(
+    const WorldRectFace &face,
+    const Vec3 &eye,
+    const ViewBasis &basis
+) {
+    constexpr double min_forward = 1e-9;
+    ViewFaceBounds result{};
+    bool initialized = false;
+    bool all_projectable = true;
+
+    for (const Vec3 &point : face_corners(face)) {
+        const Vec3 from_eye = point - eye;
+        const double forward = dot(from_eye, basis.forward);
+        result.min_forward = std::min(result.min_forward, forward);
+        result.max_forward = std::max(result.max_forward, forward);
+        if (forward <= min_forward) {
+            all_projectable = false;
+            continue;
+        }
+
+        const double x = dot(from_eye, basis.right) / forward;
+        const double y = dot(from_eye, basis.up) / forward;
+        if (!initialized) {
+            result.bounds = {x, y, x, y};
+            initialized = true;
+        } else {
+            result.bounds.min_x = std::min(result.bounds.min_x, x);
+            result.bounds.min_y = std::min(result.bounds.min_y, y);
+            result.bounds.max_x = std::max(result.bounds.max_x, x);
+            result.bounds.max_y = std::max(result.bounds.max_y, y);
+        }
+    }
+
+    result.projectable = initialized && all_projectable;
+    if (result.projectable) {
+        result.bounds = expanded_bounds(result.bounds);
+    }
+    return result;
+}
+
+bool face_may_occlude_target(
+    const WorldRectFace &occluder,
+    const ViewFaceBounds &target_bounds,
+    const Vec3 &eye,
+    const ViewBasis &basis
+) {
+    constexpr double min_forward = 1e-9;
+    const ViewFaceBounds occluder_bounds =
+        face_view_bounds(occluder, eye, basis);
+    if (occluder_bounds.max_forward <= min_forward) {
+        return false;
+    }
+
+    if (target_bounds.projectable) {
+        const double depth_guard =
+            256.0 *
+            std::numeric_limits<double>::epsilon() *
+            std::max({
+                1.0,
+                std::abs(occluder_bounds.min_forward),
+                std::abs(target_bounds.max_forward),
+            });
+        if (occluder_bounds.min_forward >
+            target_bounds.max_forward + depth_guard) {
+            return false;
+        }
+    }
+
+    if (!target_bounds.projectable ||
+        !occluder_bounds.projectable) {
+        return true;
+    }
+    return bounds_overlap(occluder_bounds.bounds, target_bounds.bounds);
+}
+
 double interval_edge_clearance(
     double value,
     double a,
@@ -570,13 +682,30 @@ private:
             ].face,
             eye_
         );
+        const ViewFaceBounds target_view_bounds =
+            face_view_bounds(
+                scan_geometry_.world_faces[
+                    target_world_face_index_
+                ].face,
+                eye_,
+                basis_
+            );
         occluder_order_.reserve(scan_geometry_.world_faces.size());
         for (std::uint32_t world_face_index = 0;
              world_face_index < scan_geometry_.world_faces.size();
              ++world_face_index) {
+            if (world_face_index == target_world_face_index_) {
+                continue;
+            }
             const WorldRectFace &face =
                 scan_geometry_.world_faces[world_face_index].face;
-            if (face_intersects_bounds(face, bounds)) {
+            if (face_intersects_bounds(face, bounds) &&
+                face_may_occlude_target(
+                    face,
+                    target_view_bounds,
+                    eye_,
+                    basis_
+                )) {
                 occluder_order_.push_back(world_face_index);
             }
         }

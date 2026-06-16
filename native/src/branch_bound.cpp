@@ -140,10 +140,10 @@ double target_face_angle_lower_bound(
 
     double radius_squared = 0.0;
     const WorldPoint corners[]{
-        world_face.face.p0,
-        world_face.face.p1,
-        world_face.face.p2,
-        world_face.face.p3,
+        face_p0(world_face.face),
+        face_p1(world_face.face),
+        face_p2(world_face.face),
+        face_p3(world_face.face),
     };
     for (const WorldPoint corner_grid : corners) {
         const Vec3 corner =
@@ -347,10 +347,10 @@ Bounds3 target_occlusion_bounds(
         eye.z,
     };
     const WorldPoint points[]{
-        face.p0,
-        face.p1,
-        face.p2,
-        face.p3,
+        face_p0(face),
+        face_p1(face),
+        face_p2(face),
+        face_p3(face),
     };
     for (const WorldPoint point_grid : points) {
         const Vec3 point = world_point_to_vec3(point_grid);
@@ -368,8 +368,8 @@ bool face_intersects_bounds(
     const WorldRectFace &face,
     const Bounds3 &bounds
 ) {
-    const Vec3 p0 = world_point_to_vec3(face.p0);
-    const Vec3 p2 = world_point_to_vec3(face.p2);
+    const Vec3 p0 = world_point_to_vec3(face_bounds_min(face));
+    const Vec3 p2 = world_point_to_vec3(face_bounds_max(face));
     const double min_x = std::min(p0.x, p2.x);
     const double min_y = std::min(p0.y, p2.y);
     const double min_z = std::min(p0.z, p2.z);
@@ -396,8 +396,8 @@ double world_face_edge_clearance(
     const WorldRectFace &face,
     const Vec3 &point
 ) {
-    const Vec3 p0 = world_point_to_vec3(face.p0);
-    const Vec3 p2 = world_point_to_vec3(face.p2);
+    const Vec3 p0 = world_point_to_vec3(face_bounds_min(face));
+    const Vec3 p2 = world_point_to_vec3(face_bounds_max(face));
     switch (face.axis) {
         case PlaneAxis::X:
             return std::min(

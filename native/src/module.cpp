@@ -348,14 +348,22 @@ static void log_scan_input(
             << target_face.center.x << ", "
             << target_face.center.y << ", "
             << target_face.center.z << "\n";
+        const minescript_miner::Vec3 target_face_p0 =
+            minescript_miner::world_point_to_vec3(
+                minescript_miner::face_p0(target_face.face)
+            );
+        const minescript_miner::Vec3 target_face_p2 =
+            minescript_miner::world_point_to_vec3(
+                minescript_miner::face_p2(target_face.face)
+            );
         log << "  solver_target_face_p0: "
-            << minescript_miner::world_point_to_vec3(target_face.face.p0).x << ", "
-            << minescript_miner::world_point_to_vec3(target_face.face.p0).y << ", "
-            << minescript_miner::world_point_to_vec3(target_face.face.p0).z << "\n";
+            << target_face_p0.x << ", "
+            << target_face_p0.y << ", "
+            << target_face_p0.z << "\n";
         log << "  solver_target_face_p2: "
-            << minescript_miner::world_point_to_vec3(target_face.face.p2).x << ", "
-            << minescript_miner::world_point_to_vec3(target_face.face.p2).y << ", "
-            << minescript_miner::world_point_to_vec3(target_face.face.p2).z << "\n";
+            << target_face_p2.x << ", "
+            << target_face_p2.y << ", "
+            << target_face_p2.z << "\n";
         log << "  solver_target_face_normal: "
             << normal.x << ", "
             << normal.y << ", "

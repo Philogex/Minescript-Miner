@@ -224,38 +224,46 @@ bool convex_hull(ReachPolygon points, ReachPolygon &out) {
 }
 
 LocalFace make_local_face(const WorldRectFace &face, const Vec3 &eye) {
-    const Vec3 p0 = world_point_to_vec3(face.p0);
-    const Vec3 p2 = world_point_to_vec3(face.p2);
+    const double coord =
+        static_cast<double>(face.coord) / GEOMETRY_UNITS_PER_BLOCK;
+    const double u_min =
+        static_cast<double>(face.u_min) / GEOMETRY_UNITS_PER_BLOCK;
+    const double u_max =
+        static_cast<double>(face.u_max) / GEOMETRY_UNITS_PER_BLOCK;
+    const double v_min =
+        static_cast<double>(face.v_min) / GEOMETRY_UNITS_PER_BLOCK;
+    const double v_max =
+        static_cast<double>(face.v_max) / GEOMETRY_UNITS_PER_BLOCK;
     switch (face.axis) {
         case PlaneAxis::X:
             return {
-                p0.x,
-                std::min(p0.y, p2.y),
-                std::max(p0.y, p2.y),
-                std::min(p0.z, p2.z),
-                std::max(p0.z, p2.z),
+                coord,
+                u_min,
+                u_max,
+                v_min,
+                v_max,
                 eye.x,
                 eye.y,
                 eye.z,
             };
         case PlaneAxis::Y:
             return {
-                p0.y,
-                std::min(p0.x, p2.x),
-                std::max(p0.x, p2.x),
-                std::min(p0.z, p2.z),
-                std::max(p0.z, p2.z),
+                coord,
+                u_min,
+                u_max,
+                v_min,
+                v_max,
                 eye.y,
                 eye.x,
                 eye.z,
             };
         case PlaneAxis::Z:
             return {
-                p0.z,
-                std::min(p0.x, p2.x),
-                std::max(p0.x, p2.x),
-                std::min(p0.y, p2.y),
-                std::max(p0.y, p2.y),
+                coord,
+                u_min,
+                u_max,
+                v_min,
+                v_max,
                 eye.z,
                 eye.x,
                 eye.y,
@@ -519,7 +527,12 @@ bool project_world_face(
     const ViewBasis &basis,
     ProjectedFace &out
 ) {
-    const std::array<WorldPoint, 4> world_points{face.p0, face.p1, face.p2, face.p3};
+    const std::array<WorldPoint, 4> world_points{
+        face_p0(face),
+        face_p1(face),
+        face_p2(face),
+        face_p3(face),
+    };
     ViewPolygon view_polygon{};
     view_polygon.count = static_cast<std::uint8_t>(world_points.size());
 
@@ -551,10 +564,10 @@ bool make_reachable_world_face_pieces(
 
     if (full_face) {
         WorldFacePolygon &polygon = out.faces[0];
-        polygon.points[0] = world_point_to_vec3(face.p0);
-        polygon.points[1] = world_point_to_vec3(face.p1);
-        polygon.points[2] = world_point_to_vec3(face.p2);
-        polygon.points[3] = world_point_to_vec3(face.p3);
+        polygon.points[0] = world_point_to_vec3(face_p0(face));
+        polygon.points[1] = world_point_to_vec3(face_p1(face));
+        polygon.points[2] = world_point_to_vec3(face_p2(face));
+        polygon.points[3] = world_point_to_vec3(face_p3(face));
         polygon.count = 4;
         out.count = 1;
         return true;

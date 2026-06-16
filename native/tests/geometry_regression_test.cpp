@@ -22,32 +22,24 @@ using minescript_miner::WorldPoint;
 using minescript_miner::WorldRectFace;
 
 constexpr std::int32_t from_sixteenths(std::int32_t value) {
+    // TODO: Rename this legacy test helper. The production geometry uses a
+    // 32-unit grid; these regression literals are still written in historical
+    // sixteenth-style coordinates and are scaled here to keep the cases stable.
     static_assert(
         minescript_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
     );
     return value * (minescript_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
 }
 
-constexpr WorldPoint point_from_sixteenths(
-    std::int32_t x,
-    std::int32_t y,
-    std::int32_t z
-) {
-    return {
-        from_sixteenths(x),
-        from_sixteenths(y),
-        from_sixteenths(z),
-    };
-}
-
 constexpr WorldRectFace face_from_sixteenths(WorldRectFace face) {
     return {
         face.axis,
         face.normal_sign,
-        point_from_sixteenths(face.p0.x, face.p0.y, face.p0.z),
-        point_from_sixteenths(face.p1.x, face.p1.y, face.p1.z),
-        point_from_sixteenths(face.p2.x, face.p2.y, face.p2.z),
-        point_from_sixteenths(face.p3.x, face.p3.y, face.p3.z),
+        from_sixteenths(face.coord),
+        from_sixteenths(face.u_min),
+        from_sixteenths(face.u_max),
+        from_sixteenths(face.v_min),
+        from_sixteenths(face.v_max),
     };
 }
 
@@ -61,10 +53,11 @@ WorldFace z_face(
     const WorldRectFace face{
         PlaneAxis::Z,
         -1,
-        point_from_sixteenths(min_x, min_y, z),
-        point_from_sixteenths(max_x, min_y, z),
-        point_from_sixteenths(max_x, max_y, z),
-        point_from_sixteenths(min_x, max_y, z),
+        from_sixteenths(z),
+        from_sixteenths(min_x),
+        from_sixteenths(max_x),
+        from_sixteenths(min_y),
+        from_sixteenths(max_y),
     };
     return {face, minescript_miner::face_center(face)};
 }
@@ -102,10 +95,11 @@ bool near_plane_regression() {
     const WorldRectFace crossing_face{
         PlaneAxis::X,
         -1,
-        point_from_sixteenths(8, -8, -16),
-        point_from_sixteenths(8, -8, 48),
-        point_from_sixteenths(8, 8, 48),
-        point_from_sixteenths(8, 8, -16),
+        from_sixteenths(8),
+        from_sixteenths(-8),
+        from_sixteenths(8),
+        from_sixteenths(-16),
+        from_sixteenths(48),
     };
 
     minescript_miner::ProjectedFace projection{};
@@ -145,10 +139,11 @@ bool near_plane_regression() {
     const WorldRectFace one_corner_behind{
         PlaneAxis::Y,
         1,
-        point_from_sixteenths(-16, 0, -16),
-        point_from_sixteenths(16, 0, -16),
-        point_from_sixteenths(16, 0, 16),
-        point_from_sixteenths(-16, 0, 16),
+        from_sixteenths(0),
+        from_sixteenths(-16),
+        from_sixteenths(16),
+        from_sixteenths(-16),
+        from_sixteenths(16),
     };
     const Vec3 diagonal_eye{-0.5, 0.5, -0.5};
     if (!minescript_miner::project_world_face(
@@ -272,10 +267,11 @@ bool float_camera_edge_clearance_regression() {
     const WorldRectFace face = face_from_sixteenths({
         PlaneAxis::Y,
         -1,
-        {-64, 1456, -48},
-        {-48, 1456, -48},
-        {-48, 1456, -32},
-        {-64, 1456, -32},
+        1456,
+        -64,
+        -48,
+        -48,
+        -32,
     });
     ScanRegionGeometry geometry{};
     geometry.world_faces.push_back({
@@ -344,36 +340,40 @@ bool adjacent_full_cube_occlusion_regression() {
     geometry.world_faces.push_back(world_face({
         PlaneAxis::Z,
         -1,
-        {-96, 1472, 32},
-        {-80, 1472, 32},
-        {-80, 1488, 32},
-        {-96, 1488, 32},
+        32,
+        -96,
+        -80,
+        1472,
+        1488,
     }));
 
     // Eye-facing faces of the full cube directly in front of the target.
     geometry.world_faces.push_back(world_face({
         PlaneAxis::X,
         1,
-        {-80, 1472, 16},
-        {-80, 1488, 16},
-        {-80, 1488, 32},
-        {-80, 1472, 32},
+        -80,
+        1472,
+        1488,
+        16,
+        32,
     }));
     geometry.world_faces.push_back(world_face({
         PlaneAxis::Y,
         -1,
-        {-96, 1472, 16},
-        {-80, 1472, 16},
-        {-80, 1472, 32},
-        {-96, 1472, 32},
+        1472,
+        -96,
+        -80,
+        16,
+        32,
     }));
     geometry.world_faces.push_back(world_face({
         PlaneAxis::Z,
         -1,
-        {-96, 1472, 16},
-        {-80, 1472, 16},
-        {-80, 1488, 16},
-        {-96, 1488, 16},
+        16,
+        -96,
+        -80,
+        1472,
+        1488,
     }));
     geometry.target_faces.push_back({0, 0.0});
 

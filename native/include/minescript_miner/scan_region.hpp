@@ -3,6 +3,7 @@
 #include "minescript_miner/geometry_catalog.hpp"
 #include "minescript_miner/vec.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <vector>
@@ -30,10 +31,11 @@ struct WorldPoint {
 struct WorldRectFace {
     PlaneAxis axis = PlaneAxis::X;
     std::int8_t normal_sign = 0;
-    WorldPoint p0{};
-    WorldPoint p1{};
-    WorldPoint p2{};
-    WorldPoint p3{};
+    std::int32_t coord = 0;
+    std::int32_t u_min = 0;
+    std::int32_t u_max = 0;
+    std::int32_t v_min = 0;
+    std::int32_t v_max = 0;
 };
 
 struct WorldFace {
@@ -114,7 +116,7 @@ constexpr WorldRectFace face_to_world(const LocalRectFace &face, BlockPos block_
             const std::int32_t y1 = world_grid_coordinate(block_pos.y, face.u_max);
             const std::int32_t z0 = world_grid_coordinate(block_pos.z, face.v_min);
             const std::int32_t z1 = world_grid_coordinate(block_pos.z, face.v_max);
-            return {face.axis, face.normal_sign, {x, y0, z0}, {x, y1, z0}, {x, y1, z1}, {x, y0, z1}};
+            return {face.axis, face.normal_sign, x, y0, y1, z0, z1};
         }
         case PlaneAxis::Y: {
             const std::int32_t y = world_grid_coordinate(block_pos.y, face.coord);
@@ -122,7 +124,7 @@ constexpr WorldRectFace face_to_world(const LocalRectFace &face, BlockPos block_
             const std::int32_t x1 = world_grid_coordinate(block_pos.x, face.u_max);
             const std::int32_t z0 = world_grid_coordinate(block_pos.z, face.v_min);
             const std::int32_t z1 = world_grid_coordinate(block_pos.z, face.v_max);
-            return {face.axis, face.normal_sign, {x0, y, z0}, {x1, y, z0}, {x1, y, z1}, {x0, y, z1}};
+            return {face.axis, face.normal_sign, y, x0, x1, z0, z1};
         }
         case PlaneAxis::Z: {
             const std::int32_t z = world_grid_coordinate(block_pos.z, face.coord);
@@ -130,8 +132,64 @@ constexpr WorldRectFace face_to_world(const LocalRectFace &face, BlockPos block_
             const std::int32_t x1 = world_grid_coordinate(block_pos.x, face.u_max);
             const std::int32_t y0 = world_grid_coordinate(block_pos.y, face.v_min);
             const std::int32_t y1 = world_grid_coordinate(block_pos.y, face.v_max);
-            return {face.axis, face.normal_sign, {x0, y0, z}, {x1, y0, z}, {x1, y1, z}, {x0, y1, z}};
+            return {face.axis, face.normal_sign, z, x0, x1, y0, y1};
         }
+    }
+    return {};
+}
+
+constexpr WorldPoint face_point(
+    const WorldRectFace &face,
+    std::int32_t u,
+    std::int32_t v
+) {
+    switch (face.axis) {
+        case PlaneAxis::X:
+            return {face.coord, u, v};
+        case PlaneAxis::Y:
+            return {u, face.coord, v};
+        case PlaneAxis::Z:
+            return {u, v, face.coord};
+    }
+    return {};
+}
+
+constexpr WorldPoint face_p0(const WorldRectFace &face) {
+    return face_point(face, face.u_min, face.v_min);
+}
+
+constexpr WorldPoint face_p1(const WorldRectFace &face) {
+    return face_point(face, face.u_max, face.v_min);
+}
+
+constexpr WorldPoint face_p2(const WorldRectFace &face) {
+    return face_point(face, face.u_max, face.v_max);
+}
+
+constexpr WorldPoint face_p3(const WorldRectFace &face) {
+    return face_point(face, face.u_min, face.v_max);
+}
+
+constexpr WorldPoint face_bounds_min(const WorldRectFace &face) {
+    switch (face.axis) {
+        case PlaneAxis::X:
+            return {face.coord, face.u_min, face.v_min};
+        case PlaneAxis::Y:
+            return {face.u_min, face.coord, face.v_min};
+        case PlaneAxis::Z:
+            return {face.u_min, face.v_min, face.coord};
+    }
+    return {};
+}
+
+constexpr WorldPoint face_bounds_max(const WorldRectFace &face) {
+    switch (face.axis) {
+        case PlaneAxis::X:
+            return {face.coord, face.u_max, face.v_max};
+        case PlaneAxis::Y:
+            return {face.u_max, face.coord, face.v_max};
+        case PlaneAxis::Z:
+            return {face.u_max, face.v_max, face.coord};
     }
     return {};
 }
@@ -147,11 +205,21 @@ constexpr Vec3 world_point_to_vec3(WorldPoint point) {
 constexpr Vec3 face_center(const WorldRectFace &face) {
     constexpr double center_denominator =
         2.0 * static_cast<double>(GEOMETRY_UNITS_PER_BLOCK);
-    return {
-        static_cast<double>(face.p0.x + face.p2.x) / center_denominator,
-        static_cast<double>(face.p0.y + face.p2.y) / center_denominator,
-        static_cast<double>(face.p0.z + face.p2.z) / center_denominator,
-    };
+    const double coord =
+        static_cast<double>(face.coord) / GEOMETRY_UNITS_PER_BLOCK;
+    const double u =
+        static_cast<double>(face.u_min + face.u_max) / center_denominator;
+    const double v =
+        static_cast<double>(face.v_min + face.v_max) / center_denominator;
+    switch (face.axis) {
+        case PlaneAxis::X:
+            return {coord, u, v};
+        case PlaneAxis::Y:
+            return {u, coord, v};
+        case PlaneAxis::Z:
+            return {u, v, coord};
+    }
+    return {};
 }
 
 constexpr Vec3 face_normal(const WorldRectFace &face) {

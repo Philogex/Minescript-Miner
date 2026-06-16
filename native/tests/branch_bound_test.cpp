@@ -7,22 +7,13 @@
 namespace {
 
 constexpr std::int32_t from_sixteenths(std::int32_t value) {
+    // TODO: Rename this legacy test helper. The production geometry uses a
+    // 32-unit grid; these regression literals are still written in historical
+    // sixteenth-style coordinates and are scaled here to keep the cases stable.
     static_assert(
         minescript_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
     );
     return value * (minescript_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
-}
-
-constexpr minescript_miner::WorldPoint point_from_sixteenths(
-    std::int32_t x,
-    std::int32_t y,
-    std::int32_t z
-) {
-    return {
-        from_sixteenths(x),
-        from_sixteenths(y),
-        from_sixteenths(z),
-    };
 }
 
 minescript_miner::WorldFace z_face(
@@ -36,10 +27,11 @@ minescript_miner::WorldFace z_face(
     const WorldRectFace face{
         PlaneAxis::Z,
         -1,
-        point_from_sixteenths(min_x, min_y, z),
-        point_from_sixteenths(max_x, min_y, z),
-        point_from_sixteenths(max_x, max_y, z),
-        point_from_sixteenths(min_x, max_y, z),
+        from_sixteenths(z),
+        from_sixteenths(min_x),
+        from_sixteenths(max_x),
+        from_sixteenths(min_y),
+        from_sixteenths(max_y),
     };
     return {face, face_center(face)};
 }

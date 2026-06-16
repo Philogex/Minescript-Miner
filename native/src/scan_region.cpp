@@ -41,12 +41,12 @@ constexpr LocalRectFace X_FACE{
     1,
 };
 constexpr WorldRectFace X_WORLD = face_to_world(X_FACE, {10, 64, -4});
-static_assert(X_WORLD.p0.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
-static_assert(X_WORLD.p0.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(2));
-static_assert(X_WORLD.p0.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(3));
-static_assert(X_WORLD.p2.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
-static_assert(X_WORLD.p2.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(6));
-static_assert(X_WORLD.p2.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(7));
+static_assert(face_p0(X_WORLD).x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(face_p0(X_WORLD).y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(2));
+static_assert(face_p0(X_WORLD).z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(3));
+static_assert(face_p2(X_WORLD).x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(face_p2(X_WORLD).y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(6));
+static_assert(face_p2(X_WORLD).z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(7));
 
 constexpr LocalRectFace Y_FACE{
     PlaneAxis::Y,
@@ -58,12 +58,12 @@ constexpr LocalRectFace Y_FACE{
     1,
 };
 constexpr WorldRectFace Y_WORLD = face_to_world(Y_FACE, {10, 64, -4});
-static_assert(Y_WORLD.p0.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(2));
-static_assert(Y_WORLD.p0.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
-static_assert(Y_WORLD.p0.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(3));
-static_assert(Y_WORLD.p2.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(6));
-static_assert(Y_WORLD.p2.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
-static_assert(Y_WORLD.p2.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(7));
+static_assert(face_p0(Y_WORLD).x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(2));
+static_assert(face_p0(Y_WORLD).y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(face_p0(Y_WORLD).z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(3));
+static_assert(face_p2(Y_WORLD).x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(6));
+static_assert(face_p2(Y_WORLD).y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(face_p2(Y_WORLD).z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(7));
 
 constexpr LocalRectFace Z_FACE{
     PlaneAxis::Z,
@@ -75,12 +75,12 @@ constexpr LocalRectFace Z_FACE{
     1,
 };
 constexpr WorldRectFace Z_WORLD = face_to_world(Z_FACE, {10, 64, -4});
-static_assert(Z_WORLD.p0.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(2));
-static_assert(Z_WORLD.p0.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(3));
-static_assert(Z_WORLD.p0.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
-static_assert(Z_WORLD.p2.x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(6));
-static_assert(Z_WORLD.p2.y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(7));
-static_assert(Z_WORLD.p2.z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(face_p0(Z_WORLD).x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(2));
+static_assert(face_p0(Z_WORLD).y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(3));
+static_assert(face_p0(Z_WORLD).z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
+static_assert(face_p2(Z_WORLD).x == 10 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(6));
+static_assert(face_p2(Z_WORLD).y == 64 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(7));
+static_assert(face_p2(Z_WORLD).z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixteenth(8));
 
 namespace {
 
@@ -93,8 +93,8 @@ double axis_distance(double value, double minimum, double maximum) {
 }
 
 bool face_within_reach(const WorldRectFace &face, const Vec3 &eye, double reach) {
-    const Vec3 p0 = world_point_to_vec3(face.p0);
-    const Vec3 p2 = world_point_to_vec3(face.p2);
+    const Vec3 p0 = world_point_to_vec3(face_bounds_min(face));
+    const Vec3 p2 = world_point_to_vec3(face_bounds_max(face));
     const double distance_x =
         axis_distance(eye.x, std::min(p0.x, p2.x), std::max(p0.x, p2.x));
     const double distance_y =

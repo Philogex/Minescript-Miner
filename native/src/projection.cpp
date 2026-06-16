@@ -240,10 +240,10 @@ bool ExactProjector::project_world_face(
     ExactProjectedFace &out
 ) {
     const std::array<WorldPoint, 4> points{
-        face.p0,
-        face.p1,
-        face.p2,
-        face.p3,
+        face_p0(face),
+        face_p1(face),
+        face_p2(face),
+        face_p3(face),
     };
     std::array<ExactViewPoint, 4> view_points{};
     for (std::size_t i = 0; i < points.size(); ++i) {

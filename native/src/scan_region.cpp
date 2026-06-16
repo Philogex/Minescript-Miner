@@ -3,8 +3,10 @@
 #include "minescript_miner/angle.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cmath>
+#include <limits>
 
 namespace minescript_miner {
 
@@ -84,10 +86,47 @@ static_assert(face_p2(Z_WORLD).z == -4 * GEOMETRY_UNITS_PER_BLOCK + local_sixtee
 
 namespace {
 
+constexpr std::uint16_t INVALID_FACE_INDEX = std::numeric_limits<std::uint16_t>::max();
+
+struct FullCubeFaceLookup {
+    std::array<std::uint16_t, 6> face_indices{};
+};
+
+struct FaceIndexList {
+    std::array<std::uint16_t, 3> face_indices{};
+    std::uint8_t count = 0;
+};
+
 constexpr bool offset_inside_cube(BlockOffset offset, std::int32_t side) {
     return offset.x >= 0 && offset.x < side &&
            offset.y >= 0 && offset.y < side &&
            offset.z >= 0 && offset.z < side;
+}
+
+constexpr std::uint8_t face_lookup_slot(PlaneAxis axis, std::int8_t normal_sign) {
+    return static_cast<std::uint8_t>(
+        static_cast<std::uint8_t>(axis) * 2 + (normal_sign > 0 ? 1 : 0)
+    );
+}
+
+FullCubeFaceLookup make_full_cube_face_lookup(const GeometryCatalog &catalog) {
+    FullCubeFaceLookup lookup{};
+    lookup.face_indices.fill(INVALID_FACE_INDEX);
+
+    const ShapeGeometry &shape = geometry_for_shape(SHAPE_FULL_CUBE);
+    for (std::uint8_t face_index = 0; face_index < shape.face_count; ++face_index) {
+        const auto catalog_face_index =
+            static_cast<std::uint16_t>(shape.face_offset + face_index);
+        const LocalRectFace &face = catalog.faces[catalog_face_index];
+        lookup.face_indices[face_lookup_slot(face.axis, face.normal_sign)] =
+            catalog_face_index;
+    }
+    return lookup;
+}
+
+const FullCubeFaceLookup &full_cube_face_lookup(const GeometryCatalog &catalog) {
+    static const FullCubeFaceLookup lookup = make_full_cube_face_lookup(catalog);
+    return lookup;
 }
 
 constexpr BlockOffset face_neighbor_offset(const LocalRectFace &face) {
@@ -125,6 +164,47 @@ bool has_internal_full_cube_neighbor_face(
 
     const std::uint16_t neighbor_index = offset_to_index(neighbor, side);
     return shape_ids[neighbor_index] == SHAPE_FULL_CUBE;
+}
+
+void append_visible_full_cube_face(
+    FaceIndexList &faces,
+    const FullCubeFaceLookup &lookup,
+    PlaneAxis axis,
+    std::int8_t normal_sign
+) {
+    const std::uint16_t face_index =
+        lookup.face_indices[face_lookup_slot(axis, normal_sign)];
+    if (face_index == INVALID_FACE_INDEX) {
+        return;
+    }
+    faces.face_indices[faces.count] = face_index;
+    ++faces.count;
+}
+
+FaceIndexList visible_full_cube_faces(
+    const FullCubeFaceLookup &lookup,
+    BlockPos block_pos,
+    const Vec3 &eye
+) {
+    FaceIndexList faces{};
+    if (eye.x < static_cast<double>(block_pos.x)) {
+        append_visible_full_cube_face(faces, lookup, PlaneAxis::X, -1);
+    } else if (eye.x > static_cast<double>(block_pos.x + 1)) {
+        append_visible_full_cube_face(faces, lookup, PlaneAxis::X, 1);
+    }
+
+    if (eye.y < static_cast<double>(block_pos.y)) {
+        append_visible_full_cube_face(faces, lookup, PlaneAxis::Y, -1);
+    } else if (eye.y > static_cast<double>(block_pos.y + 1)) {
+        append_visible_full_cube_face(faces, lookup, PlaneAxis::Y, 1);
+    }
+
+    if (eye.z < static_cast<double>(block_pos.z)) {
+        append_visible_full_cube_face(faces, lookup, PlaneAxis::Z, -1);
+    } else if (eye.z > static_cast<double>(block_pos.z + 1)) {
+        append_visible_full_cube_face(faces, lookup, PlaneAxis::Z, 1);
+    }
+    return faces;
 }
 
 bool face_points_to_eye(const WorldRectFace &face, const Vec3 &eye) {
@@ -179,6 +259,46 @@ std::size_t target_face_capacity(
     return capacity;
 }
 
+void append_world_face_if_visible(
+    ScanRegionGeometry &geometry,
+    UInt16View shape_ids,
+    const std::vector<std::uint8_t> &target_lookup,
+    std::uint16_t block_index,
+    const LocalRectFace &local_face,
+    BlockPos block_pos,
+    const Vec3 &eye,
+    const Vec3 &look_dir,
+    std::int32_t side,
+    double reach
+) {
+    if (has_internal_full_cube_neighbor_face(shape_ids, block_index, side, local_face)) {
+        return;
+    }
+
+    const WorldRectFace world_rect = face_to_world(local_face, block_pos);
+    if (!face_points_to_eye(world_rect, eye)) {
+        return;
+    }
+
+    WorldFace world_face{
+        world_rect,
+        face_center(world_rect),
+    };
+
+    const std::uint32_t world_face_index =
+        static_cast<std::uint32_t>(geometry.world_faces.size());
+    geometry.world_faces.push_back(world_face);
+
+    if (target_lookup[block_index] == 0 ||
+        !face_within_reach(world_rect, eye, reach)) {
+        return;
+    }
+    geometry.target_faces.push_back({
+        world_face_index,
+        angle_to_point(look_dir, world_face.center - eye),
+    });
+}
+
 }  // namespace
 
 ScanRegionGeometry build_scan_region_geometry(
@@ -205,40 +325,47 @@ ScanRegionGeometry build_scan_region_geometry(
     geometry.target_faces.reserve(target_face_capacity(shape_ids, target_indices));
 
     const GeometryCatalog &catalog = geometry_catalog();
+    const FullCubeFaceLookup &full_cube_lookup = full_cube_face_lookup(catalog);
     for (std::size_t block_index = 0; block_index < shape_ids.size; ++block_index) {
         const std::uint16_t shape_id = shape_ids[block_index];
         const ShapeGeometry &shape = geometry_for_shape(shape_id);
         const auto block_index16 = static_cast<std::uint16_t>(block_index);
         const BlockPos block_pos = index_to_block_pos(block_index16, side, center);
 
+        if (shape_id == SHAPE_FULL_CUBE) {
+            const FaceIndexList faces =
+                visible_full_cube_faces(full_cube_lookup, block_pos, eye);
+            for (std::uint8_t index = 0; index < faces.count; ++index) {
+                append_world_face_if_visible(
+                    geometry,
+                    shape_ids,
+                    target_lookup,
+                    block_index16,
+                    catalog.faces[faces.face_indices[index]],
+                    block_pos,
+                    eye,
+                    look_dir,
+                    side,
+                    reach
+                );
+            }
+            continue;
+        }
+
         for (std::uint8_t face_index = 0; face_index < shape.face_count; ++face_index) {
             const LocalRectFace &local_face = catalog.faces[shape.face_offset + face_index];
-            if (has_internal_full_cube_neighbor_face(shape_ids, block_index16, side, local_face)) {
-                continue;
-            }
-
-            const WorldRectFace world_rect = face_to_world(local_face, block_pos);
-            if (!face_points_to_eye(world_rect, eye)) {
-                continue;
-            }
-
-            WorldFace world_face{
-                world_rect,
-                face_center(world_rect),
-            };
-
-            const std::uint32_t world_face_index =
-                static_cast<std::uint32_t>(geometry.world_faces.size());
-            geometry.world_faces.push_back(world_face);
-
-            if (target_lookup[block_index] == 0 ||
-                !face_within_reach(world_rect, eye, reach)) {
-                continue;
-            }
-            geometry.target_faces.push_back({
-                world_face_index,
-                angle_to_point(look_dir, world_face.center - eye),
-            });
+            append_world_face_if_visible(
+                geometry,
+                shape_ids,
+                target_lookup,
+                block_index16,
+                local_face,
+                block_pos,
+                eye,
+                look_dir,
+                side,
+                reach
+            );
         }
     }
 

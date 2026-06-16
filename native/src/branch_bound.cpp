@@ -67,6 +67,12 @@ struct RegionCandidate {
     Tri2 triangle{};
 };
 
+struct ApproxRegion {
+    bool initialized = false;
+    std::vector<Point2> points{};
+    Bounds2 bounds{};
+};
+
 using OccluderTraversalStateId = std::uint32_t;
 
 struct OccluderTraversalState {
@@ -783,13 +789,36 @@ private:
         return true;
     }
 
+    const ApproxRegion &approx_region(RegionId region) {
+        if (region.value >= approx_region_cache_.size()) {
+            approx_region_cache_.resize(
+                static_cast<std::size_t>(region.value) + 1
+            );
+        }
+
+        ApproxRegion &entry =
+            approx_region_cache_[region.value];
+        if (!entry.initialized) {
+            entry.points =
+                regions_.approximate_vertices(region);
+            if (!entry.points.empty()) {
+                entry.bounds = point_bounds(entry.points);
+            }
+            entry.initialized = true;
+        }
+        return entry;
+    }
+
     OccluderChoice choose_next_occluder(
         RegionId region,
         std::size_t next_occluder
     ) {
-        const std::vector<Point2> region_points =
-            regions_.approximate_vertices(region);
-        const Bounds2 region_bounds = point_bounds(region_points);
+        const ApproxRegion &region_approx =
+            approx_region(region);
+        if (region_approx.points.empty()) {
+            return {};
+        }
+
         OccluderChoice best{};
         std::uint16_t probed = 0;
 
@@ -804,13 +833,13 @@ private:
 
             const OccluderCacheEntry &entry =
                 occluder_cache_[world_face_index];
-            if (!bounds_overlap(region_bounds, entry.bounds) ||
+            if (!bounds_overlap(region_approx.bounds, entry.bounds) ||
                 !occluder_intersects_region(region, entry)) {
                 continue;
             }
 
             const double overlap_area =
-                bounds_overlap_area(region_bounds, entry.bounds);
+                bounds_overlap_area(region_approx.bounds, entry.bounds);
             if (!best.found ||
                 overlap_area > best.overlap_area) {
                 best = {true, i, overlap_area};
@@ -825,17 +854,17 @@ private:
 
     RegionCandidate region_bound(RegionId region) {
         RegionCandidate best{};
-        const std::vector<Point2> points =
-            regions_.approximate_vertices(region);
-        if (points.size() < 3) {
+        const ApproxRegion &region_approx =
+            approx_region(region);
+        if (region_approx.points.size() < 3) {
             return best;
         }
 
-        for (std::size_t i = 1; i + 1 < points.size(); ++i) {
+        for (std::size_t i = 1; i + 1 < region_approx.points.size(); ++i) {
             const Tri2 triangle{
-                points[0],
-                points[i],
-                points[i + 1],
+                region_approx.points[0],
+                region_approx.points[i],
+                region_approx.points[i + 1],
             };
             const TriangleAngleResult candidate =
                 minimum_angle_to_triangle(
@@ -855,13 +884,13 @@ private:
     }
 
     double region_angle_lower_bound(RegionId region) {
-        const std::vector<Point2> points =
-            regions_.approximate_vertices(region);
-        if (points.size() < 3) {
+        const ApproxRegion &region_approx =
+            approx_region(region);
+        if (region_approx.points.size() < 3) {
             return std::numeric_limits<double>::infinity();
         }
 
-        const Bounds2 bounds = point_bounds(points);
+        const Bounds2 bounds = region_approx.bounds;
         const Point2 lower_left{bounds.min_x, bounds.min_y};
         const Point2 lower_right{bounds.max_x, bounds.min_y};
         const Point2 upper_right{bounds.max_x, bounds.max_y};
@@ -1199,6 +1228,7 @@ private:
     std::vector<std::uint32_t> occluder_order_;
     bool occluder_order_initialized_ = false;
     std::vector<OccluderTraversalState> occluder_states_;
+    std::vector<ApproxRegion> approx_region_cache_;
     std::map<
         std::pair<OccluderTraversalStateId, std::uint32_t>,
         OccluderTraversalStateId

@@ -223,6 +223,27 @@ double target_face_ordering_bound(
     return angle;
 }
 
+double target_face_pruning_bound(
+    const ScanRegionGeometry &geometry,
+    const TargetFaceCandidate &target,
+    const Vec3 &eye,
+    double ordering_bound
+) {
+    double pruning_bound =
+        target_face_angle_lower_bound(geometry, target, eye);
+    if (std::isfinite(ordering_bound)) {
+        const double guarded_ordering_bound = std::max(
+            0.0,
+            ordering_bound - conservative_angle_guard(ordering_bound)
+        );
+        pruning_bound = std::max(
+            pruning_bound,
+            guarded_ordering_bound
+        );
+    }
+    return pruning_bound;
+}
+
 bool bounds_overlap(const Bounds2 &lhs, const Bounds2 &rhs) {
     return lhs.max_x >= rhs.min_x &&
            rhs.max_x >= lhs.min_x &&
@@ -1118,15 +1139,16 @@ BranchBoundResult solve_visible_target(
     std::vector<BoundedTarget> ordered_targets;
     ordered_targets.reserve(geometry.target_faces.size());
     for (const TargetFaceCandidate &target : geometry.target_faces) {
+        const double ordering_bound = target_face_ordering_bound(
+            geometry,
+            target,
+            eye,
+            look_direction,
+            reach
+        );
         ordered_targets.push_back({
             &target,
-            target_face_ordering_bound(
-                geometry,
-                target,
-                eye,
-                look_direction,
-                reach
-            ),
+            ordering_bound,
             target.world_face_index < geometry.world_faces.size()
                 ? length_squared(
                     geometry.world_faces[
@@ -1134,20 +1156,25 @@ BranchBoundResult solve_visible_target(
                     ].center - eye
                 )
                 : std::numeric_limits<double>::infinity(),
-            target_face_angle_lower_bound(geometry, target, eye),
+            target_face_pruning_bound(
+                geometry,
+                target,
+                eye,
+                ordering_bound
+            ),
         });
     }
     std::sort(
         ordered_targets.begin(),
         ordered_targets.end(),
         [](const BoundedTarget &lhs, const BoundedTarget &rhs) {
+            if (lhs.ordering_bound != rhs.ordering_bound) {
+                return lhs.ordering_bound < rhs.ordering_bound;
+            }
             if (lhs.center_distance_squared !=
                 rhs.center_distance_squared) {
                 return lhs.center_distance_squared <
                        rhs.center_distance_squared;
-            }
-            if (lhs.ordering_bound != rhs.ordering_bound) {
-                return lhs.ordering_bound < rhs.ordering_bound;
             }
             if (lhs.target->center_angle != rhs.target->center_angle) {
                 return lhs.target->center_angle <

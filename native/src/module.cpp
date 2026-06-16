@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <ctime>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <string>
@@ -216,6 +217,47 @@ static bool parse_uint16_values(
     return true;
 }
 
+struct UInt16Input {
+    std::vector<std::uint16_t> storage{};
+    minescript_miner::UInt16View view{};
+};
+
+static bool parse_uint16_input(
+    PyObject *ids,
+    UInt16Input &out,
+    const char *name
+) {
+    char *bytes = nullptr;
+    Py_ssize_t byte_count = 0;
+    if (PyBytes_AsStringAndSize(ids, &bytes, &byte_count) == 0) {
+        if (byte_count % static_cast<Py_ssize_t>(sizeof(std::uint16_t)) != 0) {
+            PyErr_Format(PyExc_ValueError, "%s byte length must align to uint16_t", name);
+            return false;
+        }
+        out.storage.resize(static_cast<std::size_t>(byte_count) / sizeof(std::uint16_t));
+        if (byte_count > 0) {
+            std::memcpy(out.storage.data(), bytes, static_cast<std::size_t>(byte_count));
+        }
+        out.view = minescript_miner::UInt16View{out.storage};
+        return true;
+    }
+
+    if (PyErr_ExceptionMatches(PyExc_TypeError)) {
+        PyErr_Clear();
+    } else {
+        return false;
+    }
+
+    // TODO: Once external callers have migrated to compact uint16 payloads,
+    // remove this sequence fallback so native scan inputs have one predictable
+    // representation and accidental Python-int paths fail loudly.
+    if (!parse_uint16_values(ids, out.storage, name)) {
+        return false;
+    }
+    out.view = minescript_miner::UInt16View{out.storage};
+    return true;
+}
+
 static std::string configured_log_path() {
     const char *setting = std::getenv("MINESCRIPT_MINER_NATIVE_LOG");
     if (setting == nullptr || setting[0] == '\0') {
@@ -237,8 +279,8 @@ static void log_scan_input(
     const double (&position)[3],
     const double (&orientation)[2],
     int shape_catalog_version,
-    const std::vector<std::uint16_t> &shape_ids,
-    const std::vector<std::uint16_t> &target_indices,
+    minescript_miner::UInt16View shape_ids,
+    minescript_miner::UInt16View target_indices,
     const minescript_miner::ScanRegionGeometry &scan_geometry,
     const minescript_miner::BranchBoundResult &solve_result,
     int side,
@@ -278,8 +320,8 @@ static void log_scan_input(
     log << "  shape_catalog_version: " << shape_catalog_version << "\n";
     log << "  native_shape_catalog_version: " << minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION << "\n";
     log << "  native_geometry_catalog_version: " << minescript_miner::GEOMETRY_CATALOG_VERSION << "\n";
-    log << "  block_count: " << shape_ids.size() << "\n";
-    log << "  target_block_count: " << target_indices.size() << "\n";
+    log << "  block_count: " << shape_ids.size << "\n";
+    log << "  target_block_count: " << target_indices.size << "\n";
     log << "  world_face_count: " << scan_geometry.world_faces.size() << "\n";
     log << "  target_face_count: " << scan_geometry.target_faces.size() << "\n";
     log << "  cube_side: " << side << "\n";
@@ -357,11 +399,11 @@ static void log_scan_input(
     }
 
     log << "  first_shape_ids:";
-    const std::size_t sample_count = std::min<std::size_t>(shape_ids.size(), 64);
+    const std::size_t sample_count = std::min<std::size_t>(shape_ids.size, 64);
     for (std::size_t i = 0; i < sample_count; ++i) {
         log << ' ' << shape_ids[i];
     }
-    if (sample_count < shape_ids.size()) {
+    if (sample_count < shape_ids.size) {
         log << " ...";
     }
     log << "\n";
@@ -369,16 +411,16 @@ static void log_scan_input(
     for (std::size_t i = 0; i < sample_count; ++i) {
         log << ' ' << minescript_miner::shape_id_name(shape_ids[i]);
     }
-    if (sample_count < shape_ids.size()) {
+    if (sample_count < shape_ids.size) {
         log << " ...";
     }
     log << "\n";
     log << "  first_target_block_indices:";
-    const std::size_t target_sample_count = std::min<std::size_t>(target_indices.size(), 64);
+    const std::size_t target_sample_count = std::min<std::size_t>(target_indices.size, 64);
     for (std::size_t i = 0; i < target_sample_count; ++i) {
         log << ' ' << target_indices[i];
     }
-    if (target_sample_count < target_indices.size()) {
+    if (target_sample_count < target_indices.size) {
         log << " ...";
     }
     log << "\n";
@@ -456,18 +498,18 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
 
     double position[3] = {0.0, 0.0, 0.0};
     double orientation[2] = {0.0, 0.0};
-    std::vector<std::uint16_t> shape_ids;
-    std::vector<std::uint16_t> target_indices;
+    UInt16Input shape_ids;
+    UInt16Input target_indices;
     if (!parse_position(position_object, position)) {
         return nullptr;
     }
     if (!parse_orientation(orientation_object, orientation)) {
         return nullptr;
     }
-    if (!parse_uint16_values(shape_ids_object, shape_ids, "shape_ids")) {
+    if (!parse_uint16_input(shape_ids_object, shape_ids, "shape_ids")) {
         return nullptr;
     }
-    if (!parse_uint16_values(target_indices_object, target_indices, "target_indices")) {
+    if (!parse_uint16_input(target_indices_object, target_indices, "target_indices")) {
         return nullptr;
     }
 
@@ -475,18 +517,18 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         static_cast<std::size_t>(side) *
         static_cast<std::size_t>(side) *
         static_cast<std::size_t>(side);
-    if (shape_ids.size() != expected_count) {
+    if (shape_ids.view.size != expected_count) {
         PyErr_Format(
             PyExc_ValueError,
             "shape_ids must contain side^3 entries "
             "(side=%d, expected=%zu, got shape_ids=%zu)",
             side,
             expected_count,
-            shape_ids.size()
+            shape_ids.view.size
         );
         return nullptr;
     }
-    for (const std::uint16_t shape_id : shape_ids) {
+    for (const std::uint16_t shape_id : shape_ids.view) {
         if (static_cast<std::size_t>(shape_id) >= minescript_miner::GEOMETRY_SHAPE_COUNT) {
             PyErr_Format(
                 PyExc_ValueError,
@@ -498,7 +540,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
             return nullptr;
         }
     }
-    for (const std::uint16_t target_index : target_indices) {
+    for (const std::uint16_t target_index : target_indices.view) {
         if (static_cast<std::size_t>(target_index) >= expected_count) {
             PyErr_Format(
                 PyExc_ValueError,
@@ -522,8 +564,8 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     }
     const minescript_miner::ScanRegionGeometry scan_geometry =
         minescript_miner::build_scan_region_geometry(
-            shape_ids,
-            target_indices,
+            shape_ids.view,
+            target_indices.view,
             eye,
             look_dir,
             side,
@@ -566,8 +608,8 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
             position,
             orientation,
             shape_catalog_version,
-            shape_ids,
-            target_indices,
+            shape_ids.view,
+            target_indices.view,
             scan_geometry,
             solve_result,
             side,

@@ -465,6 +465,7 @@ Do not edit by hand.
 
 from __future__ import annotations
 
+from array import array
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -489,7 +490,7 @@ class EncodedBlockRegion:
     shape_catalog_version: int
     block_shape_mapping_version: int
     side: int
-    shape_ids: List[int]
+    shape_ids: array
 
     @property
     def catalog_version(self) -> int:
@@ -605,7 +606,10 @@ class BlockShapeCatalog:
             shape_catalog_version=self.shape_catalog_version,
             block_shape_mapping_version=self.block_shape_mapping_version,
             side=side,
-            shape_ids=[self.shape_id(block_string) for block_string in block_strings],
+            shape_ids=array(
+                "H",
+                (self.shape_id(block_string) for block_string in block_strings),
+            ),
         )
 
 

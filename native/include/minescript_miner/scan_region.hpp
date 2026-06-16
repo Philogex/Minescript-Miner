@@ -46,6 +46,29 @@ struct TargetFaceCandidate {
     double center_angle = 0.0;
 };
 
+struct UInt16View {
+    const std::uint16_t *data = nullptr;
+    std::size_t size = 0;
+
+    constexpr UInt16View() = default;
+    constexpr UInt16View(const std::uint16_t *data, std::size_t size)
+        : data(data), size(size) {}
+    UInt16View(const std::vector<std::uint16_t> &values)
+        : data(values.data()), size(values.size()) {}
+
+    constexpr const std::uint16_t *begin() const {
+        return data;
+    }
+
+    constexpr const std::uint16_t *end() const {
+        return data + size;
+    }
+
+    constexpr const std::uint16_t &operator[](std::size_t index) const {
+        return data[index];
+    }
+};
+
 struct ScanRegionGeometry {
     std::vector<WorldFace> world_faces{};
     std::vector<TargetFaceCandidate> target_faces{};
@@ -144,8 +167,8 @@ constexpr Vec3 face_normal(const WorldRectFace &face) {
 }
 
 ScanRegionGeometry build_scan_region_geometry(
-    const std::vector<std::uint16_t> &shape_ids,
-    const std::vector<std::uint16_t> &target_indices,
+    UInt16View shape_ids,
+    UInt16View target_indices,
     const Vec3 &eye,
     const Vec3 &look_dir,
     std::int32_t side,

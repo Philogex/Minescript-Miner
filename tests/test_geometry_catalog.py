@@ -3,6 +3,7 @@ import os
 import json
 import tempfile
 import unittest
+from array import array
 from pathlib import Path
 
 from minescript_miner.adapter.shape_catalog import (
@@ -158,6 +159,22 @@ class GeometryCatalogTest(unittest.TestCase):
                 4.8,
                 [SHAPE_ID_BY_NAME["empty"]] * 27,
                 [],
+            ),
+        )
+
+    def test_native_acquire_target_accepts_compact_uint16_bytes(self):
+        shape_ids = array("H", [SHAPE_ID_BY_NAME["empty"]] * 27)
+        target_indices = array("H")
+
+        self.assertIsNone(
+            acquire_target(
+                (0.5, 64.5, 0.5),
+                (90.0, 10.0),
+                SHAPE_CATALOG_VERSION,
+                3,
+                4.8,
+                shape_ids.tobytes(),
+                target_indices.tobytes(),
             ),
         )
 

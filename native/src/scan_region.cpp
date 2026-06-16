@@ -107,7 +107,7 @@ bool face_within_reach(const WorldRectFace &face, const Vec3 &eye, double reach)
            reach * reach;
 }
 
-std::size_t world_face_capacity(const std::vector<std::uint16_t> &shape_ids) {
+std::size_t world_face_capacity(UInt16View shape_ids) {
     std::size_t capacity = 0;
     for (const std::uint16_t shape_id : shape_ids) {
         capacity += geometry_for_shape(shape_id).face_count;
@@ -116,8 +116,8 @@ std::size_t world_face_capacity(const std::vector<std::uint16_t> &shape_ids) {
 }
 
 std::size_t target_face_capacity(
-    const std::vector<std::uint16_t> &shape_ids,
-    const std::vector<std::uint16_t> &target_indices
+    UInt16View shape_ids,
+    UInt16View target_indices
 ) {
     std::size_t capacity = 0;
     for (const std::uint16_t target_index : target_indices) {
@@ -129,8 +129,8 @@ std::size_t target_face_capacity(
 }  // namespace
 
 ScanRegionGeometry build_scan_region_geometry(
-    const std::vector<std::uint16_t> &shape_ids,
-    const std::vector<std::uint16_t> &target_indices,
+    UInt16View shape_ids,
+    UInt16View target_indices,
     const Vec3 &eye,
     const Vec3 &look_dir,
     std::int32_t side,
@@ -142,7 +142,7 @@ ScanRegionGeometry build_scan_region_geometry(
         static_cast<std::int32_t>(std::floor(eye.z)),
     };
 
-    std::vector<std::uint8_t> target_lookup(shape_ids.size(), 0);
+    std::vector<std::uint8_t> target_lookup(shape_ids.size, 0);
     for (const std::uint16_t target_index : target_indices) {
         target_lookup[target_index] = 1;
     }
@@ -152,7 +152,7 @@ ScanRegionGeometry build_scan_region_geometry(
     geometry.target_faces.reserve(target_face_capacity(shape_ids, target_indices));
 
     const GeometryCatalog &catalog = geometry_catalog();
-    for (std::size_t block_index = 0; block_index < shape_ids.size(); ++block_index) {
+    for (std::size_t block_index = 0; block_index < shape_ids.size; ++block_index) {
         const std::uint16_t shape_id = shape_ids[block_index];
         const ShapeGeometry &shape = geometry_for_shape(shape_id);
         const BlockPos block_pos = index_to_block_pos(static_cast<std::uint16_t>(block_index), side, center);

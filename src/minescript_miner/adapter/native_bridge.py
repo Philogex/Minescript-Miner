@@ -11,6 +11,13 @@ ScanPosition = Tuple[float, float, float]
 Orientation = Tuple[float, float]
 
 
+def _uint16_payload(values: Sequence[int]):
+    tobytes = getattr(values, "tobytes", None)
+    if callable(tobytes):
+        return tobytes()
+    return values
+
+
 def acquire_target(
     position: ScanPosition,
     orientation: Orientation,
@@ -28,8 +35,8 @@ def acquire_target(
         shape_catalog_version,
         side,
         reach,
-        shape_ids,
-        target_indices,
+        _uint16_payload(shape_ids),
+        _uint16_payload(target_indices),
     )
     if result is None:
         return None

@@ -7,6 +7,7 @@ This module is the only layer in the package that should talk to the
 from __future__ import annotations
 
 import time
+from array import array
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import AbstractSet, FrozenSet, List, Optional, Tuple, Union
@@ -87,7 +88,7 @@ def acquire_current_target(
         )
     match_start = time.perf_counter_ns() if timings is not None else 0
     block_strings: List[Optional[str]] = []
-    target_indices: List[int] = []
+    target_indices = array("H")
     for index, (_pos, block_string) in enumerate(area):
         block_strings.append(block_string)
         if block_id_literal(block_string) in target_blocks:

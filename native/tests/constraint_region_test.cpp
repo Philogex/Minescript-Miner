@@ -82,6 +82,8 @@ int main() {
     const RegionId strict_square_edge =
         regions.add_constraint(square, x_min, true);
     assert(strict_square_edge != square);
+    assert(regions.vertices(strict_square_edge) ==
+           regions.vertices(square));
     assert(regions.add_constraint(strict_square_edge, x_min) ==
            strict_square_edge);
     assert(regions.add_constraint(strict_square_edge, x_min, true) ==

@@ -108,13 +108,15 @@ RegionId ConstraintRegionStore::add_constraint(
     (void) geometry_.half_plane(constraint);
     const ConstraintRegion &parent_region = region(parent_id);
     const RegionConstraint added_constraint{constraint, strict};
+    bool tightens_existing_constraint = false;
     for (const RegionConstraint parent_constraint :
          parent_region.constraints) {
-        if (
-            parent_constraint.half_plane == constraint &&
-            (parent_constraint.strict || !strict)
-        ) {
-            return parent_id;
+        if (parent_constraint.half_plane == constraint) {
+            if (parent_constraint.strict || !strict) {
+                return parent_id;
+            }
+            tightens_existing_constraint = true;
+            break;
         }
     }
 
@@ -127,7 +129,11 @@ RegionId ConstraintRegionStore::add_constraint(
         std::move(constraints),
         parent_id,
         added_constraint,
-        true
+        true,
+        tightens_existing_constraint
+            ? std::optional<std::vector<VertexId>>{
+                  parent_region.vertices}
+            : std::nullopt
     );
 }
 
@@ -248,7 +254,8 @@ RegionId ConstraintRegionStore::intern_region(
     std::vector<RegionConstraint> constraints,
     RegionId parent,
     RegionConstraint added_constraint,
-    bool constraints_are_canonical
+    bool constraints_are_canonical,
+    std::optional<std::vector<VertexId>> known_hull
 ) {
     for (const RegionConstraint constraint : constraints) {
         (void) geometry_.half_plane(constraint.half_plane);
@@ -262,11 +269,19 @@ RegionId ConstraintRegionStore::intern_region(
         return existing->second;
     }
 
-    std::optional<std::vector<VertexId>> incremental_hull =
-        compute_incremental_hull(parent, added_constraint, constraints);
-    std::vector<VertexId> hull = incremental_hull
-        ? std::move(*incremental_hull)
-        : compute_convex_hull(constraints);
+    std::vector<VertexId> hull;
+    if (known_hull) {
+        hull = std::move(*known_hull);
+    } else if (std::optional<std::vector<VertexId>> incremental_hull =
+                   compute_incremental_hull(
+                       parent,
+                       added_constraint,
+                       constraints
+                   )) {
+        hull = std::move(*incremental_hull);
+    } else {
+        hull = compute_convex_hull(constraints);
+    }
     const ConstraintRegionState state =
         hull.size() >= 3
             ? ConstraintRegionState::Bounded

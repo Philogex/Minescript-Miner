@@ -87,7 +87,8 @@ private:
         std::vector<RegionConstraint> constraints,
         RegionId parent,
         RegionConstraint added_constraint,
-        bool constraints_are_canonical = false
+        bool constraints_are_canonical = false,
+        std::optional<std::vector<VertexId>> known_hull = std::nullopt
     );
     std::vector<VertexId> compute_convex_hull(
         const std::vector<RegionConstraint> &constraints

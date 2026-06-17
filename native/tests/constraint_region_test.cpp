@@ -120,6 +120,27 @@ int main() {
     assert(regions.is_empty(empty));
     assert(regions.vertices(empty).empty());
 
+    const HalfPlaneId keep_above_diagonal =
+        geometry.intern_half_plane(line(1, 1, -1));
+    const RegionId diagonal_triangle =
+        regions.add_constraint(square, keep_above_diagonal);
+    assert(!regions.is_empty(diagonal_triangle));
+    assert(regions.vertices(diagonal_triangle).size() == 3);
+
+    const HalfPlaneId keep_origin_side =
+        geometry.intern_half_plane(line(1, 1, 0));
+    const RegionId origin_touch =
+        regions.add_constraint(square, keep_origin_side);
+    assert(!regions.is_empty(origin_touch));
+    assert(regions.vertices(origin_touch) == regions.vertices(square));
+
+    const HalfPlaneId collapse_to_right_edge =
+        geometry.intern_half_plane(line(1, 0, -1));
+    const RegionId collapsed =
+        regions.add_constraint(square, collapse_to_right_edge);
+    assert(regions.is_empty(collapsed));
+    assert(regions.vertices(collapsed).empty());
+
     const ExactInt scale = ExactInt{1} << 200U;
     const HalfPlaneId thin_min =
         geometry.intern_half_plane(line(scale, 0, -(scale - 1)));

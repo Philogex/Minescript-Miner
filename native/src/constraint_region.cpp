@@ -432,7 +432,7 @@ ConstraintRegionStore::compute_incremental_hull(
                         added_constraint.half_plane
                     );
                 if (!intersection) {
-                    return std::nullopt;
+                    return std::vector<VertexId>{};
                 }
                 clipped.push_back(*intersection);
             }
@@ -445,7 +445,7 @@ ConstraintRegionStore::compute_incremental_hull(
                     added_constraint.half_plane
                 );
             if (!intersection) {
-                return std::nullopt;
+                return std::vector<VertexId>{};
             }
             clipped.push_back(*intersection);
         }

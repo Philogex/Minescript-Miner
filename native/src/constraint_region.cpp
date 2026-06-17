@@ -27,6 +27,62 @@ ExactSign orientation(
     return classify_line(line_through_raw(a, b), point);
 }
 
+std::vector<RegionConstraint> canonicalize_constraints(
+    std::vector<RegionConstraint> constraints
+) {
+    std::sort(constraints.begin(), constraints.end());
+    std::vector<RegionConstraint> canonical_constraints;
+    canonical_constraints.reserve(constraints.size());
+    for (const RegionConstraint constraint : constraints) {
+        if (
+            !canonical_constraints.empty() &&
+            canonical_constraints.back().half_plane ==
+                constraint.half_plane
+        ) {
+            canonical_constraints.back().strict =
+                canonical_constraints.back().strict ||
+                constraint.strict;
+        } else {
+            canonical_constraints.push_back(constraint);
+        }
+    }
+    return canonical_constraints;
+}
+
+std::vector<RegionConstraint> insert_into_canonical_constraints(
+    const std::vector<RegionConstraint> &parent_constraints,
+    RegionConstraint added_constraint
+) {
+    std::vector<RegionConstraint> constraints;
+    constraints.reserve(parent_constraints.size() + 1);
+
+    bool inserted = false;
+    for (const RegionConstraint parent_constraint : parent_constraints) {
+        if (parent_constraint.half_plane == added_constraint.half_plane) {
+            constraints.push_back({
+                parent_constraint.half_plane,
+                parent_constraint.strict || added_constraint.strict,
+            });
+            inserted = true;
+            continue;
+        }
+
+        if (
+            !inserted &&
+            added_constraint.half_plane < parent_constraint.half_plane
+        ) {
+            constraints.push_back(added_constraint);
+            inserted = true;
+        }
+        constraints.push_back(parent_constraint);
+    }
+
+    if (!inserted) {
+        constraints.push_back(added_constraint);
+    }
+    return constraints;
+}
+
 }  // namespace
 
 ConstraintRegionStore::ConstraintRegionStore(
@@ -51,14 +107,17 @@ RegionId ConstraintRegionStore::add_constraint(
 ) {
     (void) geometry_.half_plane(constraint);
     const ConstraintRegion &parent_region = region(parent_id);
-    std::vector<RegionConstraint> constraints =
-        parent_region.constraints;
     const RegionConstraint added_constraint{constraint, strict};
-    constraints.push_back(added_constraint);
+    std::vector<RegionConstraint> constraints =
+        insert_into_canonical_constraints(
+            parent_region.constraints,
+            added_constraint
+        );
     return intern_region(
         std::move(constraints),
         parent_id,
-        added_constraint
+        added_constraint,
+        true
     );
 }
 
@@ -178,28 +237,15 @@ std::size_t ConstraintRegionStore::region_count() const {
 RegionId ConstraintRegionStore::intern_region(
     std::vector<RegionConstraint> constraints,
     RegionId parent,
-    RegionConstraint added_constraint
+    RegionConstraint added_constraint,
+    bool constraints_are_canonical
 ) {
     for (const RegionConstraint constraint : constraints) {
         (void) geometry_.half_plane(constraint.half_plane);
     }
-    std::sort(constraints.begin(), constraints.end());
-    std::vector<RegionConstraint> canonical_constraints;
-    canonical_constraints.reserve(constraints.size());
-    for (const RegionConstraint constraint : constraints) {
-        if (
-            !canonical_constraints.empty() &&
-            canonical_constraints.back().half_plane ==
-                constraint.half_plane
-        ) {
-            canonical_constraints.back().strict =
-                canonical_constraints.back().strict ||
-                constraint.strict;
-        } else {
-            canonical_constraints.push_back(constraint);
-        }
+    if (!constraints_are_canonical) {
+        constraints = canonicalize_constraints(std::move(constraints));
     }
-    constraints = std::move(canonical_constraints);
 
     const auto existing = region_ids_.find(constraints);
     if (existing != region_ids_.end()) {

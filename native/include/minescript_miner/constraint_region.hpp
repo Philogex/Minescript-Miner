@@ -65,6 +65,9 @@ public:
     // Returns closures of the disjoint visible prefix pieces. Complemented
     // occluder boundaries are stored as strict constraints, and an empty
     // occluder constraint list is treated as a no-op.
+    // Constraints are applied one by one because occluder subtraction needs
+    // those intermediate prefix pieces; batch clipping would only fit future
+    // static constraints that do not need intermediate regions.
     std::vector<RegionId> subtract_convex_region(
         RegionId source,
         const std::vector<HalfPlaneId> &occluder
@@ -83,7 +86,8 @@ private:
     RegionId intern_region(
         std::vector<RegionConstraint> constraints,
         RegionId parent,
-        RegionConstraint added_constraint
+        RegionConstraint added_constraint,
+        bool constraints_are_canonical = false
     );
     std::vector<VertexId> compute_convex_hull(
         const std::vector<RegionConstraint> &constraints

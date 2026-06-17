@@ -74,6 +74,11 @@ The main runtime constants are currently defined near the top of `miner.py`:
 - `IDLE_DELAY`: delay while no target is available
 - `BREAK_POLL_DELAY`: interval used while monitoring a mined block
 
+Native scan regions are fixed cubes with a maximum side length of 39 blocks
+(`39^3 = 59,319` entries). This limit comes from the current compact
+`uint16_t` target-index payload; shape IDs are also transmitted as `uint16_t`.
+Larger scan cubes would require a wider target-index representation.
+
 ## Supported Shapes
 
 The catalog currently models:
@@ -145,6 +150,7 @@ This is an experimental project. Important current limitations include:
 - World changes between scanning and interaction can invalidate a result
 - Reach and interaction behavior ultimately remain subject to Minecraft and
   Minescript
+- Native scan-cube side length is currently capped at 39 blocks
 
 Native diagnostic logging is disabled by default. Set
 `MINESCRIPT_MINER_NATIVE_LOG=1` before starting the script to enable it.

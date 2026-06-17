@@ -22,6 +22,10 @@
 
 namespace {
 
+// API note: shape IDs and target block indices currently share the compact
+// uint16 payload format. This caps indexable cube entries at 39^3 blocks
+// because 41^3 no longer fits in uint16_t. Raising this limit should keep
+// shape IDs as uint16_t and introduce a wider target-index payload.
 constexpr int MAX_CUBE_SIDE = 39;
 
 }  // namespace

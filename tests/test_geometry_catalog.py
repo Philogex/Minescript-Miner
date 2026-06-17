@@ -13,6 +13,7 @@ from minescript_miner.adapter.shape_catalog import (
     SHAPE_ID_BY_NAME,
     SHAPE_NAMES,
 )
+from minescript_miner.adapter.native_bridge import acquire_target as bridged_acquire_target
 from minescript_miner.api import acquire_target, geometry_catalog_debug
 
 
@@ -177,6 +178,21 @@ class GeometryCatalogTest(unittest.TestCase):
                 target_indices.tobytes(),
             ),
         )
+
+    def test_native_bridge_rejects_non_uint16_arrays(self):
+        shape_ids = array("I", [SHAPE_ID_BY_NAME["empty"]] * 27)
+        target_indices = array("H")
+
+        with self.assertRaisesRegex(TypeError, "array\\('H'\\)"):
+            bridged_acquire_target(
+                (0.5, 64.5, 0.5),
+                (90.0, 10.0),
+                SHAPE_CATALOG_VERSION,
+                3,
+                4.8,
+                shape_ids,
+                target_indices,
+            )
 
     def test_native_logging_can_be_disabled(self):
         original_log_setting = os.environ.get("MINESCRIPT_MINER_NATIVE_LOG")

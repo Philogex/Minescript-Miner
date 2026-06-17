@@ -88,11 +88,11 @@ def acquire_current_target(
         )
     match_start = time.perf_counter_ns() if timings is not None else 0
     block_strings: List[Optional[str]] = []
-    target_indices = array("H")
+    target_index_values: List[int] = []
     for index, (_pos, block_string) in enumerate(area):
         block_strings.append(block_string)
         if block_id_literal(block_string) in target_blocks:
-            target_indices.append(index)
+            target_index_values.append(index)
     if timings is not None:
         timings.target_match_ms = elapsed_ms(match_start)
 
@@ -107,10 +107,11 @@ def acquire_current_target(
     encoded = catalog.encode_region(side, block_strings)
     if timings is not None:
         timings.shape_encode_ms = elapsed_ms(encode_start)
-    if not target_indices:
+    if not target_index_values:
         if timings is not None:
             timings.total_ms = elapsed_ms(total_start)
         return None
+    target_indices = array("H", target_index_values)
 
     native_start = time.perf_counter_ns() if timings is not None else 0
     result = acquire_target(

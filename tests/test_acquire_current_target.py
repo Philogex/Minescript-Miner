@@ -115,6 +115,31 @@ class AcquireCurrentTargetTest(unittest.TestCase):
         self.assertEqual(SHAPE_ID_BY_NAME["empty"], captured["shape_ids"][3])
         self.assertEqual([1, 2], captured["target_indices"])
 
+    def test_acquire_current_target_rejects_large_cube_before_uint16_targets(self):
+        original_get_area = io.get_area
+        block_count = 41 * 41 * 41
+
+        def fake_get_area(position, reach, *, await_region=True):
+            return [
+                (
+                    (index, 0, 0),
+                    "minecraft:stone" if index == block_count - 1 else "minecraft:air",
+                )
+                for index in range(block_count)
+            ]
+
+        try:
+            io.get_area = fake_get_area
+            with self.assertRaisesRegex(ValueError, "side must be <= 39"):
+                io.acquire_current_target(
+                    (0.5, 0.5, 0.5),
+                    (90.0, 10.0),
+                    reach=20.0,
+                    target_blocks=frozenset({"minecraft:stone"}),
+                )
+        finally:
+            io.get_area = original_get_area
+
     def test_load_target_blocks_uses_literal_line_matching(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             target_config = Path(temp_dir) / "targets.txt"

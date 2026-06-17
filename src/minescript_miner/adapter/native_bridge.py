@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from array import array
 from typing import Optional, Sequence, Tuple
 
 import _minescript_miner_native as native
@@ -12,9 +13,15 @@ Orientation = Tuple[float, float]
 
 
 def _uint16_payload(values: Sequence[int]):
-    tobytes = getattr(values, "tobytes", None)
-    if callable(tobytes):
-        return tobytes()
+    if isinstance(values, array):
+        if values.typecode != "H":
+            raise TypeError(
+                f"Expected array('H') for compact uint16 payload, "
+                f"got array({values.typecode!r})"
+            )
+        return values.tobytes()
+    if isinstance(values, (bytes, bytearray)):
+        return bytes(values)
     return values
 
 

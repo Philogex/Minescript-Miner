@@ -6,9 +6,8 @@ native C++ exact geometry instead of pixel rasterization or repeated
 raycasting.
 
 The miner does not provide movement, pathfinding, inventory management, or
-tool selection. It only considers targets that can be reached from the
-player's current positions static eye level, which ignores sneaking.
-
+tool selection. It only considers targets that can be reached from the 
+player's current eye-level position, which ignores sneaking.
 ## Features
 
 - Configurable target blocks

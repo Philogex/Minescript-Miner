@@ -28,8 +28,8 @@ from minescript_miner.minescript.runtime import query
 
 
 TOGGLE_KEY = "o"
-REACH = 4.8
-ROTATION_DURATION = 0.01
+REACH = 4.6
+ROTATION_DURATION = 0.3
 IDLE_DELAY = 0.25
 BREAK_POLL_DELAY = 0.05
 LOG_SCAN_TIMINGS = os.environ.get(

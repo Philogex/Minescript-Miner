@@ -108,6 +108,16 @@ RegionId ConstraintRegionStore::add_constraint(
     (void) geometry_.half_plane(constraint);
     const ConstraintRegion &parent_region = region(parent_id);
     const RegionConstraint added_constraint{constraint, strict};
+    for (const RegionConstraint parent_constraint :
+         parent_region.constraints) {
+        if (
+            parent_constraint.half_plane == constraint &&
+            (parent_constraint.strict || !strict)
+        ) {
+            return parent_id;
+        }
+    }
+
     std::vector<RegionConstraint> constraints =
         insert_into_canonical_constraints(
             parent_region.constraints,

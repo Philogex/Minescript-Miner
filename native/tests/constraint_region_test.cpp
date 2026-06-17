@@ -79,6 +79,13 @@ int main() {
     assert(regions.intern_bounded_region(reversed) == square);
     assert(regions.region_count() == 1);
     assert(regions.add_constraint(square, x_min) == square);
+    const RegionId strict_square_edge =
+        regions.add_constraint(square, x_min, true);
+    assert(strict_square_edge != square);
+    assert(regions.add_constraint(strict_square_edge, x_min) ==
+           strict_square_edge);
+    assert(regions.add_constraint(strict_square_edge, x_min, true) ==
+           strict_square_edge);
 
     const std::vector<Point2> square_points =
         regions.approximate_vertices(square);

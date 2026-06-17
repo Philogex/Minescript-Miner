@@ -206,7 +206,11 @@ RegionId ConstraintRegionStore::intern_region(
         return existing->second;
     }
 
-    std::vector<VertexId> hull = compute_convex_hull(constraints);
+    std::optional<std::vector<VertexId>> incremental_hull =
+        compute_incremental_hull(parent, added_constraint, constraints);
+    std::vector<VertexId> hull = incremental_hull
+        ? std::move(*incremental_hull)
+        : compute_convex_hull(constraints);
     const ConstraintRegionState state =
         hull.size() >= 3
             ? ConstraintRegionState::Bounded
@@ -322,6 +326,167 @@ std::vector<VertexId> ConstraintRegionStore::compute_convex_hull(
     hull.insert(hull.end(), lower.begin(), lower.end());
     hull.insert(hull.end(), upper.begin(), upper.end());
     return hull.size() >= 3 ? hull : std::vector<VertexId>{};
+}
+
+std::optional<std::vector<VertexId>>
+ConstraintRegionStore::compute_incremental_hull(
+    RegionId parent,
+    RegionConstraint added_constraint,
+    const std::vector<RegionConstraint> &constraints
+) {
+    if (!can_incrementally_clip(parent, added_constraint, constraints)) {
+        return std::nullopt;
+    }
+
+    const std::vector<VertexId> &input = region(parent).vertices;
+    std::vector<VertexId> clipped;
+    clipped.reserve(input.size() + 1);
+
+    VertexId previous = input.back();
+    ExactSign previous_sign =
+        geometry_.classify(previous, added_constraint.half_plane);
+    bool previous_inside = previous_sign != ExactSign::Negative;
+
+    for (const VertexId current : input) {
+        const ExactSign current_sign =
+            geometry_.classify(current, added_constraint.half_plane);
+        const bool current_inside = current_sign != ExactSign::Negative;
+
+        if (current_inside) {
+            if (!previous_inside) {
+                std::optional<VertexId> intersection =
+                    intersect_edge_with_constraint(
+                        previous,
+                        current,
+                        added_constraint.half_plane
+                    );
+                if (!intersection) {
+                    return std::nullopt;
+                }
+                clipped.push_back(*intersection);
+            }
+            clipped.push_back(current);
+        } else if (previous_inside) {
+            std::optional<VertexId> intersection =
+                intersect_edge_with_constraint(
+                    previous,
+                    current,
+                    added_constraint.half_plane
+                );
+            if (!intersection) {
+                return std::nullopt;
+            }
+            clipped.push_back(*intersection);
+        }
+
+        previous = current;
+        previous_inside = current_inside;
+    }
+
+    return compact_hull_vertices(std::move(clipped));
+}
+
+bool ConstraintRegionStore::can_incrementally_clip(
+    RegionId parent,
+    RegionConstraint added_constraint,
+    const std::vector<RegionConstraint> &constraints
+) const {
+    if (!parent || !added_constraint.half_plane) {
+        return false;
+    }
+
+    const ConstraintRegion &parent_region = region(parent);
+    if (
+        parent_region.state != ConstraintRegionState::Bounded ||
+        parent_region.vertices.size() < 3 ||
+        constraints.size() != parent_region.constraints.size() + 1
+    ) {
+        return false;
+    }
+
+    bool found_added = false;
+    std::size_t parent_index = 0;
+    for (const RegionConstraint constraint : constraints) {
+        if (
+            parent_index < parent_region.constraints.size() &&
+            constraint == parent_region.constraints[parent_index]
+        ) {
+            ++parent_index;
+            continue;
+        }
+        if (!found_added && constraint == added_constraint) {
+            found_added = true;
+            continue;
+        }
+        return false;
+    }
+
+    return found_added &&
+           parent_index == parent_region.constraints.size();
+}
+
+std::optional<VertexId>
+ConstraintRegionStore::intersect_edge_with_constraint(
+    VertexId from,
+    VertexId to,
+    HalfPlaneId constraint
+) {
+    const LineId edge_line = geometry_.intern_line(
+        line_through_raw(geometry_.vertex(from), geometry_.vertex(to))
+    );
+    if (!edge_line) {
+        return std::nullopt;
+    }
+
+    const LineId constraint_line =
+        geometry_.half_plane(constraint).line;
+    const VertexId intersection =
+        geometry_.intersect(edge_line, constraint_line);
+    if (!intersection || !is_finite(geometry_.vertex(intersection))) {
+        return std::nullopt;
+    }
+    return intersection;
+}
+
+std::vector<VertexId> ConstraintRegionStore::compact_hull_vertices(
+    std::vector<VertexId> vertices
+) const {
+    vertices.erase(
+        std::unique(vertices.begin(), vertices.end()),
+        vertices.end()
+    );
+    if (vertices.size() > 1 && vertices.front() == vertices.back()) {
+        vertices.pop_back();
+    }
+
+    bool changed = true;
+    while (changed && vertices.size() >= 3) {
+        changed = false;
+        for (std::size_t index = 0; index < vertices.size(); ++index) {
+            const VertexId previous =
+                vertices[
+                    (index + vertices.size() - 1) % vertices.size()
+                ];
+            const VertexId current = vertices[index];
+            const VertexId next =
+                vertices[(index + 1) % vertices.size()];
+            if (
+                current == previous ||
+                current == next ||
+                orientation(
+                    geometry_.vertex(previous),
+                    geometry_.vertex(current),
+                    geometry_.vertex(next)
+                ) == ExactSign::Zero
+            ) {
+                vertices.erase(vertices.begin() + index);
+                changed = true;
+                break;
+            }
+        }
+    }
+
+    return vertices.size() >= 3 ? vertices : std::vector<VertexId>{};
 }
 
 }  // namespace minescript_miner

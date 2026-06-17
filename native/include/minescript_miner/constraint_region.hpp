@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <vector>
 
 namespace minescript_miner {
@@ -87,6 +88,24 @@ private:
     std::vector<VertexId> compute_convex_hull(
         const std::vector<RegionConstraint> &constraints
     );
+    std::optional<std::vector<VertexId>> compute_incremental_hull(
+        RegionId parent,
+        RegionConstraint added_constraint,
+        const std::vector<RegionConstraint> &constraints
+    );
+    bool can_incrementally_clip(
+        RegionId parent,
+        RegionConstraint added_constraint,
+        const std::vector<RegionConstraint> &constraints
+    ) const;
+    std::optional<VertexId> intersect_edge_with_constraint(
+        VertexId from,
+        VertexId to,
+        HalfPlaneId constraint
+    );
+    std::vector<VertexId> compact_hull_vertices(
+        std::vector<VertexId> vertices
+    ) const;
 
     ExactGeometryStore &geometry_;
     std::vector<ConstraintRegion> regions_;

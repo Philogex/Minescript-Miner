@@ -19,7 +19,8 @@ for path in (PROJECT_ROOT, SRC_ROOT):
         sys.path.insert(0, path_text)
 
 import _minescript_miner_native as native
-from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION, SHAPE_NAMES
+from minescript_miner.adapter.catalog_contract import SHAPE_CATALOG_VERSION
+from minescript_miner.adapter.shape_catalog import SHAPE_NAMES
 
 
 def _echo(message: str) -> None:

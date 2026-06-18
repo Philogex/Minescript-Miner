@@ -6,10 +6,12 @@ import unittest
 from array import array
 from pathlib import Path
 
-from minescript_miner.adapter.shape_catalog import (
-    DEFAULT_CATALOG,
+from minescript_miner.adapter.catalog_contract import (
     MAX_CUBE_SIDE,
     SHAPE_CATALOG_VERSION,
+)
+from minescript_miner.adapter.shape_catalog import (
+    DEFAULT_CATALOG,
     SHAPE_ID_BY_NAME,
     SHAPE_NAMES,
 )

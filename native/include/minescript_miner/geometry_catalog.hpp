@@ -3,19 +3,13 @@
 
 #pragma once
 
+#include "minescript_miner/catalog_contract.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
 namespace minescript_miner {
-
-inline constexpr int SHAPE_CATALOG_VERSION = 3;
-inline constexpr int GEOMETRY_CATALOG_VERSION = 3;
-inline constexpr int GEOMETRY_SHAPE_CATALOG_VERSION = SHAPE_CATALOG_VERSION;
-inline constexpr std::int32_t GEOMETRY_UNITS_PER_BLOCK = 32;
-inline constexpr std::size_t GEOMETRY_SHAPE_COUNT = 106;
-inline constexpr std::size_t GEOMETRY_BOX_COUNT = 249;
-inline constexpr std::size_t GEOMETRY_FACE_COUNT = 1246;
 
 inline constexpr std::int32_t SHAPE_EMPTY = 0;
 inline constexpr std::int32_t SHAPE_FULL_CUBE = 1;

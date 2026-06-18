@@ -10,11 +10,13 @@ from array import array
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
-
-SHAPE_CATALOG_VERSION = 3
-BLOCK_SHAPE_MAPPING_VERSION = 3
-CATALOG_VERSION = SHAPE_CATALOG_VERSION
-MAX_CUBE_SIDE = 39
+from minescript_miner.adapter.catalog_contract import (
+    BLOCK_SHAPE_MAPPING_VERSION,
+    CATALOG_VERSION,
+    MAX_CUBE_SIDE,
+    SHAPE_CATALOG_VERSION,
+    SHAPE_COUNT,
+)
 
 DIRECTIONS = ('north', 'east', 'south', 'west')
 HALVES = ('bottom', 'top')
@@ -3675,7 +3677,6 @@ SHAPE_EMPTY = SHAPE_ID_BY_NAME["empty"]
 SHAPE_FULL_CUBE = SHAPE_ID_BY_NAME["full_cube"]
 SHAPE_SLAB_BOTTOM = SHAPE_ID_BY_NAME["slab_bottom"]
 SHAPE_SLAB_TOP = SHAPE_ID_BY_NAME["slab_top"]
-SHAPE_COUNT = len(SHAPE_NAMES)
 
 RELEVANT_PROPERTIES: Dict[str, Tuple[str, ...]] = {
     'minecraft:acacia_button': ('face', 'facing', 'powered'),

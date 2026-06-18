@@ -1,17 +1,19 @@
-from .shape_catalog import (
+from .catalog_contract import (
     BLOCK_SHAPE_MAPPING_VERSION,
     CATALOG_VERSION,
+    MAX_CUBE_SIDE,
+    SHAPE_COUNT,
+    SHAPE_CATALOG_VERSION,
+)
+from .shape_catalog import (
     DEFAULT_CATALOG,
     EMPTY_BLOCKS,
-    MAX_CUBE_SIDE,
     RELEVANT_PROPERTIES,
-    SHAPE_COUNT,
     SHAPE_EMPTY,
     SHAPE_FULL_CUBE,
     SHAPE_ID_BY_BLOCK_STATE,
     SHAPE_ID_BY_NAME,
     SHAPE_NAMES,
-    SHAPE_CATALOG_VERSION,
     SHAPE_SLAB_BOTTOM,
     SHAPE_SLAB_TOP,
     BlockShapeCatalog,

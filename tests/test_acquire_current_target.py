@@ -10,7 +10,8 @@ sys.modules.setdefault(
     types.SimpleNamespace(await_loaded_region=lambda *_args: None),
 )
 
-from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION, SHAPE_ID_BY_NAME
+from minescript_miner.adapter.catalog_contract import SHAPE_CATALOG_VERSION
+from minescript_miner.adapter.shape_catalog import SHAPE_ID_BY_NAME
 from minescript_miner.minescript import io
 
 

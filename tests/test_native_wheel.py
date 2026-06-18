@@ -7,7 +7,7 @@ import unittest
 import venv
 from pathlib import Path
 
-from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION
+from minescript_miner.adapter.catalog_contract import SHAPE_CATALOG_VERSION
 
 
 class NativeWheelTest(unittest.TestCase):

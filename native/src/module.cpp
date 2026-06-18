@@ -20,17 +20,6 @@
 #include <vector>
 
 
-namespace {
-
-// API note: shape IDs and target block indices currently share the compact
-// uint16 payload format. This caps indexable cube entries at 39^3 blocks
-// because 41^3 no longer fits in uint16_t. Raising this limit should keep
-// shape IDs as uint16_t and introduce a wider target-index payload.
-constexpr int MAX_CUBE_SIDE = 39;
-
-}  // namespace
-
-
 static PyObject *hello(PyObject *, PyObject *) {
     return PyUnicode_FromString("hello from native extension");
 }
@@ -499,8 +488,16 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         PyErr_SetString(PyExc_ValueError, "side must be a positive integer");
         return nullptr;
     }
-    if (side > MAX_CUBE_SIDE) {
-        PyErr_Format(PyExc_ValueError, "side must be <= %d, got %d", MAX_CUBE_SIDE, side);
+    // API note: shape IDs and target block indices currently share the compact
+    // uint16 payload format. Raising this limit should keep shape IDs as
+    // uint16_t and introduce a wider target-index payload.
+    if (side > minescript_miner::MAX_CUBE_SIDE) {
+        PyErr_Format(
+            PyExc_ValueError,
+            "side must be <= %d, got %d",
+            minescript_miner::MAX_CUBE_SIDE,
+            side
+        );
         return nullptr;
     }
     if (!(reach > 0.0) || !std::isfinite(reach)) {

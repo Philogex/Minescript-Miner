@@ -204,7 +204,7 @@ def write_fixture(
     selected_lookup = {index for index, _face_count in selected}
     selected_text = " ".join(str(index) for index, _face_count in selected)
     output_lines = [
-        "# Derived from recorded_side_39.scan for target-pruning benchmarks.",
+        "# Derived from recorded_side_39.scan for target-pruning stress tests.",
         "# Converted occluder block indices: " + selected_text,
     ]
 

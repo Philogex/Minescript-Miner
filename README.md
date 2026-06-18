@@ -1,16 +1,17 @@
 # Minescript Miner
 
-Minescript Miner finds visible faces of configured Minecraft blocks, rotates
-the camera towards the best candidate, and mines it. The current solver uses
-native C++ exact geometry instead of pixel rasterization or repeated
-raycasting.
+Minescript Miner provides visibility-query helpers for Minecraft blocks. The
+current solver uses native C++ exact geometry instead of pixel rasterization or
+repeated raycasting.
 
-The miner does not provide movement, pathfinding, inventory management, or
-tool selection. It only considers targets that can be reached from the 
-player's current eye-level position, which ignores sneaking.
+The library does not provide movement, pathfinding, mining loops, inventory
+management, or tool selection. It answers whether a specific block has a
+visible target point and can return the yaw/pitch needed to look at such a
+point from the player's current eye-level position, which ignores sneaking.
+
 ## Features
 
-- Configurable target blocks
+- Single-block target queries
 - Occlusion-aware target selection
 - Exact projective geometry for visibility and clipping decisions
 - Approximate angle heuristics for efficient candidate ordering
@@ -33,50 +34,33 @@ depends on whether Minescript supports the Minecraft version in question.
    [latest GitHub release](https://github.com/Philogex/Minescript-Miner/releases).
 2. Extract the included `Minescript-Miner` directory into Minecraft's
    `minescript` directory.
-3. Edit `Minescript-Miner/targets.txt`.
-4. In Minecraft chat, run:
+3. Import the library from your own Minescript script:
 
-   ```text
-   \Minescript-Miner/miner
+   ```python
+   from minescript_miner.api import can_see_block, get_angle_to_block
+
+   angle = get_angle_to_block((10, 64, -3))
+   if angle is not None:
+       yaw, pitch = angle
+
+   visible = can_see_block((0.5, 65.62, 0.5), (10, 64, -3))
    ```
 
-5. Press `O` to enable or disable the miner.
+## API
 
-The miner prints its current active state in chat. Disabling it also releases
-the attack key.
+`get_angle_to_block((x, y, z))` returns `None` or a Minecraft `(yaw, pitch)`
+pair for a visible point on the target block, using the current player position
+plus a static eye height.
 
-## Target Configuration
-
-`targets.txt` contains one Minecraft block ID per line:
-
-```text
-minecraft:stone
-minecraft:cobblestone
-minecraft:dirt
-```
-
-Blank lines and comments beginning with `#` are ignored. Inline comments are
-also supported:
-
-```text
-minecraft:deepslate_diamond_ore # valuable target
-```
-
-The file is loaded once when the script starts. Restart the script after
-changing it.
-
-The main runtime constants are currently defined near the top of `miner.py`:
-
-- `TOGGLE_KEY`: activation key
-- `REACH`: maximum mining reach
-- `ROTATION_DURATION`: camera rotation duration
-- `IDLE_DELAY`: delay while no target is available
-- `BREAK_POLL_DELAY`: interval used while monitoring a mined block
+`can_see_block((x1, y1, z1), (x2, y2, z2))` returns `True` when the solver can
+find any visible point on the target block from the supplied source position.
 
 Native scan regions are fixed cubes with a maximum side length of 39 blocks
 (`39^3 = 59,319` entries). This limit comes from the current compact
 `uint16_t` target-index payload; shape IDs are also transmitted as `uint16_t`.
-Larger scan cubes would require a wider target-index representation.
+Larger scan cubes would require a wider target-index representation. The cube
+is centered on `floor(source_position)`, so target blocks outside that cube
+raise `ValueError`.
 
 ## Supported Shapes
 
@@ -91,9 +75,9 @@ The catalog currently models:
 
 Unknown non-empty blocks fall back to a full-cube shape. This is conservative
 when they act as occluders, but unsupported non-cubic target blocks are not
-guaranteed to produce a valid interaction point. The final Minescript target
-check prevents the miner from attacking a different block when such a
-mismatch occurs.
+guaranteed to produce a valid interaction point. Callers that use the returned
+angle for interaction should still verify Minecraft's targeted block before
+acting on it.
 
 The shape catalog is intentionally incomplete and will be expanded
 incrementally rather than attempting to encode every Minecraft block at once.
@@ -123,37 +107,37 @@ model and internal invariants.
 
 ## How It Works
 
-1. Python reads a fixed cube of blocks around the player's eye position.
-2. Blocks outside the reachable scan volume are replaced with air while the
-   cube layout is preserved.
-3. Minecraft block states are mapped to stable shape IDs.
-4. The native geometry catalog expands those IDs into reusable block faces.
+1. Python chooses the smallest supported scan cube centered on
+   `floor(source_position)` that contains the requested target block.
+2. Python reads that cube from Minescript and maps Minecraft block states to
+   stable shape IDs.
+3. The requested target block is passed to native code as a compact target
+   index aligned with the shape-ID cube.
+4. The native geometry catalog expands shape IDs into reusable block faces.
 5. Target-facing planes are ordered by an approximate camera-angle bound.
 6. The exact branch-and-bound solver subtracts projected occluders until it
    finds a visible target point.
-7. The point is converted to a Minecraft yaw and pitch.
-8. Python rotates the camera, verifies the targeted block, and holds attack
-   until that block changes.
+7. The point is converted to a Minecraft yaw and pitch, or no result is
+   returned when no represented visible point exists.
 
 Read-only Minecraft queries run on Minescript's script executor to avoid
-waiting for the render queue. Camera and input commands retain Minescript's
-normal execution behavior.
+waiting for the render queue. The query API itself does not issue camera or
+input commands.
 
 ## Status And Limitations
 
 This is an experimental project. Important current limitations include:
 
+- No bundled mining loop
 - No movement or pathfinding
 - No automatic tool or inventory handling
 - Incomplete shape coverage
 - World changes between scanning and interaction can invalidate a result
-- Reach and interaction behavior ultimately remain subject to Minecraft and
-  Minescript
+- Interaction behavior ultimately remains subject to Minecraft and Minescript
 - Native scan-cube side length is currently capped at 39 blocks
 
 Native diagnostic logging is disabled by default. Set
 `MINESCRIPT_MINER_NATIVE_LOG=1` before starting the script to enable it.
-Set `MINESCRIPT_MINER_LOG_TIMINGS=1` to log total scan timings from `miner.py`.
 
 ## Development
 
@@ -167,9 +151,8 @@ python -m pip install build
 scripts/run-tests.sh
 ```
 
-Tagged commits build Linux and Windows wheels, Minescript bundles, and a
-Callgrind performance report through GitHub Actions. Local profiling helpers
-are available under `scripts/`.
+Tagged commits build Linux and Windows wheels and Minescript bundles through
+GitHub Actions.
 
 Generated shape-catalog files originate from
 `catalog/shape_catalog.json`. Regenerate them with:
@@ -203,8 +186,8 @@ heuristics for ordering and pruning.
 Please report correctness and performance problems through
 [GitHub Issues](https://github.com/Philogex/Minescript-Miner/issues). Geometry
 reports are most useful when they include the Minecraft and Minescript
-versions, target configuration, relevant block states, and a reproducible
-world arrangement.
+versions, query source/target positions, relevant block states, and a
+reproducible world arrangement.
 
 ## License
 

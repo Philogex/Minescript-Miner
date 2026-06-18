@@ -50,5 +50,4 @@ setup(
         where="src",
         include=["minescript_miner*"],
     ),
-    py_modules=["miner"],
 )

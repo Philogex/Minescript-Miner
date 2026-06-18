@@ -4,22 +4,28 @@ import unittest
 from contextlib import nullcontext
 
 
-sys.modules.setdefault(
+minescript = sys.modules.setdefault(
     "minescript",
     types.SimpleNamespace(
         await_loaded_region=lambda *_args: None,
         script_loop=nullcontext(),
     ),
 )
+minescript.await_loaded_region = getattr(
+    minescript,
+    "await_loaded_region",
+    lambda *_args: None,
+)
+minescript.script_loop = getattr(minescript, "script_loop", nullcontext())
 
-from minescript_miner.minescript import world
+from minescript_miner.minescript import io, world
 
 
 class PrunedCubeBlocksTest(unittest.TestCase):
     def test_read_block_region_uses_script_loop(self):
         calls = []
-        original_get_block_region = getattr(world.m, "get_block_region", None)
-        original_script_loop = getattr(world.m, "script_loop", None)
+        original_get_block_region = getattr(io.m, "get_block_region", None)
+        original_script_loop = getattr(io.m, "script_loop", None)
 
         class ScriptLoop:
             def __enter__(self):
@@ -29,21 +35,21 @@ class PrunedCubeBlocksTest(unittest.TestCase):
                 calls.append("exit")
 
         try:
-            world.m.script_loop = ScriptLoop()
-            world.m.get_block_region = lambda pos1, pos2: calls.append(
+            io.m.script_loop = ScriptLoop()
+            io.m.get_block_region = lambda pos1, pos2: calls.append(
                 (pos1, pos2)
             ) or "region"
 
             region = world.read_block_region((1, 2, 3), (4, 5, 6))
         finally:
             if original_get_block_region is None:
-                del world.m.get_block_region
+                del io.m.get_block_region
             else:
-                world.m.get_block_region = original_get_block_region
+                io.m.get_block_region = original_get_block_region
             if original_script_loop is None:
-                del world.m.script_loop
+                del io.m.script_loop
             else:
-                world.m.script_loop = original_script_loop
+                io.m.script_loop = original_script_loop
 
         self.assertEqual("region", region)
         self.assertEqual(
@@ -55,7 +61,7 @@ class PrunedCubeBlocksTest(unittest.TestCase):
         calls = []
         original_positions_within_reach = world.positions_within_reach
         original_read_blocks_region_prune = world.read_blocks_region_prune
-        original_await_loaded_region = world.m.await_loaded_region
+        original_await_loaded_region = io.await_loaded_region
 
         def fake_await_loaded_region(*args):
             calls.append(args)
@@ -67,7 +73,7 @@ class PrunedCubeBlocksTest(unittest.TestCase):
             return ["minecraft:stone", None]
 
         try:
-            world.m.await_loaded_region = fake_await_loaded_region
+            io.await_loaded_region = fake_await_loaded_region
             world.positions_within_reach = fake_positions_within_reach
             world.read_blocks_region_prune = fake_read_blocks_region_prune
 
@@ -78,7 +84,7 @@ class PrunedCubeBlocksTest(unittest.TestCase):
         finally:
             world.positions_within_reach = original_positions_within_reach
             world.read_blocks_region_prune = original_read_blocks_region_prune
-            world.m.await_loaded_region = original_await_loaded_region
+            io.await_loaded_region = original_await_loaded_region
 
         min_pos, max_pos = world.fixed_cube_bounds((10.1, 64.2, -3.7), 1.0)
         block_strings = [block_string for _pos, block_string in area]
@@ -88,8 +94,14 @@ class PrunedCubeBlocksTest(unittest.TestCase):
         self.assertEqual(27, len(area))
         self.assertEqual([(9, -5, 11, -3)], calls)
         self.assertEqual((9, 63, -5), area[0][0])
-        self.assertEqual("minecraft:stone", block_strings[world.cube_block_index((9, 63, -5), min_pos, 3)])
-        self.assertEqual("minecraft:air", block_strings[world.cube_block_index((10, 64, -4), min_pos, 3)])
+        self.assertEqual(
+            "minecraft:stone",
+            block_strings[world.cube_block_index((9, 63, -5), min_pos, 3)],
+        )
+        self.assertEqual(
+            "minecraft:air",
+            block_strings[world.cube_block_index((10, 64, -4), min_pos, 3)],
+        )
         self.assertEqual(26, block_strings.count("minecraft:air"))
 
     def test_positions_within_reach_use_block_aabb_distance(self):
@@ -103,44 +115,6 @@ class PrunedCubeBlocksTest(unittest.TestCase):
 
         self.assertIn((2, 0, 0), positions)
         self.assertNotIn((-2, 0, 0), positions)
-
-    def test_get_area_records_pipeline_timings(self):
-        original_get_block_region = getattr(world.m, "get_block_region", None)
-        original_await_loaded_region = world.m.await_loaded_region
-        original_script_loop = world.m.script_loop
-
-        class Region:
-            min_pos = (0, 0, 0)
-            max_pos = (0, 0, 0)
-            x_length = 1
-            z_length = 1
-            blocks = ["minecraft:stone"]
-
-        try:
-            world.m.await_loaded_region = lambda *_args: None
-            world.m.script_loop = nullcontext()
-            world.m.get_block_region = lambda *_args: Region()
-            timings = world.AreaTimings()
-            area = world.get_area(
-                (0.5, 0.5, 0.5),
-                reach=0.1,
-                timings=timings,
-            )
-        finally:
-            world.m.await_loaded_region = original_await_loaded_region
-            world.m.script_loop = original_script_loop
-            if original_get_block_region is None:
-                del world.m.get_block_region
-            else:
-                world.m.get_block_region = original_get_block_region
-
-        self.assertEqual(27, len(area))
-        self.assertGreaterEqual(timings.await_region_ms, 0.0)
-        self.assertGreaterEqual(timings.prune_positions_ms, 0.0)
-        self.assertGreaterEqual(timings.region_read_ms, 0.0)
-        self.assertGreaterEqual(timings.region_extract_ms, 0.0)
-        self.assertGreaterEqual(timings.cube_rebuild_ms, 0.0)
-        self.assertGreaterEqual(timings.total_ms, timings.region_read_ms)
 
 
 if __name__ == "__main__":

@@ -77,7 +77,6 @@ jobs:
     needs:
       - test
       - windows-build-test
-      - performance
     runs-on: ubuntu-24.04
 
     steps:
@@ -125,7 +124,6 @@ jobs:
     needs:
       - test
       - windows-build-test
-      - performance
     runs-on: windows-2022
 
     steps:
@@ -189,51 +187,12 @@ jobs:
             dist/minescript-miner-windows-${{ steps.release.outputs.tag }}.zip
           if-no-files-found: error
 
-  performance:
-    name: Record performance metadata
-    if: startsWith(github.ref, 'refs/tags/')
-    needs: test
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-
-      - name: Install profiling dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes g++ valgrind
-
-      - name: Prepare release tag
-        id: release
-        run: echo "tag=$(python tools/release_tag.py "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
-
-      - name: Run Callgrind benchmark
-        run: scripts/run-performance-report.sh "${{ steps.release.outputs.tag }}" build/profile/report
-
-      - name: Upload performance report
-        uses: actions/upload-artifact@v6
-        with:
-          name: minescript-miner-performance-${{ steps.release.outputs.tag }}
-          path: |
-            build/profile/report/performance-report.json
-            build/profile/report/benchmark-output.txt
-            build/profile/report/callgrind-annotate.txt
-            build/profile/report/callgrind.out
-          if-no-files-found: error
-
   release:
     name: Publish GitHub release
     if: startsWith(github.ref, 'refs/tags/')
     needs:
       - linux-wheel
       - windows-wheel
-      - performance
     runs-on: ubuntu-24.04
     permissions:
       actions: read

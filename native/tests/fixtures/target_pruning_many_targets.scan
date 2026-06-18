@@ -1,4 +1,4 @@
-# Derived from recorded_side_39.scan for target-pruning benchmarks.
+# Derived from recorded_side_39.scan for target-pruning stress tests.
 # Converted occluder block indices: 25055 25058 25059 25061 25093 25096 25098 25099 25131 25132 25135 25136 25137 25172 25175 25177 25178 25211 25212 25213 25252 25254 26459 26461 26462 26496 26497 26498 26499 26500 26504 26535
 # Unlisted blocks use default_shape. Order is x fastest, then z, then y.
 fixture_version 1

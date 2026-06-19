@@ -9,6 +9,7 @@ SEED="${2:-0x1234}"
 CASES="${3:-50}"
 DENSITY="${4:-0.14}"
 TARGETS="${5:-5}"
+DUMP_DIR="${6:-}"
 
 BOOST_INCLUDE="$(pwd)/third_party/boost"
 mkdir -p "$(dirname "${OUTPUT}")"
@@ -35,4 +36,9 @@ mkdir -p "$(dirname "${OUTPUT}")"
     native/src/visibility.cpp \
     -o "${OUTPUT}"
 
-"${OUTPUT}" "${SEED}" "${CASES}" "${DENSITY}" "${TARGETS}"
+if [[ -n "${DUMP_DIR}" ]]; then
+    mkdir -p "${DUMP_DIR}"
+    "${OUTPUT}" "${SEED}" "${CASES}" "${DENSITY}" "${TARGETS}" "${DUMP_DIR}"
+else
+    "${OUTPUT}" "${SEED}" "${CASES}" "${DENSITY}" "${TARGETS}"
+fi

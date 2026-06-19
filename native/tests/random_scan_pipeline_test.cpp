@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <cstring>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -37,6 +38,7 @@ struct RandomConfig {
     std::uint32_t cases = 5;
     double density = 0.14;
     std::uint16_t target_count = 5;
+    std::string dump_dir{};
 };
 
 struct CaseData {
@@ -120,8 +122,11 @@ RandomConfig parse_config(int argc, char **argv) {
         config.target_count = static_cast<std::uint16_t>(parse_u64(argv[4]));
     }
     if (argc > 5) {
+        config.dump_dir = argv[5];
+    }
+    if (argc > 6) {
         throw std::invalid_argument(
-            "usage: random_scan_pipeline_test [seed] [cases] [density] [targets]"
+            "usage: random_scan_pipeline_test [seed] [cases] [density] [targets] [dump_dir]"
         );
     }
     if (config.cases == 0) {
@@ -136,6 +141,17 @@ RandomConfig parse_config(int argc, char **argv) {
         throw std::invalid_argument("targets must be smaller than block count");
     }
     return config;
+}
+
+std::string join_path(const std::string &directory, const std::string &filename) {
+    if (directory.empty()) {
+        return filename;
+    }
+    const char last = directory[directory.size() - 1];
+    if (last == '/' || last == '\\') {
+        return directory + filename;
+    }
+    return directory + "/" + filename;
 }
 
 Vec3 random_look_direction(SplitMix64 &rng) {
@@ -412,6 +428,104 @@ void update_checksum(SolveStats &stats, const BranchBoundResult &result) {
     stats.checksum = mix_checksum(stats.checksum, double_bits(result.direction.z));
 }
 
+bool is_target_index(const CaseData &data, std::uint16_t index) {
+    return std::find(
+        data.target_indices.begin(),
+        data.target_indices.end(),
+        index
+    ) != data.target_indices.end();
+}
+
+std::string candidate_only_basename(
+    const RandomConfig &config,
+    std::uint32_t case_index
+) {
+    return "candidate_only_seed" + std::to_string(config.seed) +
+           "_case" + std::to_string(case_index) +
+           "_density" + std::to_string(static_cast<int>(config.density * 10000.0)) +
+           "_targets" + std::to_string(config.target_count);
+}
+
+void dump_candidate_only_scan(
+    const RandomConfig &config,
+    std::uint32_t case_index,
+    const CaseData &data,
+    const BranchBoundResult &candidate
+) {
+    if (config.dump_dir.empty()) {
+        return;
+    }
+
+    const std::string basename = candidate_only_basename(config, case_index);
+    const std::string scan_path = join_path(config.dump_dir, basename + ".scan");
+    std::ofstream scan(scan_path);
+    if (!scan) {
+        throw std::runtime_error("cannot write candidate-only scan: " + scan_path);
+    }
+
+    const auto orientation =
+        minescript_miner::yaw_pitch_from_direction(data.look_direction);
+    scan
+        << "# Uniform random candidate-only case.\n"
+        << "# Reproduce with seed=" << config.seed
+        << " case=" << case_index
+        << " density=" << config.density
+        << " targets=" << config.target_count << "\n"
+        << "# Candidate angle=" << candidate.angle
+        << " distance=" << candidate.distance << "\n"
+        << "# Cube center is the command/source origin. Index order is x fastest, then z, then y.\n"
+        << "fixture_version 1\n"
+        << "shape_catalog_version " << minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION << "\n"
+        << "side " << kSide << "\n"
+        << "position " << data.eye.x << ' ' << data.eye.y << ' ' << data.eye.z << "\n"
+        << "orientation_yaw_pitch " << orientation.yaw << ' ' << orientation.pitch << "\n"
+        << "default_shape " << minescript_miner::SHAPE_EMPTY << "\n\n"
+        << "expect_found 0\n\n";
+
+    for (std::size_t index = 0; index < data.shape_ids.size(); ++index) {
+        if (data.shape_ids[index] != minescript_miner::SHAPE_FULL_CUBE) {
+            continue;
+        }
+        const auto block_index = static_cast<std::uint16_t>(index);
+        scan
+            << (is_target_index(data, block_index) ? "target " : "block ")
+            << block_index << ' ' << minescript_miner::SHAPE_FULL_CUBE << '\n';
+    }
+
+    const std::string mcfunction_path =
+        join_path(config.dump_dir, basename + ".mcfunction");
+    std::ofstream function(mcfunction_path);
+    if (!function) {
+        throw std::runtime_error(
+            "cannot write candidate-only mcfunction: " + mcfunction_path
+        );
+    }
+    function
+        << "# Execute at the intended cube center. Full cubes are stone; targets are gold_block.\n"
+        << "fill ~-19 ~-19 ~-19 ~19 ~19 ~19 minecraft:air\n";
+
+    constexpr BlockPos center{0, 0, 0};
+    for (std::size_t index = 0; index < data.shape_ids.size(); ++index) {
+        if (data.shape_ids[index] != minescript_miner::SHAPE_FULL_CUBE) {
+            continue;
+        }
+        const auto block_index = static_cast<std::uint16_t>(index);
+        const BlockPos block_pos =
+            minescript_miner::index_to_block_pos(block_index, kSide, center);
+        function
+            << "setblock ~" << block_pos.x
+            << " ~" << block_pos.y
+            << " ~" << block_pos.z
+            << (is_target_index(data, block_index)
+                    ? " minecraft:gold_block\n"
+                    : " minecraft:stone\n");
+    }
+
+    std::cerr
+        << "dumped candidate_only case: " << scan_path
+        << " and " << mcfunction_path << '\n';
+}
+
 void assert_result_invariants(
     const ScanRegionGeometry &geometry,
     const BranchBoundResult &result,
@@ -492,6 +606,7 @@ int main(int argc, char **argv) {
             ++stats.reference_only;
         } else {
             ++stats.candidate_only;
+            dump_candidate_only_scan(config, case_index, data, candidate);
         }
 
         stats.world_faces += geometry.world_faces.size();

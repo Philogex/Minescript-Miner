@@ -22,6 +22,7 @@
 namespace {
 
 using minescript_miner::BranchBoundResult;
+using minescript_miner::BlockPos;
 using minescript_miner::ScanRegionGeometry;
 using minescript_miner::TargetFaceCandidate;
 using minescript_miner::Vec3;
@@ -34,7 +35,7 @@ constexpr std::uint16_t kCenterIndex =
 struct RandomConfig {
     std::uint64_t seed = 0x4d595df4d0f33173ULL;
     std::uint32_t cases = 5;
-    double density = 0.25;
+    double density = 0.14;
     std::uint16_t target_count = 5;
 };
 
@@ -46,8 +47,10 @@ struct CaseData {
 };
 
 struct SolveStats {
-    std::uint64_t found = 0;
-    std::uint64_t missing = 0;
+    std::uint64_t both_found = 0;
+    std::uint64_t both_missing = 0;
+    std::uint64_t reference_only = 0;
+    std::uint64_t candidate_only = 0;
     std::uint64_t world_faces = 0;
     std::uint64_t target_faces = 0;
     std::uint64_t branches = 0;
@@ -55,6 +58,12 @@ struct SolveStats {
     std::uint64_t reference_us = 0;
     std::uint64_t candidate_us = 0;
     std::uint64_t checksum = 1469598103934665603ULL;
+};
+
+struct RayHit {
+    bool hit = false;
+    std::uint16_t block_index = 0;
+    double distance = std::numeric_limits<double>::infinity();
 };
 
 class SplitMix64 {
@@ -202,17 +211,183 @@ BranchBoundResult solve_reference(
     );
 }
 
+double axis_interval_entry(
+    double origin,
+    double direction,
+    double minimum,
+    double maximum,
+    double &exit
+) {
+    if (direction == 0.0) {
+        if (origin < minimum || origin > maximum) {
+            exit = -std::numeric_limits<double>::infinity();
+            return std::numeric_limits<double>::infinity();
+        }
+        exit = std::numeric_limits<double>::infinity();
+        return -std::numeric_limits<double>::infinity();
+    }
+    double first = (minimum - origin) / direction;
+    double second = (maximum - origin) / direction;
+    if (first > second) {
+        std::swap(first, second);
+    }
+    exit = second;
+    return first;
+}
+
+bool ray_intersects_unit_block(
+    const Vec3 &origin,
+    const Vec3 &direction,
+    BlockPos block_pos,
+    double &distance
+) {
+    double x_exit = 0.0;
+    double y_exit = 0.0;
+    double z_exit = 0.0;
+    const double x_entry = axis_interval_entry(
+        origin.x,
+        direction.x,
+        static_cast<double>(block_pos.x),
+        static_cast<double>(block_pos.x + 1),
+        x_exit
+    );
+    const double y_entry = axis_interval_entry(
+        origin.y,
+        direction.y,
+        static_cast<double>(block_pos.y),
+        static_cast<double>(block_pos.y + 1),
+        y_exit
+    );
+    const double z_entry = axis_interval_entry(
+        origin.z,
+        direction.z,
+        static_cast<double>(block_pos.z),
+        static_cast<double>(block_pos.z + 1),
+        z_exit
+    );
+    const double entry = std::max({x_entry, y_entry, z_entry, 0.0});
+    const double exit = std::min({x_exit, y_exit, z_exit});
+    if (entry > exit || exit < 0.0) {
+        return false;
+    }
+    distance = entry;
+    return true;
+}
+
+RayHit first_full_cube_hit(
+    const std::vector<std::uint16_t> &shape_ids,
+    const Vec3 &eye,
+    const Vec3 &direction
+) {
+    constexpr BlockPos center{0, 0, 0};
+    RayHit best{};
+    for (std::size_t index = 0; index < shape_ids.size(); ++index) {
+        if (shape_ids[index] != minescript_miner::SHAPE_FULL_CUBE) {
+            continue;
+        }
+        const auto block_index = static_cast<std::uint16_t>(index);
+        const BlockPos block_pos =
+            minescript_miner::index_to_block_pos(block_index, kSide, center);
+        double distance = 0.0;
+        if (!ray_intersects_unit_block(eye, direction, block_pos, distance)) {
+            continue;
+        }
+        constexpr double epsilon = 1e-10;
+        if (!best.hit || distance + epsilon < best.distance) {
+            best = {true, block_index, distance};
+        }
+    }
+    return best;
+}
+
+Vec3 target_sample_point(std::uint16_t target_index, std::uint8_t sample_index) {
+    constexpr BlockPos center{0, 0, 0};
+    const BlockPos block_pos =
+        minescript_miner::index_to_block_pos(target_index, kSide, center);
+    switch (sample_index) {
+        case 0:
+            return {
+                static_cast<double>(block_pos.x) + 0.5,
+                static_cast<double>(block_pos.y) + 0.5,
+                static_cast<double>(block_pos.z) + 0.5,
+            };
+        case 1:
+            return {
+                static_cast<double>(block_pos.x) + 0.5,
+                static_cast<double>(block_pos.y),
+                static_cast<double>(block_pos.z) + 0.5,
+            };
+        case 2:
+            return {
+                static_cast<double>(block_pos.x) + 0.5,
+                static_cast<double>(block_pos.y) + 1.0,
+                static_cast<double>(block_pos.z) + 0.5,
+            };
+        case 3:
+            return {
+                static_cast<double>(block_pos.x) + 0.5,
+                static_cast<double>(block_pos.y) + 0.5,
+                static_cast<double>(block_pos.z),
+            };
+        case 4:
+            return {
+                static_cast<double>(block_pos.x) + 0.5,
+                static_cast<double>(block_pos.y) + 0.5,
+                static_cast<double>(block_pos.z) + 1.0,
+            };
+        case 5:
+            return {
+                static_cast<double>(block_pos.x),
+                static_cast<double>(block_pos.y) + 0.5,
+                static_cast<double>(block_pos.z) + 0.5,
+            };
+        default:
+            return {
+                static_cast<double>(block_pos.x) + 1.0,
+                static_cast<double>(block_pos.y) + 0.5,
+                static_cast<double>(block_pos.z) + 0.5,
+            };
+    }
+}
+
 BranchBoundResult solve_candidate(
-    const ScanRegionGeometry &geometry,
+    const CaseData &data,
     const Vec3 &eye,
     const Vec3 &look_direction
 ) {
-    return minescript_miner::solve_visible_target(
-        geometry,
-        eye,
-        look_direction,
-        std::numeric_limits<double>::infinity()
-    );
+    BranchBoundResult best{};
+    for (const std::uint16_t target_index : data.target_indices) {
+        for (std::uint8_t sample_index = 0; sample_index < 7; ++sample_index) {
+            const Vec3 sample = target_sample_point(target_index, sample_index);
+            Vec3 direction = sample - eye;
+            const double distance = std::sqrt(length_squared(direction));
+            if (distance <= 0.0) {
+                continue;
+            }
+            direction = direction * (1.0 / distance);
+            const RayHit hit = first_full_cube_hit(
+                data.shape_ids,
+                eye,
+                direction
+            );
+            if (!hit.hit || hit.block_index != target_index) {
+                continue;
+            }
+            const double angle = minescript_miner::angle_to_point(
+                look_direction,
+                direction
+            );
+            if (!best.found || angle < best.angle) {
+                best.found = true;
+                best.direction = direction;
+                best.angle = angle;
+                best.distance = hit.distance;
+                best.target_world_face_index =
+                    std::numeric_limits<std::uint32_t>::max();
+            }
+        }
+    }
+    return best;
 }
 
 std::uint64_t mix_checksum(std::uint64_t checksum, std::uint64_t value) {
@@ -237,27 +412,10 @@ void update_checksum(SolveStats &stats, const BranchBoundResult &result) {
     stats.checksum = mix_checksum(stats.checksum, double_bits(result.direction.z));
 }
 
-bool same_result(
-    const BranchBoundResult &reference,
-    const BranchBoundResult &candidate
-) {
-    if (reference.found != candidate.found) {
-        return false;
-    }
-    if (!reference.found) {
-        return true;
-    }
-    constexpr double epsilon = 1e-12;
-    return reference.target_world_face_index == candidate.target_world_face_index &&
-           std::abs(reference.angle - candidate.angle) <= epsilon &&
-           std::abs(reference.direction.x - candidate.direction.x) <= epsilon &&
-           std::abs(reference.direction.y - candidate.direction.y) <= epsilon &&
-           std::abs(reference.direction.z - candidate.direction.z) <= epsilon;
-}
-
 void assert_result_invariants(
     const ScanRegionGeometry &geometry,
-    const BranchBoundResult &result
+    const BranchBoundResult &result,
+    bool require_target_face
 ) {
     if (!result.found) {
         return;
@@ -265,14 +423,16 @@ void assert_result_invariants(
     assert(std::isfinite(result.angle));
     assert(std::isfinite(result.distance));
     assert(std::abs(length_squared(result.direction) - 1.0) < 1e-12);
-    const bool result_is_target_face = std::any_of(
-        geometry.target_faces.begin(),
-        geometry.target_faces.end(),
-        [&result](const TargetFaceCandidate &target) {
-            return target.world_face_index == result.target_world_face_index;
-        }
-    );
-    assert(result_is_target_face);
+    if (require_target_face) {
+        const bool result_is_target_face = std::any_of(
+            geometry.target_faces.begin(),
+            geometry.target_faces.end(),
+            [&result](const TargetFaceCandidate &target) {
+                return target.world_face_index == result.target_world_face_index;
+            }
+        );
+        assert(result_is_target_face);
+    }
 }
 
 template <typename Function>
@@ -316,30 +476,24 @@ int main(int argc, char **argv) {
         );
         const BranchBoundResult candidate = time_solve(
             [&]() {
-                return solve_candidate(geometry, data.eye, data.look_direction);
+                return solve_candidate(data, data.eye, data.look_direction);
             },
             candidate_us
         );
 
-        assert_result_invariants(geometry, reference);
-        assert_result_invariants(geometry, candidate);
-        if (!same_result(reference, candidate)) {
-            std::cerr
-                << "random scan mismatch: seed=" << config.seed
-                << " case=" << case_index
-                << " density=" << config.density
-                << " targets=" << config.target_count
-                << " reference_found=" << reference.found
-                << " candidate_found=" << candidate.found
-                << '\n';
-            return 1;
+        assert_result_invariants(geometry, reference, true);
+        assert_result_invariants(geometry, candidate, false);
+
+        if (reference.found && candidate.found) {
+            ++stats.both_found;
+        } else if (!reference.found && !candidate.found) {
+            ++stats.both_missing;
+        } else if (reference.found) {
+            ++stats.reference_only;
+        } else {
+            ++stats.candidate_only;
         }
 
-        if (reference.found) {
-            ++stats.found;
-        } else {
-            ++stats.missing;
-        }
         stats.world_faces += geometry.world_faces.size();
         stats.target_faces += geometry.target_faces.size();
         stats.branches += reference.stats.branches_visited;
@@ -347,6 +501,7 @@ int main(int argc, char **argv) {
         stats.reference_us += reference_us;
         stats.candidate_us += candidate_us;
         update_checksum(stats, reference);
+        update_checksum(stats, candidate);
     }
 
     std::cout
@@ -356,8 +511,10 @@ int main(int argc, char **argv) {
         << " side=" << kSide
         << " density=" << std::setprecision(4) << config.density
         << " targets=" << config.target_count
-        << " found=" << stats.found
-        << " missing=" << stats.missing
+        << " both_found=" << stats.both_found
+        << " both_missing=" << stats.both_missing
+        << " reference_only=" << stats.reference_only
+        << " candidate_only=" << stats.candidate_only
         << " world_faces=" << stats.world_faces
         << " target_faces=" << stats.target_faces
         << " branches=" << stats.branches

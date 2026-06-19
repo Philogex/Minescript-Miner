@@ -7,7 +7,7 @@ CXX_BIN="${CXX:-c++}"
 OUTPUT="${1:-build/random-scan/random_scan_pipeline_test}"
 SEED="${2:-0x1234}"
 CASES="${3:-50}"
-DENSITY="${4:-0.25}"
+DENSITY="${4:-0.14}"
 TARGETS="${5:-5}"
 
 BOOST_INCLUDE="$(pwd)/third_party/boost"

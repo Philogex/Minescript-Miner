@@ -53,7 +53,7 @@ class NativeRandomScanPipelineTest(unittest.TestCase):
                     str(executable),
                     os.environ.get("MINESCRIPT_MINER_RANDOM_SCAN_SEED", "0x1234"),
                     os.environ.get("MINESCRIPT_MINER_RANDOM_SCAN_CASES", "3"),
-                    os.environ.get("MINESCRIPT_MINER_RANDOM_SCAN_DENSITY", "0.25"),
+                    os.environ.get("MINESCRIPT_MINER_RANDOM_SCAN_DENSITY", "0.14"),
                     os.environ.get("MINESCRIPT_MINER_RANDOM_SCAN_TARGETS", "5"),
                 ],
                 check=True,

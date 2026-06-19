@@ -446,6 +446,36 @@ std::string candidate_only_basename(
            "_targets" + std::to_string(config.target_count);
 }
 
+void write_candidate_ray_particles(
+    std::ofstream &function,
+    const CaseData &data,
+    const BranchBoundResult &candidate
+) {
+    function
+        << "# Candidate ray. Run the function again if the particles fade.\n";
+    if (!candidate.found || !std::isfinite(candidate.distance)) {
+        return;
+    }
+
+    constexpr int steps = 96;
+    const double ray_length = candidate.distance + 0.25;
+    for (int step = 0; step <= steps; ++step) {
+        const double t = ray_length * static_cast<double>(step) /
+                         static_cast<double>(steps);
+        const Vec3 point{
+            data.eye.x + candidate.direction.x * t,
+            data.eye.y + candidate.direction.y * t,
+            data.eye.z + candidate.direction.z * t,
+        };
+        function
+            << "particle minecraft:end_rod "
+            << '~' << std::fixed << std::setprecision(4) << point.x << ' '
+            << '~' << std::fixed << std::setprecision(4) << point.y << ' '
+            << '~' << std::fixed << std::setprecision(4) << point.z
+            << " 0 0 0 0 1 force\n";
+    }
+}
+
 void dump_candidate_only_scan(
     const RandomConfig &config,
     std::uint32_t case_index,
@@ -473,6 +503,9 @@ void dump_candidate_only_scan(
         << " targets=" << config.target_count << "\n"
         << "# Candidate angle=" << candidate.angle
         << " distance=" << candidate.distance << "\n"
+        << "# Candidate direction=" << candidate.direction.x
+        << ' ' << candidate.direction.y
+        << ' ' << candidate.direction.z << "\n"
         << "# Cube center is the command/source origin. Index order is x fastest, then z, then y.\n"
         << "fixture_version 1\n"
         << "shape_catalog_version " << minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION << "\n"
@@ -520,6 +553,8 @@ void dump_candidate_only_scan(
                     ? " minecraft:gold_block\n"
                     : " minecraft:stone\n");
     }
+
+    write_candidate_ray_particles(function, data, candidate);
 
     std::cerr
         << "dumped candidate_only case: " << scan_path

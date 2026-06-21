@@ -413,6 +413,19 @@ bool face_intersects_bounds(
            min_z <= bounds.max_z;
 }
 
+bool same_world_rect_face(
+    const WorldRectFace &lhs,
+    const WorldRectFace &rhs
+) {
+    return lhs.axis == rhs.axis &&
+           lhs.normal_sign == rhs.normal_sign &&
+           lhs.coord == rhs.coord &&
+           lhs.u_min == rhs.u_min &&
+           lhs.u_max == rhs.u_max &&
+           lhs.v_min == rhs.v_min &&
+           lhs.v_max == rhs.v_max;
+}
+
 std::int32_t clamped_offset_min(
     double world_min,
     std::int32_t cube_min
@@ -596,7 +609,6 @@ public:
         angle_limit_(angle_limit),
         options_(options),
         regions_(geometry_),
-        occluder_cache_(scan_geometry.world_faces.size()),
         occluder_states_(1) {
         if (options_.occluder_probe_limit == 0) {
             options_.occluder_probe_limit = 1;
@@ -711,6 +723,29 @@ private:
                 eye_,
                 basis_
             );
+        const WorldRectFace &target_face =
+            scan_geometry_.world_faces[target_world_face_index_].face;
+        const auto append_if_relevant =
+            [&](const WorldFace &world_face) {
+                const WorldRectFace &face = world_face.face;
+                if (same_world_rect_face(face, target_face)) {
+                    return;
+                }
+                if (face_intersects_bounds(face, bounds) &&
+                    face_may_occlude_target(
+                        face,
+                        target_view_bounds,
+                        eye_,
+                        basis_
+                    )) {
+                    const auto occluder_index =
+                        static_cast<std::uint32_t>(
+                            local_occluder_faces_.size()
+                        );
+                    local_occluder_faces_.push_back(world_face);
+                    occluder_order_.push_back(occluder_index);
+                }
+            };
 
         if (scan_geometry_.has_lazy_block_faces()) {
             const BlockPos cube_min =
@@ -728,34 +763,21 @@ private:
             const std::int32_t max_z =
                 clamped_offset_max(bounds.max_z, cube_min.z, scan_geometry_.side);
 
+            std::vector<WorldFace> block_faces;
+            block_faces.reserve(8);
             for (std::int32_t y = min_y; y <= max_y; ++y) {
                 for (std::int32_t z = min_z; z <= max_z; ++z) {
                     for (std::int32_t x = min_x; x <= max_x; ++x) {
                         const auto block_index =
                             offset_to_index({x, y, z}, scan_geometry_.side);
-                        const WorldFaceSpan span =
-                            faces_for_block(scan_geometry_, block_index);
-                        for (std::uint16_t face_index = 0;
-                             face_index < span.count;
-                             ++face_index) {
-                            const std::uint32_t world_face_index =
-                                span.offset + face_index;
-                            if (world_face_index == target_world_face_index_) {
-                                continue;
-                            }
-                            const WorldRectFace &face =
-                                scan_geometry_.world_faces[
-                                    world_face_index
-                                ].face;
-                            if (face_intersects_bounds(face, bounds) &&
-                                face_may_occlude_target(
-                                    face,
-                                    target_view_bounds,
-                                    eye_,
-                                    basis_
-                                )) {
-                                occluder_order_.push_back(world_face_index);
-                            }
+                        block_faces.clear();
+                        append_visible_block_faces(
+                            block_faces,
+                            scan_geometry_,
+                            block_index
+                        );
+                        for (const WorldFace &world_face : block_faces) {
+                            append_if_relevant(world_face);
                         }
                     }
                 }
@@ -768,39 +790,28 @@ private:
                 if (world_face_index == target_world_face_index_) {
                     continue;
                 }
-                const WorldRectFace &face =
-                    scan_geometry_.world_faces[world_face_index].face;
-                if (face_intersects_bounds(face, bounds) &&
-                    face_may_occlude_target(
-                        face,
-                        target_view_bounds,
-                        eye_,
-                        basis_
-                    )) {
-                    occluder_order_.push_back(world_face_index);
-                }
+                append_if_relevant(
+                    scan_geometry_.world_faces[world_face_index]
+                );
             }
         }
 
-        if (occluder_cache_.size() < scan_geometry_.world_faces.size()) {
-            occluder_cache_.resize(scan_geometry_.world_faces.size());
-        }
+        occluder_cache_.resize(local_occluder_faces_.size());
     }
 
-    bool prepare_occluder(std::uint32_t world_face_index) {
+    bool prepare_occluder(std::uint32_t occluder_index) {
+        if (occluder_index >= local_occluder_faces_.size()) {
+            return false;
+        }
         OccluderCacheEntry &entry =
-            occluder_cache_[world_face_index];
+            occluder_cache_[occluder_index];
         if (entry.state != OccluderState::Unprepared) {
             return entry.state == OccluderState::Ready;
-        }
-        if (world_face_index == target_world_face_index_) {
-            entry.state = OccluderState::Empty;
-            return false;
         }
 
         ++result_.stats.occluders_prepared;
         const WorldRectFace &world_face =
-            scan_geometry_.world_faces[world_face_index].face;
+            local_occluder_faces_[occluder_index].face;
         if (!face_points_to_eye(world_face, eye_)) {
             entry.state = OccluderState::Empty;
             return false;
@@ -1272,6 +1283,7 @@ private:
     ConstraintRegionStore regions_;
     std::unique_ptr<ExactProjector> projector_{};
     std::vector<OccluderCacheEntry> occluder_cache_;
+    std::vector<WorldFace> local_occluder_faces_;
     std::vector<std::uint32_t> occluder_order_;
     bool occluder_order_initialized_ = false;
     std::vector<OccluderTraversalState> occluder_states_;

@@ -261,6 +261,12 @@ WorldFaceSpan faces_for_block(
     std::uint16_t block_index
 );
 
+void append_visible_block_faces(
+    std::vector<WorldFace> &destination,
+    const ScanRegionGeometry &geometry,
+    std::uint16_t block_index
+);
+
 ScanRegionGeometry build_scan_region_geometry(
     UInt16View shape_ids,
     UInt16View target_indices,

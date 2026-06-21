@@ -240,14 +240,6 @@ bool face_within_reach(const WorldRectFace &face, const Vec3 &eye, double reach)
            reach * reach;
 }
 
-std::size_t world_face_capacity(UInt16View shape_ids) {
-    std::size_t capacity = 0;
-    for (const std::uint16_t shape_id : shape_ids) {
-        capacity += geometry_for_shape(shape_id).face_count;
-    }
-    return capacity;
-}
-
 std::size_t target_face_capacity(
     UInt16View shape_ids,
     UInt16View target_indices
@@ -259,17 +251,14 @@ std::size_t target_face_capacity(
     return capacity;
 }
 
-void append_world_face_if_visible(
-    ScanRegionGeometry &geometry,
+void append_cached_world_face_if_visible(
+    const ScanRegionGeometry &geometry,
     UInt16View shape_ids,
-    const std::vector<std::uint8_t> &target_lookup,
     std::uint16_t block_index,
     const LocalRectFace &local_face,
     BlockPos block_pos,
     const Vec3 &eye,
-    const Vec3 &look_dir,
-    std::int32_t side,
-    double reach
+    std::int32_t side
 ) {
     if (has_internal_full_cube_neighbor_face(shape_ids, block_index, side, local_face)) {
         return;
@@ -285,21 +274,72 @@ void append_world_face_if_visible(
         face_center(world_rect),
     };
 
-    const std::uint32_t world_face_index =
-        static_cast<std::uint32_t>(geometry.world_faces.size());
     geometry.world_faces.push_back(world_face);
-
-    if (target_lookup[block_index] == 0 ||
-        !face_within_reach(world_rect, eye, reach)) {
-        return;
-    }
-    geometry.target_faces.push_back({
-        world_face_index,
-        angle_to_point(look_dir, world_face.center - eye),
-    });
 }
 
 }  // namespace
+
+WorldFaceSpan faces_for_block(
+    const ScanRegionGeometry &geometry,
+    std::uint16_t block_index
+) {
+    if (!geometry.has_lazy_block_faces() ||
+        static_cast<std::size_t>(block_index) >= geometry.shape_ids.size) {
+        return {};
+    }
+
+    BlockFaceSpan &span = geometry.block_faces[block_index];
+    if (span.initialized) {
+        return {span.offset, span.count};
+    }
+
+    span.initialized = true;
+    span.offset = static_cast<std::uint32_t>(geometry.world_faces.size());
+
+    const GeometryCatalog &catalog = geometry_catalog();
+    const FullCubeFaceLookup &full_cube_lookup = full_cube_face_lookup(catalog);
+    const std::uint16_t shape_id = geometry.shape_ids[block_index];
+    const ShapeGeometry &shape = geometry_for_shape(shape_id);
+    const BlockPos block_pos =
+        index_to_block_pos(block_index, geometry.side, geometry.center);
+
+    if (shape_id == SHAPE_FULL_CUBE) {
+        const FaceIndexList faces =
+            visible_full_cube_faces(full_cube_lookup, block_pos, geometry.eye);
+        for (std::uint8_t index = 0; index < faces.count; ++index) {
+            append_cached_world_face_if_visible(
+                geometry,
+                geometry.shape_ids,
+                block_index,
+                catalog.faces[faces.face_indices[index]],
+                block_pos,
+                geometry.eye,
+                geometry.side
+            );
+        }
+    } else {
+        for (std::uint8_t face_index = 0;
+             face_index < shape.face_count;
+             ++face_index) {
+            const LocalRectFace &local_face =
+                catalog.faces[shape.face_offset + face_index];
+            append_cached_world_face_if_visible(
+                geometry,
+                geometry.shape_ids,
+                block_index,
+                local_face,
+                block_pos,
+                geometry.eye,
+                geometry.side
+            );
+        }
+    }
+
+    span.count = static_cast<std::uint16_t>(
+        geometry.world_faces.size() - span.offset
+    );
+    return {span.offset, span.count};
+}
 
 ScanRegionGeometry build_scan_region_geometry(
     UInt16View shape_ids,
@@ -315,57 +355,33 @@ ScanRegionGeometry build_scan_region_geometry(
         static_cast<std::int32_t>(std::floor(eye.z)),
     };
 
-    std::vector<std::uint8_t> target_lookup(shape_ids.size, 0);
-    for (const std::uint16_t target_index : target_indices) {
-        target_lookup[target_index] = 1;
-    }
-
     ScanRegionGeometry geometry{};
-    geometry.world_faces.reserve(world_face_capacity(shape_ids));
-    geometry.target_faces.reserve(target_face_capacity(shape_ids, target_indices));
+    geometry.shape_ids = shape_ids;
+    geometry.eye = eye;
+    geometry.center = center;
+    geometry.side = side;
+    geometry.block_faces.resize(shape_ids.size);
+    const std::size_t target_capacity =
+        target_face_capacity(shape_ids, target_indices);
+    geometry.world_faces.reserve(std::max<std::size_t>(target_capacity, 16));
+    geometry.target_faces.reserve(target_capacity);
 
-    const GeometryCatalog &catalog = geometry_catalog();
-    const FullCubeFaceLookup &full_cube_lookup = full_cube_face_lookup(catalog);
-    for (std::size_t block_index = 0; block_index < shape_ids.size; ++block_index) {
-        const std::uint16_t shape_id = shape_ids[block_index];
-        const ShapeGeometry &shape = geometry_for_shape(shape_id);
-        const auto block_index16 = static_cast<std::uint16_t>(block_index);
-        const BlockPos block_pos = index_to_block_pos(block_index16, side, center);
-
-        if (shape_id == SHAPE_FULL_CUBE) {
-            const FaceIndexList faces =
-                visible_full_cube_faces(full_cube_lookup, block_pos, eye);
-            for (std::uint8_t index = 0; index < faces.count; ++index) {
-                append_world_face_if_visible(
-                    geometry,
-                    shape_ids,
-                    target_lookup,
-                    block_index16,
-                    catalog.faces[faces.face_indices[index]],
-                    block_pos,
-                    eye,
-                    look_dir,
-                    side,
-                    reach
-                );
+    for (const std::uint16_t target_index : target_indices) {
+        const WorldFaceSpan span = faces_for_block(geometry, target_index);
+        for (std::uint16_t face_index = 0;
+             face_index < span.count;
+             ++face_index) {
+            const std::uint32_t world_face_index =
+                span.offset + face_index;
+            const WorldFace &world_face =
+                geometry.world_faces[world_face_index];
+            if (!face_within_reach(world_face.face, eye, reach)) {
+                continue;
             }
-            continue;
-        }
-
-        for (std::uint8_t face_index = 0; face_index < shape.face_count; ++face_index) {
-            const LocalRectFace &local_face = catalog.faces[shape.face_offset + face_index];
-            append_world_face_if_visible(
-                geometry,
-                shape_ids,
-                target_lookup,
-                block_index16,
-                local_face,
-                block_pos,
-                eye,
-                look_dir,
-                side,
-                reach
-            );
+            geometry.target_faces.push_back({
+                world_face_index,
+                angle_to_point(look_dir, world_face.center - eye),
+            });
         }
     }
 

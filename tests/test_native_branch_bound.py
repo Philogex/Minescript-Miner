@@ -34,15 +34,18 @@ class NativeBranchBoundTest(unittest.TestCase):
                         project_root
                         / "native/tests/branch_bound_test.cpp"
                     ),
+                    str(project_root / "native/src/angle.cpp"),
                     str(project_root / "native/src/clipping.cpp"),
                     str(project_root / "native/src/constraint_region.cpp"),
                     str(project_root / "native/src/branch_bound.cpp"),
                     str(project_root / "native/src/geometry.cpp"),
+                    str(project_root / "native/src/geometry_catalog.cpp"),
                     str(
                         project_root
                         / "native/src/geometry_store.cpp"
                     ),
                     str(project_root / "native/src/projection.cpp"),
+                    str(project_root / "native/src/scan_region.cpp"),
                     str(project_root / "native/src/target_solver.cpp"),
                     str(project_root / "native/src/visibility.cpp"),
                     "-o",

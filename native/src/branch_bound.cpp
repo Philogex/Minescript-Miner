@@ -413,6 +413,27 @@ bool face_intersects_bounds(
            min_z <= bounds.max_z;
 }
 
+std::int32_t clamped_offset_min(
+    double world_min,
+    std::int32_t cube_min
+) {
+    return std::max(
+        0,
+        static_cast<std::int32_t>(std::floor(world_min)) - cube_min - 1
+    );
+}
+
+std::int32_t clamped_offset_max(
+    double world_max,
+    std::int32_t cube_min,
+    std::int32_t side
+) {
+    return std::min(
+        side - 1,
+        static_cast<std::int32_t>(std::floor(world_max)) - cube_min + 1
+    );
+}
+
 std::array<Vec3, 4> face_corners(const WorldRectFace &face) {
     return {
         world_point_to_vec3(face_p0(face)),
@@ -690,24 +711,79 @@ private:
                 eye_,
                 basis_
             );
-        occluder_order_.reserve(scan_geometry_.world_faces.size());
-        for (std::uint32_t world_face_index = 0;
-             world_face_index < scan_geometry_.world_faces.size();
-             ++world_face_index) {
-            if (world_face_index == target_world_face_index_) {
-                continue;
+
+        if (scan_geometry_.has_lazy_block_faces()) {
+            const BlockPos cube_min =
+                cube_min_pos(scan_geometry_.center, scan_geometry_.side);
+            const std::int32_t min_x =
+                clamped_offset_min(bounds.min_x, cube_min.x);
+            const std::int32_t max_x =
+                clamped_offset_max(bounds.max_x, cube_min.x, scan_geometry_.side);
+            const std::int32_t min_y =
+                clamped_offset_min(bounds.min_y, cube_min.y);
+            const std::int32_t max_y =
+                clamped_offset_max(bounds.max_y, cube_min.y, scan_geometry_.side);
+            const std::int32_t min_z =
+                clamped_offset_min(bounds.min_z, cube_min.z);
+            const std::int32_t max_z =
+                clamped_offset_max(bounds.max_z, cube_min.z, scan_geometry_.side);
+
+            for (std::int32_t y = min_y; y <= max_y; ++y) {
+                for (std::int32_t z = min_z; z <= max_z; ++z) {
+                    for (std::int32_t x = min_x; x <= max_x; ++x) {
+                        const auto block_index =
+                            offset_to_index({x, y, z}, scan_geometry_.side);
+                        const WorldFaceSpan span =
+                            faces_for_block(scan_geometry_, block_index);
+                        for (std::uint16_t face_index = 0;
+                             face_index < span.count;
+                             ++face_index) {
+                            const std::uint32_t world_face_index =
+                                span.offset + face_index;
+                            if (world_face_index == target_world_face_index_) {
+                                continue;
+                            }
+                            const WorldRectFace &face =
+                                scan_geometry_.world_faces[
+                                    world_face_index
+                                ].face;
+                            if (face_intersects_bounds(face, bounds) &&
+                                face_may_occlude_target(
+                                    face,
+                                    target_view_bounds,
+                                    eye_,
+                                    basis_
+                                )) {
+                                occluder_order_.push_back(world_face_index);
+                            }
+                        }
+                    }
+                }
             }
-            const WorldRectFace &face =
-                scan_geometry_.world_faces[world_face_index].face;
-            if (face_intersects_bounds(face, bounds) &&
-                face_may_occlude_target(
-                    face,
-                    target_view_bounds,
-                    eye_,
-                    basis_
-                )) {
-                occluder_order_.push_back(world_face_index);
+        } else {
+            occluder_order_.reserve(scan_geometry_.world_faces.size());
+            for (std::uint32_t world_face_index = 0;
+                 world_face_index < scan_geometry_.world_faces.size();
+                 ++world_face_index) {
+                if (world_face_index == target_world_face_index_) {
+                    continue;
+                }
+                const WorldRectFace &face =
+                    scan_geometry_.world_faces[world_face_index].face;
+                if (face_intersects_bounds(face, bounds) &&
+                    face_may_occlude_target(
+                        face,
+                        target_view_bounds,
+                        eye_,
+                        basis_
+                    )) {
+                    occluder_order_.push_back(world_face_index);
+                }
             }
+        }
+
+        if (occluder_cache_.size() < scan_geometry_.world_faces.size()) {
+            occluder_cache_.resize(scan_geometry_.world_faces.size());
         }
     }
 

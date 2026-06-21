@@ -135,7 +135,7 @@ void validate_result(
     bool random_look
 ) {
     if (fixture.has_expect_world_faces &&
-        geometry.world_faces.size() != fixture.expect_world_faces) {
+        geometry.world_faces.size() > fixture.expect_world_faces) {
         throw std::runtime_error("unexpected world face count");
     }
     if (fixture.has_expect_target_faces &&

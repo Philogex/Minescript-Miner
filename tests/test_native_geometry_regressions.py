@@ -35,12 +35,15 @@ class NativeGeometryRegressionTest(unittest.TestCase):
                     cls.project_root
                     / "native/tests/geometry_regression_test.cpp"
                 ),
+                str(cls.project_root / "native/src/angle.cpp"),
                 str(cls.project_root / "native/src/clipping.cpp"),
                 str(cls.project_root / "native/src/constraint_region.cpp"),
                 str(cls.project_root / "native/src/branch_bound.cpp"),
                 str(cls.project_root / "native/src/geometry.cpp"),
+                str(cls.project_root / "native/src/geometry_catalog.cpp"),
                 str(cls.project_root / "native/src/geometry_store.cpp"),
                 str(cls.project_root / "native/src/projection.cpp"),
+                str(cls.project_root / "native/src/scan_region.cpp"),
                 str(cls.project_root / "native/src/target_solver.cpp"),
                 str(cls.project_root / "native/src/visibility.cpp"),
                 "-o",

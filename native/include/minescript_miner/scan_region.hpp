@@ -48,6 +48,17 @@ struct TargetFaceCandidate {
     double center_angle = 0.0;
 };
 
+struct BlockFaceSpan {
+    std::uint32_t offset = 0;
+    std::uint16_t count = 0;
+    bool initialized = false;
+};
+
+struct WorldFaceSpan {
+    std::uint32_t offset = 0;
+    std::uint16_t count = 0;
+};
+
 struct UInt16View {
     const std::uint16_t *data = nullptr;
     std::size_t size = 0;
@@ -72,8 +83,19 @@ struct UInt16View {
 };
 
 struct ScanRegionGeometry {
-    std::vector<WorldFace> world_faces{};
+    UInt16View shape_ids{};
+    Vec3 eye{};
+    BlockPos center{};
+    std::int32_t side = 0;
+    mutable std::vector<BlockFaceSpan> block_faces{};
+    mutable std::vector<WorldFace> world_faces{};
     std::vector<TargetFaceCandidate> target_faces{};
+
+    bool has_lazy_block_faces() const {
+        return shape_ids.data != nullptr &&
+               side > 0 &&
+               block_faces.size() == shape_ids.size;
+    }
 };
 
 constexpr BlockOffset index_to_offset(std::uint16_t index, std::int32_t side) {
@@ -233,6 +255,11 @@ constexpr Vec3 face_normal(const WorldRectFace &face) {
     }
     return {};
 }
+
+WorldFaceSpan faces_for_block(
+    const ScanRegionGeometry &geometry,
+    std::uint16_t block_index
+);
 
 ScanRegionGeometry build_scan_region_geometry(
     UInt16View shape_ids,

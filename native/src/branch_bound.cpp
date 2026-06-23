@@ -1013,8 +1013,7 @@ private:
     }
 
     Point2 region_centroid(RegionId region) {
-        const std::vector<VertexId> &vertices =
-            regions_.vertices(region);
+        const VertexIdSpan vertices = regions_.vertices(region);
         ExactRational x{0};
         ExactRational y{0};
         for (const VertexId vertex_id : vertices) {

@@ -41,7 +41,8 @@ ExactRational area2(
     const ConstraintRegionStore &regions,
     RegionId region
 ) {
-    const std::vector<VertexId> &vertices = regions.vertices(region);
+    const minescript_miner::VertexIdSpan vertices =
+        regions.vertices(region);
     ExactRational area{0};
     for (std::size_t i = 0; i < vertices.size(); ++i) {
         const ExactPoint2H &current = geometry.vertex(vertices[i]);

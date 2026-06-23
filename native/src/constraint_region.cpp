@@ -131,7 +131,7 @@ RegionId ConstraintRegionStore::add_constraint(
         added_constraint,
         true,
         tightens_existing_constraint
-            ? std::optional<std::vector<VertexId>>{
+            ? std::optional<StoredVertexSpan>{
                   parent_region.vertices}
             : std::nullopt
     );
@@ -228,17 +228,17 @@ bool ConstraintRegionStore::contains_interior(
     return true;
 }
 
-const std::vector<VertexId> &ConstraintRegionStore::vertices(
+VertexIdSpan ConstraintRegionStore::vertices(
     RegionId id
 ) const {
-    return region(id).vertices;
+    return vertex_span(region(id).vertices);
 }
 
 std::vector<Point2> ConstraintRegionStore::approximate_vertices(
     RegionId id
 ) const {
     std::vector<Point2> result;
-    const std::vector<VertexId> &region_vertices = vertices(id);
+    const VertexIdSpan region_vertices = vertices(id);
     result.reserve(region_vertices.size());
     for (const VertexId vertex_id : region_vertices) {
         result.push_back(approximate_point(geometry_.vertex(vertex_id)));
@@ -255,7 +255,7 @@ RegionId ConstraintRegionStore::intern_region(
     RegionId parent,
     RegionConstraint added_constraint,
     bool constraints_are_canonical,
-    std::optional<std::vector<VertexId>> known_hull
+    std::optional<StoredVertexSpan> known_hull
 ) {
     for (const RegionConstraint constraint : constraints) {
         (void) geometry_.half_plane(constraint.half_plane);
@@ -270,8 +270,9 @@ RegionId ConstraintRegionStore::intern_region(
     }
 
     std::vector<VertexId> hull;
+    StoredVertexSpan hull_span{};
     if (known_hull) {
-        hull = std::move(*known_hull);
+        hull_span = *known_hull;
     } else if (std::optional<std::vector<VertexId>> incremental_hull =
                    compute_incremental_hull(
                        parent,
@@ -283,11 +284,14 @@ RegionId ConstraintRegionStore::intern_region(
         hull = compute_convex_hull(constraints);
     }
     const ConstraintRegionState state =
-        hull.size() >= 3
+        (known_hull ? known_hull->count : hull.size()) >= 3
             ? ConstraintRegionState::Bounded
             : ConstraintRegionState::Empty;
-    if (state == ConstraintRegionState::Empty) {
-        hull.clear();
+    if (!known_hull) {
+        if (state == ConstraintRegionState::Empty) {
+            hull.clear();
+        }
+        hull_span = store_vertices(hull);
     }
 
     const RegionId id{static_cast<std::uint32_t>(regions_.size())};
@@ -296,7 +300,7 @@ RegionId ConstraintRegionStore::intern_region(
         added_constraint,
         state,
         constraints,
-        std::move(hull),
+        hull_span,
     });
     region_ids_.emplace(std::move(constraints), id);
     return id;
@@ -409,7 +413,7 @@ ConstraintRegionStore::compute_incremental_hull(
         return std::nullopt;
     }
 
-    const std::vector<VertexId> &input = region(parent).vertices;
+    const VertexIdSpan input = vertices(parent);
     std::vector<VertexId> clipped;
     clipped.reserve(input.size() + 1);
 
@@ -469,7 +473,7 @@ bool ConstraintRegionStore::can_incrementally_clip(
     const ConstraintRegion &parent_region = region(parent);
     if (
         parent_region.state != ConstraintRegionState::Bounded ||
-        parent_region.vertices.size() < 3 ||
+        parent_region.vertices.count < 3 ||
         constraints.size() != parent_region.constraints.size() + 1
     ) {
         return false;
@@ -558,6 +562,30 @@ std::vector<VertexId> ConstraintRegionStore::compact_hull_vertices(
     }
 
     return vertices.size() >= 3 ? vertices : std::vector<VertexId>{};
+}
+
+StoredVertexSpan ConstraintRegionStore::store_vertices(
+    const std::vector<VertexId> &vertices
+) {
+    const StoredVertexSpan span{
+        static_cast<std::uint32_t>(vertex_storage_.size()),
+        static_cast<std::uint32_t>(vertices.size()),
+    };
+    vertex_storage_.insert(
+        vertex_storage_.end(),
+        vertices.begin(),
+        vertices.end()
+    );
+    return span;
+}
+
+VertexIdSpan ConstraintRegionStore::vertex_span(
+    StoredVertexSpan span
+) const {
+    return {
+        span.count == 0 ? nullptr : vertex_storage_.data() + span.offset,
+        span.count,
+    };
 }
 
 }  // namespace minescript_miner

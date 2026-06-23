@@ -3,6 +3,8 @@
 #include "minescript_miner/geometry_store.hpp"
 #include "minescript_miner/tri2.hpp"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <optional>
@@ -39,12 +41,59 @@ struct RegionConstraint {
     }
 };
 
+struct VertexIdSpan {
+    const VertexId *data = nullptr;
+    std::size_t count = 0;
+
+    const VertexId *begin() const {
+        return data;
+    }
+
+    const VertexId *end() const {
+        return count == 0 ? data : data + count;
+    }
+
+    bool empty() const {
+        return count == 0;
+    }
+
+    std::size_t size() const {
+        return count;
+    }
+
+    VertexId operator[](std::size_t index) const {
+        return data[index];
+    }
+
+    VertexId front() const {
+        return data[0];
+    }
+
+    VertexId back() const {
+        return data[count - 1];
+    }
+
+    friend bool operator==(VertexIdSpan lhs, VertexIdSpan rhs) {
+        return lhs.size() == rhs.size() &&
+               std::equal(lhs.begin(), lhs.end(), rhs.begin());
+    }
+
+    friend bool operator!=(VertexIdSpan lhs, VertexIdSpan rhs) {
+        return !(lhs == rhs);
+    }
+};
+
+struct StoredVertexSpan {
+    std::uint32_t offset = 0;
+    std::uint32_t count = 0;
+};
+
 struct ConstraintRegion {
     RegionId parent{};
     RegionConstraint added_constraint{};
     ConstraintRegionState state = ConstraintRegionState::Empty;
     std::vector<RegionConstraint> constraints{};
-    std::vector<VertexId> vertices{};
+    StoredVertexSpan vertices{};
 };
 
 class ConstraintRegionStore {
@@ -77,7 +126,7 @@ public:
     bool is_empty(RegionId id) const;
     bool contains(RegionId id, VertexId point);
     bool contains_interior(RegionId id, VertexId point);
-    const std::vector<VertexId> &vertices(RegionId id) const;
+    VertexIdSpan vertices(RegionId id) const;
     std::vector<Point2> approximate_vertices(RegionId id) const;
 
     std::size_t region_count() const;
@@ -88,7 +137,7 @@ private:
         RegionId parent,
         RegionConstraint added_constraint,
         bool constraints_are_canonical = false,
-        std::optional<std::vector<VertexId>> known_hull = std::nullopt
+        std::optional<StoredVertexSpan> known_hull = std::nullopt
     );
     std::vector<VertexId> compute_convex_hull(
         const std::vector<RegionConstraint> &constraints
@@ -111,9 +160,14 @@ private:
     std::vector<VertexId> compact_hull_vertices(
         std::vector<VertexId> vertices
     ) const;
+    StoredVertexSpan store_vertices(
+        const std::vector<VertexId> &vertices
+    );
+    VertexIdSpan vertex_span(StoredVertexSpan span) const;
 
     ExactGeometryStore &geometry_;
     std::vector<ConstraintRegion> regions_;
+    std::vector<VertexId> vertex_storage_;
     std::map<std::vector<RegionConstraint>, RegionId> region_ids_;
 };
 

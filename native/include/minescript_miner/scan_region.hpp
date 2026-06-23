@@ -38,11 +38,6 @@ struct WorldRectFace {
     std::int32_t v_max = 0;
 };
 
-struct WorldFace {
-    WorldRectFace face{};
-    Vec3 center{};
-};
-
 struct TargetFaceCandidate {
     std::uint32_t world_face_index = 0;
     double center_angle = 0.0;
@@ -88,7 +83,8 @@ struct ScanRegionGeometry {
     BlockPos center{};
     std::int32_t side = 0;
     mutable std::vector<BlockFaceSpan> block_faces{};
-    mutable std::vector<WorldFace> world_faces{};
+    mutable std::vector<WorldRectFace> world_faces{};
+    mutable std::vector<Vec3> world_face_centers{};
     std::vector<TargetFaceCandidate> target_faces{};
 
     bool has_lazy_block_faces() const {
@@ -242,6 +238,31 @@ constexpr Vec3 face_center(const WorldRectFace &face) {
             return {u, v, coord};
     }
     return {};
+}
+
+inline Vec3 world_face_center(
+    const ScanRegionGeometry &geometry,
+    std::uint32_t world_face_index
+) {
+    if (world_face_index < geometry.world_face_centers.size()) {
+        return geometry.world_face_centers[world_face_index];
+    }
+    return face_center(geometry.world_faces[world_face_index]);
+}
+
+inline void append_world_face(
+    const ScanRegionGeometry &geometry,
+    const WorldRectFace &face
+) {
+    while (geometry.world_face_centers.size() < geometry.world_faces.size()) {
+        geometry.world_face_centers.push_back(
+            face_center(
+                geometry.world_faces[geometry.world_face_centers.size()]
+            )
+        );
+    }
+    geometry.world_faces.push_back(face);
+    geometry.world_face_centers.push_back(face_center(face));
 }
 
 constexpr Vec3 face_normal(const WorldRectFace &face) {

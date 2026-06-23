@@ -269,12 +269,7 @@ void append_cached_world_face_if_visible(
         return;
     }
 
-    WorldFace world_face{
-        world_rect,
-        face_center(world_rect),
-    };
-
-    geometry.world_faces.push_back(world_face);
+    append_world_face(geometry, world_rect);
 }
 
 }  // namespace
@@ -363,7 +358,9 @@ ScanRegionGeometry build_scan_region_geometry(
     geometry.block_faces.resize(shape_ids.size);
     const std::size_t target_capacity =
         target_face_capacity(shape_ids, target_indices);
-    geometry.world_faces.reserve(std::max<std::size_t>(target_capacity, 16));
+    const std::size_t face_capacity = std::max<std::size_t>(target_capacity, 16);
+    geometry.world_faces.reserve(face_capacity);
+    geometry.world_face_centers.reserve(face_capacity);
     geometry.target_faces.reserve(target_capacity);
 
     for (const std::uint16_t target_index : target_indices) {
@@ -373,14 +370,17 @@ ScanRegionGeometry build_scan_region_geometry(
              ++face_index) {
             const std::uint32_t world_face_index =
                 span.offset + face_index;
-            const WorldFace &world_face =
+            const WorldRectFace &world_face =
                 geometry.world_faces[world_face_index];
-            if (!face_within_reach(world_face.face, eye, reach)) {
+            if (!face_within_reach(world_face, eye, reach)) {
                 continue;
             }
             geometry.target_faces.push_back({
                 world_face_index,
-                angle_to_point(look_dir, world_face.center - eye),
+                angle_to_point(
+                    look_dir,
+                    world_face_center(geometry, world_face_index) - eye
+                ),
             });
         }
     }

@@ -16,7 +16,7 @@ constexpr std::int32_t from_sixteenths(std::int32_t value) {
     return value * (minescript_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
 }
 
-minescript_miner::WorldFace z_face(
+minescript_miner::WorldRectFace z_face(
     std::int32_t min_x,
     std::int32_t min_y,
     std::int32_t max_x,
@@ -33,7 +33,7 @@ minescript_miner::WorldFace z_face(
         from_sixteenths(min_y),
         from_sixteenths(max_y),
     };
-    return {face, face_center(face)};
+    return face;
 }
 
 minescript_miner::ScanRegionGeometry target_with_occluder(

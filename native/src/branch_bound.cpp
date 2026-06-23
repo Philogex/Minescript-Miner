@@ -137,9 +137,10 @@ double target_face_angle_lower_bound(
     if (target.world_face_index >= geometry.world_faces.size()) {
         return 0.0;
     }
-    const WorldFace &world_face =
+    const WorldRectFace &world_face =
         geometry.world_faces[target.world_face_index];
-    const Vec3 center_direction = world_face.center - eye;
+    const Vec3 center = world_face_center(geometry, target.world_face_index);
+    const Vec3 center_direction = center - eye;
     const double center_distance =
         std::sqrt(length_squared(center_direction));
     if (!(center_distance > 0.0)) {
@@ -148,14 +149,14 @@ double target_face_angle_lower_bound(
 
     double radius_squared = 0.0;
     const WorldPoint corners[]{
-        face_p0(world_face.face),
-        face_p1(world_face.face),
-        face_p2(world_face.face),
-        face_p3(world_face.face),
+        face_p0(world_face),
+        face_p1(world_face),
+        face_p2(world_face),
+        face_p3(world_face),
     };
     for (const WorldPoint corner_grid : corners) {
         const Vec3 corner =
-            world_point_to_vec3(corner_grid) - world_face.center;
+            world_point_to_vec3(corner_grid) - center;
         radius_squared = std::max(
             radius_squared,
             length_squared(corner)
@@ -187,15 +188,16 @@ double target_face_ordering_bound(
         return std::numeric_limits<double>::infinity();
     }
 
-    const WorldFace &world_face =
+    const WorldRectFace &world_face =
         geometry.world_faces[target.world_face_index];
+    const Vec3 center = world_face_center(geometry, target.world_face_index);
     ViewBasis basis{};
-    if (!make_view_basis_toward(eye, world_face.center, basis)) {
+    if (!make_view_basis_toward(eye, center, basis)) {
         return std::numeric_limits<double>::infinity();
     }
     ProjectedFacePieces pieces{};
     if (!project_reachable_world_face(
-            world_face.face,
+            world_face,
             eye,
             basis,
             reach,
@@ -612,9 +614,13 @@ public:
             return result_;
         }
 
-        const WorldFace &target =
+        const WorldRectFace &target =
             scan_geometry_.world_faces[target_world_face_index_];
-        if (!make_view_basis_toward(eye_, target.center, basis_)) {
+        if (!make_view_basis_toward(
+                eye_,
+                world_face_center(scan_geometry_, target_world_face_index_),
+                basis_
+            )) {
             return result_;
         }
         projector_ = std::make_unique<ExactProjector>(
@@ -623,7 +629,7 @@ public:
             basis_
         );
         if (!projector_->project_world_face(
-                target.face,
+                target,
                 target_projection_
             )) {
             return result_;
@@ -636,7 +642,7 @@ public:
         };
         ReachableWorldFacePieces reachable_pieces{};
         if (!make_reachable_world_face_pieces(
-                target.face,
+                target,
                 eye_,
                 reach_,
                 reachable_pieces
@@ -698,16 +704,12 @@ private:
         }
         occluder_order_initialized_ = true;
         const Bounds3 bounds = target_occlusion_bounds(
-            scan_geometry_.world_faces[
-                target_world_face_index_
-            ].face,
+            scan_geometry_.world_faces[target_world_face_index_],
             eye_
         );
         const ViewFaceBounds target_view_bounds =
             face_view_bounds(
-                scan_geometry_.world_faces[
-                    target_world_face_index_
-                ].face,
+                scan_geometry_.world_faces[target_world_face_index_],
                 eye_,
                 basis_
             );
@@ -744,9 +746,7 @@ private:
                                 continue;
                             }
                             const WorldRectFace &face =
-                                scan_geometry_.world_faces[
-                                    world_face_index
-                                ].face;
+                                scan_geometry_.world_faces[world_face_index];
                             if (face_intersects_bounds(face, bounds) &&
                                 face_may_occlude_target(
                                     face,
@@ -769,7 +769,7 @@ private:
                     continue;
                 }
                 const WorldRectFace &face =
-                    scan_geometry_.world_faces[world_face_index].face;
+                    scan_geometry_.world_faces[world_face_index];
                 if (face_intersects_bounds(face, bounds) &&
                     face_may_occlude_target(
                         face,
@@ -800,7 +800,7 @@ private:
 
         ++result_.stats.occluders_prepared;
         const WorldRectFace &world_face =
-            scan_geometry_.world_faces[world_face_index].face;
+            scan_geometry_.world_faces[world_face_index];
         if (!face_points_to_eye(world_face, eye_)) {
             entry.state = OccluderState::Empty;
             return false;
@@ -1136,9 +1136,7 @@ private:
             eye_.z + direction.z * distance,
         };
         const WorldRectFace &target_face =
-            scan_geometry_.world_faces[
-                target_world_face_index_
-            ].face;
+            scan_geometry_.world_faces[target_world_face_index_];
         return world_face_edge_clearance(
                    target_face,
                    world_point
@@ -1356,9 +1354,7 @@ BranchBoundResult solve_visible_target(
             ordering_bound,
             target.world_face_index < geometry.world_faces.size()
                 ? length_squared(
-                    geometry.world_faces[
-                        target.world_face_index
-                    ].center - eye
+                    world_face_center(geometry, target.world_face_index) - eye
                 )
                 : std::numeric_limits<double>::infinity(),
             target_face_pruning_bound(

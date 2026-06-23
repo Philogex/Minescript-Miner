@@ -17,7 +17,6 @@ using minescript_miner::Point2;
 using minescript_miner::ScanRegionGeometry;
 using minescript_miner::Vec3;
 using minescript_miner::ViewBasis;
-using minescript_miner::WorldFace;
 using minescript_miner::WorldPoint;
 using minescript_miner::WorldRectFace;
 
@@ -43,7 +42,7 @@ constexpr WorldRectFace face_from_sixteenths(WorldRectFace face) {
     };
 }
 
-WorldFace z_face(
+WorldRectFace z_face(
     std::int32_t min_x,
     std::int32_t min_y,
     std::int32_t max_x,
@@ -59,12 +58,11 @@ WorldFace z_face(
         from_sixteenths(min_y),
         from_sixteenths(max_y),
     };
-    return {face, minescript_miner::face_center(face)};
+    return face;
 }
 
-WorldFace world_face(WorldRectFace face) {
-    face = face_from_sixteenths(face);
-    return {face, minescript_miner::face_center(face)};
+WorldRectFace world_face(WorldRectFace face) {
+    return face_from_sixteenths(face);
 }
 
 bool robust_orientation_regression() {
@@ -274,10 +272,7 @@ bool float_camera_edge_clearance_regression() {
         -32,
     });
     ScanRegionGeometry geometry{};
-    geometry.world_faces.push_back({
-        face,
-        minescript_miner::face_center(face),
-    });
+    geometry.world_faces.push_back(face);
     geometry.target_faces.push_back({0, 0.0});
 
     const Vec3 look_direction{

@@ -325,29 +325,34 @@ static void log_scan_input(
     log << "  solver_target_world_face_index: " << solve_result.target_world_face_index << "\n";
     if (solve_result.found &&
         solve_result.target_world_face_index < scan_geometry.world_faces.size()) {
-        const minescript_miner::WorldFace &target_face =
+        const minescript_miner::WorldRectFace &target_face =
             scan_geometry.world_faces[solve_result.target_world_face_index];
+        const minescript_miner::Vec3 target_face_center =
+            minescript_miner::world_face_center(
+                scan_geometry,
+                solve_result.target_world_face_index
+            );
         const minescript_miner::Vec3 target_point{
             position[0] + solve_result.direction.x * solve_result.distance,
             position[1] + solve_result.direction.y * solve_result.distance,
             position[2] + solve_result.direction.z * solve_result.distance,
         };
         const minescript_miner::Vec3 normal =
-            minescript_miner::face_normal(target_face.face);
+            minescript_miner::face_normal(target_face);
         const minescript_miner::Vec3 owning_block_point =
-            target_face.center - normal * 1.0e-6;
+            target_face_center - normal * 1.0e-6;
         log << std::setprecision(17);
         log << "  solver_target_face_center: "
-            << target_face.center.x << ", "
-            << target_face.center.y << ", "
-            << target_face.center.z << "\n";
+            << target_face_center.x << ", "
+            << target_face_center.y << ", "
+            << target_face_center.z << "\n";
         const minescript_miner::Vec3 target_face_p0 =
             minescript_miner::world_point_to_vec3(
-                minescript_miner::face_p0(target_face.face)
+                minescript_miner::face_p0(target_face)
             );
         const minescript_miner::Vec3 target_face_p2 =
             minescript_miner::world_point_to_vec3(
-                minescript_miner::face_p2(target_face.face)
+                minescript_miner::face_p2(target_face)
             );
         log << "  solver_target_face_p0: "
             << target_face_p0.x << ", "

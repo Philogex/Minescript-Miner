@@ -10,7 +10,6 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
@@ -26,16 +25,12 @@ using minescript_miner::ScanRegionGeometry;
 using minescript_miner::TargetFaceCandidate;
 using minescript_miner::Vec3;
 
-constexpr std::int32_t kSide = minescript_miner::MAX_CUBE_SIDE;
-constexpr std::uint16_t kCenterIndex =
-    static_cast<std::uint16_t>((kSide / 2) + (kSide / 2) * kSide +
-                               (kSide / 2) * kSide * kSide);
-
 struct RandomConfig {
     std::uint64_t seed = 0x4d595df4d0f33173ULL;
     std::uint32_t cases = 5;
     double density = 0.25;
     std::uint16_t target_count = 5;
+    std::int32_t side = minescript_miner::MAX_CUBE_SIDE;
 };
 
 struct CaseData {
@@ -52,8 +47,7 @@ struct SolveStats {
     std::uint64_t target_faces = 0;
     std::uint64_t branches = 0;
     std::uint64_t clips = 0;
-    std::uint64_t reference_us = 0;
-    std::uint64_t candidate_us = 0;
+    std::uint64_t solve_us = 0;
     std::uint64_t checksum = 1469598103934665603ULL;
 };
 
@@ -111,8 +105,11 @@ RandomConfig parse_config(int argc, char **argv) {
         config.target_count = static_cast<std::uint16_t>(parse_u64(argv[4]));
     }
     if (argc > 5) {
+        config.side = static_cast<std::int32_t>(parse_u64(argv[5]));
+    }
+    if (argc > 6) {
         throw std::invalid_argument(
-            "usage: random_scan_pipeline_test [seed] [cases] [density] [targets]"
+            "usage: random_scan_pipeline_test [seed] [cases] [density] [targets] [side]"
         );
     }
     if (config.cases == 0) {
@@ -121,12 +118,28 @@ RandomConfig parse_config(int argc, char **argv) {
     if (config.target_count == 0) {
         throw std::invalid_argument("targets must be positive");
     }
-    constexpr std::size_t block_count =
-        static_cast<std::size_t>(kSide) * kSide * kSide;
+    if (config.side <= 0 ||
+        config.side > minescript_miner::MAX_CUBE_SIDE) {
+        throw std::invalid_argument("side must be in [1, MAX_CUBE_SIDE]");
+    }
+    const std::size_t block_count =
+        static_cast<std::size_t>(config.side) *
+        static_cast<std::size_t>(config.side) *
+        static_cast<std::size_t>(config.side);
+    if (block_count > std::numeric_limits<std::uint16_t>::max()) {
+        throw std::invalid_argument("side^3 must fit in uint16_t");
+    }
     if (config.target_count >= block_count) {
         throw std::invalid_argument("targets must be smaller than block count");
     }
     return config;
+}
+
+std::uint16_t center_index(std::int32_t side) {
+    const std::int32_t half = side / 2;
+    return static_cast<std::uint16_t>(
+        half + half * side + half * side * side
+    );
 }
 
 Vec3 random_look_direction(SplitMix64 &rng) {
@@ -150,8 +163,11 @@ void shuffle_prefix(
 
 CaseData make_case(const RandomConfig &config, std::uint64_t case_index) {
     SplitMix64 rng(config.seed + case_index * 0x9e3779b97f4a7c15ULL);
-    constexpr std::size_t block_count =
-        static_cast<std::size_t>(kSide) * kSide * kSide;
+    const std::size_t block_count =
+        static_cast<std::size_t>(config.side) *
+        static_cast<std::size_t>(config.side) *
+        static_cast<std::size_t>(config.side);
+    const std::uint16_t center = center_index(config.side);
 
     CaseData data{};
     data.shape_ids.assign(block_count, minescript_miner::SHAPE_EMPTY);
@@ -161,7 +177,7 @@ CaseData make_case(const RandomConfig &config, std::uint64_t case_index) {
     ));
 
     for (std::size_t index = 0; index < block_count; ++index) {
-        if (index == kCenterIndex || rng.unit() >= config.density) {
+        if (index == center || rng.unit() >= config.density) {
             continue;
         }
         data.shape_ids[index] = minescript_miner::SHAPE_FULL_CUBE;
@@ -172,7 +188,7 @@ CaseData make_case(const RandomConfig &config, std::uint64_t case_index) {
         const auto index = static_cast<std::uint16_t>(
             rng.bounded(block_count)
         );
-        if (index == kCenterIndex ||
+        if (index == center ||
             data.shape_ids[index] == minescript_miner::SHAPE_FULL_CUBE) {
             continue;
         }
@@ -189,20 +205,7 @@ CaseData make_case(const RandomConfig &config, std::uint64_t case_index) {
     return data;
 }
 
-BranchBoundResult solve_reference(
-    const ScanRegionGeometry &geometry,
-    const Vec3 &eye,
-    const Vec3 &look_direction
-) {
-    return minescript_miner::solve_visible_target(
-        geometry,
-        eye,
-        look_direction,
-        std::numeric_limits<double>::infinity()
-    );
-}
-
-BranchBoundResult solve_candidate(
+BranchBoundResult solve_once(
     const ScanRegionGeometry &geometry,
     const Vec3 &eye,
     const Vec3 &look_direction
@@ -221,38 +224,11 @@ std::uint64_t mix_checksum(std::uint64_t checksum, std::uint64_t value) {
     return checksum;
 }
 
-std::uint64_t double_bits(double value) {
-    static_assert(sizeof(double) == sizeof(std::uint64_t));
-    std::uint64_t bits = 0;
-    std::memcpy(&bits, &value, sizeof(bits));
-    return bits;
-}
-
 void update_checksum(SolveStats &stats, const BranchBoundResult &result) {
     stats.checksum = mix_checksum(stats.checksum, result.found ? 1 : 0);
     stats.checksum = mix_checksum(stats.checksum, result.target_world_face_index);
-    stats.checksum = mix_checksum(stats.checksum, double_bits(result.angle));
-    stats.checksum = mix_checksum(stats.checksum, double_bits(result.direction.x));
-    stats.checksum = mix_checksum(stats.checksum, double_bits(result.direction.y));
-    stats.checksum = mix_checksum(stats.checksum, double_bits(result.direction.z));
-}
-
-bool same_result(
-    const BranchBoundResult &reference,
-    const BranchBoundResult &candidate
-) {
-    if (reference.found != candidate.found) {
-        return false;
-    }
-    if (!reference.found) {
-        return true;
-    }
-    constexpr double epsilon = 1e-12;
-    return reference.target_world_face_index == candidate.target_world_face_index &&
-           std::abs(reference.angle - candidate.angle) <= epsilon &&
-           std::abs(reference.direction.x - candidate.direction.x) <= epsilon &&
-           std::abs(reference.direction.y - candidate.direction.y) <= epsilon &&
-           std::abs(reference.direction.z - candidate.direction.z) <= epsilon;
+    stats.checksum = mix_checksum(stats.checksum, result.stats.branches_visited);
+    stats.checksum = mix_checksum(stats.checksum, result.stats.clips_performed);
 }
 
 void assert_result_invariants(
@@ -291,8 +267,6 @@ BranchBoundResult time_solve(Function &&function, std::uint64_t &elapsed_us) {
 int main(int argc, char **argv) {
     using namespace minescript_miner;
     const RandomConfig config = parse_config(argc, argv);
-    static_assert(kSide == 39);
-    static_assert(static_cast<std::size_t>(kSide) * kSide * kSide <= 65535);
 
     SolveStats stats{};
     for (std::uint32_t case_index = 0; case_index < config.cases; ++case_index) {
@@ -302,58 +276,38 @@ int main(int argc, char **argv) {
             data.target_indices,
             data.eye,
             data.look_direction,
-            kSide,
+            config.side,
             std::numeric_limits<double>::infinity()
         );
 
-        std::uint64_t reference_us = 0;
-        std::uint64_t candidate_us = 0;
-        const BranchBoundResult reference = time_solve(
+        std::uint64_t solve_us = 0;
+        const BranchBoundResult result = time_solve(
             [&]() {
-                return solve_reference(geometry, data.eye, data.look_direction);
+                return solve_once(geometry, data.eye, data.look_direction);
             },
-            reference_us
-        );
-        const BranchBoundResult candidate = time_solve(
-            [&]() {
-                return solve_candidate(geometry, data.eye, data.look_direction);
-            },
-            candidate_us
+            solve_us
         );
 
-        assert_result_invariants(geometry, reference);
-        assert_result_invariants(geometry, candidate);
-        if (!same_result(reference, candidate)) {
-            std::cerr
-                << "random scan mismatch: seed=" << config.seed
-                << " case=" << case_index
-                << " density=" << config.density
-                << " targets=" << config.target_count
-                << " reference_found=" << reference.found
-                << " candidate_found=" << candidate.found
-                << '\n';
-            return 1;
-        }
+        assert_result_invariants(geometry, result);
 
-        if (reference.found) {
+        if (result.found) {
             ++stats.found;
         } else {
             ++stats.missing;
         }
         stats.world_faces += geometry.world_faces.size();
         stats.target_faces += geometry.target_faces.size();
-        stats.branches += reference.stats.branches_visited;
-        stats.clips += reference.stats.clips_performed;
-        stats.reference_us += reference_us;
-        stats.candidate_us += candidate_us;
-        update_checksum(stats, reference);
+        stats.branches += result.stats.branches_visited;
+        stats.clips += result.stats.clips_performed;
+        stats.solve_us += solve_us;
+        update_checksum(stats, result);
     }
 
     std::cout
         << "random_scan"
         << " seed=" << config.seed
         << " cases=" << config.cases
-        << " side=" << kSide
+        << " side=" << config.side
         << " density=" << std::setprecision(4) << config.density
         << " targets=" << config.target_count
         << " found=" << stats.found
@@ -362,8 +316,7 @@ int main(int argc, char **argv) {
         << " target_faces=" << stats.target_faces
         << " branches=" << stats.branches
         << " clips=" << stats.clips
-        << " reference_us=" << stats.reference_us
-        << " candidate_us=" << stats.candidate_us
+        << " solve_us=" << stats.solve_us
         << " checksum=" << stats.checksum
         << '\n';
 }

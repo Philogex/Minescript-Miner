@@ -1,4 +1,4 @@
-#include "minescript_miner/clipping.hpp"
+#include "minescript_miner/geometry/clipping.hpp"
 
 #include <array>
 #include <cmath>

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "minescript_miner/tri2.hpp"
-#include "minescript_miner/vec.hpp"
+#include "minescript_miner/geometry/tri2.hpp"
+#include "minescript_miner/geometry/vec.hpp"
 
 #include <cstdint>
 #include <limits>

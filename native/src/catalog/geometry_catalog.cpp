@@ -1,6 +1,6 @@
-#include "minescript_miner/geometry_catalog.hpp"
+#include "minescript_miner/catalog/geometry_catalog.hpp"
 
-#include "minescript_miner/geometry_catalog_data.hpp"
+#include "minescript_miner/catalog/geometry_catalog_data.hpp"
 
 #include <array>
 #include <cstddef>

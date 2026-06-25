@@ -1,7 +1,7 @@
 #pragma once
 
-#include "minescript_miner/geometry_store.hpp"
-#include "minescript_miner/tri2.hpp"
+#include "minescript_miner/geometry/geometry_store.hpp"
+#include "minescript_miner/geometry/tri2.hpp"
 
 #include <algorithm>
 #include <cstddef>

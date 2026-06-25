@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "minescript_miner/catalog_contract.hpp"
+#include "minescript_miner/catalog/catalog_contract.hpp"
 
 #include <array>
 #include <cstddef>

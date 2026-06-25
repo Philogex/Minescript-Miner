@@ -1,7 +1,7 @@
 #pragma once
 
-#include "minescript_miner/scan_region.hpp"
-#include "minescript_miner/target_solver.hpp"
+#include "minescript_miner/scanner/scan_region.hpp"
+#include "minescript_miner/scanner/target_solver.hpp"
 
 #include <cstdint>
 

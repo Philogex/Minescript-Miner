@@ -1,4 +1,4 @@
-#include "minescript_miner/constraint_region.hpp"
+#include "minescript_miner/geometry/constraint_region.hpp"
 
 #include <algorithm>
 #include <stdexcept>

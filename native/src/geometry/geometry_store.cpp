@@ -1,4 +1,4 @@
-#include "minescript_miner/geometry_store.hpp"
+#include "minescript_miner/geometry/geometry_store.hpp"
 
 #include <algorithm>
 #include <stdexcept>

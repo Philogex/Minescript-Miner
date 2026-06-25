@@ -34,12 +34,12 @@ class NativeConstraintSubtractionTest(unittest.TestCase):
                         project_root
                         / "native/tests/constraint_subtraction_test.cpp"
                     ),
-                    str(project_root / "native/src/geometry.cpp"),
+                    str(project_root / "native/src/geometry/geometry.cpp"),
                     str(
                         project_root
-                        / "native/src/geometry_store.cpp"
+                        / "native/src/geometry/geometry_store.cpp"
                     ),
-                    str(project_root / "native/src/constraint_region.cpp"),
+                    str(project_root / "native/src/geometry/constraint_region.cpp"),
                     "-o",
                     str(executable),
                 ],

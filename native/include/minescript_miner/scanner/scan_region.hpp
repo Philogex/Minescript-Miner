@@ -1,7 +1,7 @@
 #pragma once
 
-#include "minescript_miner/geometry_catalog.hpp"
-#include "minescript_miner/vec.hpp"
+#include "minescript_miner/catalog/geometry_catalog.hpp"
+#include "minescript_miner/geometry/vec.hpp"
 
 #include <algorithm>
 #include <cstdint>

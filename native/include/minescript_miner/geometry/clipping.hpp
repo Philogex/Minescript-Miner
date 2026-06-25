@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minescript_miner/tri2.hpp"
+#include "minescript_miner/geometry/tri2.hpp"
 
 #include <cstdint>
 

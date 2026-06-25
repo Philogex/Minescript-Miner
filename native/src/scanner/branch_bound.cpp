@@ -1,7 +1,8 @@
-#include "minescript_miner/branch_bound.hpp"
+#include "minescript_miner/scanner/branch_bound.hpp"
 
-#include "minescript_miner/constraint_region.hpp"
-#include "minescript_miner/projection.hpp"
+#include "minescript_miner/geometry/constraint_region.hpp"
+#include "minescript_miner/scanner/projection.hpp"
+#include "minescript_miner/scanner/reach_projection.hpp"
 
 #include <algorithm>
 #include <array>

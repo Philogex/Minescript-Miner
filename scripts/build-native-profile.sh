@@ -37,17 +37,18 @@ mkdir -p "$(dirname "${OUTPUT}")"
     -I "${BOOST_INCLUDE}" \
     native/tools/scan_pipeline_profile.cpp \
     native/tests/scan_fixture.cpp \
-    native/src/angle.cpp \
-    native/src/branch_bound.cpp \
-    native/src/clipping.cpp \
-    native/src/constraint_region.cpp \
-    native/src/geometry.cpp \
-    native/src/geometry_store.cpp \
-    native/src/projection.cpp \
-    native/src/geometry_catalog.cpp \
-    native/src/scan_region.cpp \
-    native/src/target_solver.cpp \
-    native/src/visibility.cpp \
+    native/src/aim/angle.cpp \
+    native/src/scanner/branch_bound.cpp \
+    native/src/geometry/clipping.cpp \
+    native/src/geometry/constraint_region.cpp \
+    native/src/geometry/geometry.cpp \
+    native/src/geometry/geometry_store.cpp \
+    native/src/scanner/projection.cpp \
+    native/src/catalog/geometry_catalog.cpp \
+    native/src/scanner/scan_region.cpp \
+    native/src/scanner/target_solver.cpp \
+    native/src/scanner/reach_projection.cpp \
+    native/src/scanner/view_projection.cpp \
     -o "${OUTPUT}"
 
 echo "${OUTPUT}"

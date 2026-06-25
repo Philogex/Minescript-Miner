@@ -1,4 +1,4 @@
-#include "minescript_miner/geometry.hpp"
+#include "minescript_miner/geometry/geometry.hpp"
 
 #ifdef MINESCRIPT_MINER_GCD_BENCHMARK
 #include "gcd_benchmark_support.hpp"

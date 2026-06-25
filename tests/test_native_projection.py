@@ -34,13 +34,13 @@ class NativeProjectionTest(unittest.TestCase):
                         project_root
                         / "native/tests/projection_test.cpp"
                     ),
-                    str(project_root / "native/src/geometry.cpp"),
+                    str(project_root / "native/src/geometry/geometry.cpp"),
                     str(
                         project_root
-                        / "native/src/geometry_store.cpp"
+                        / "native/src/geometry/geometry_store.cpp"
                     ),
-                    str(project_root / "native/src/constraint_region.cpp"),
-                    str(project_root / "native/src/projection.cpp"),
+                    str(project_root / "native/src/geometry/constraint_region.cpp"),
+                    str(project_root / "native/src/scanner/projection.cpp"),
                     "-o",
                     str(executable),
                 ],

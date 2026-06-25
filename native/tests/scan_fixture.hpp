@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minescript_miner/vec.hpp"
+#include "minescript_miner/geometry/vec.hpp"
 
 #include <cstddef>
 #include <cstdint>

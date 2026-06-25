@@ -1,8 +1,8 @@
 #pragma once
 
-#include "minescript_miner/geometry_store.hpp"
-#include "minescript_miner/scan_region.hpp"
-#include "minescript_miner/visibility.hpp"
+#include "minescript_miner/geometry/geometry_store.hpp"
+#include "minescript_miner/scanner/scan_region.hpp"
+#include "minescript_miner/scanner/view_projection.hpp"
 
 #include <array>
 #include <cstddef>

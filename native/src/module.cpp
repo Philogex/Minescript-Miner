@@ -1,10 +1,10 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-#include "minescript_miner/angle.hpp"
-#include "minescript_miner/branch_bound.hpp"
-#include "minescript_miner/geometry_catalog.hpp"
-#include "minescript_miner/scan_region.hpp"
+#include "minescript_miner/aim/angle.hpp"
+#include "minescript_miner/scanner/branch_bound.hpp"
+#include "minescript_miner/catalog/geometry_catalog.hpp"
+#include "minescript_miner/scanner/scan_region.hpp"
 
 #include <algorithm>
 #include <chrono>

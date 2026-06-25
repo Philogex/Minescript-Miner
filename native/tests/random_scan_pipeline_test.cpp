@@ -1,9 +1,9 @@
-#include "minescript_miner/angle.hpp"
-#include "minescript_miner/branch_bound.hpp"
-#include "minescript_miner/catalog_contract.hpp"
-#include "minescript_miner/geometry_catalog.hpp"
-#include "minescript_miner/scan_region.hpp"
-#include "minescript_miner/target_solver.hpp"
+#include "minescript_miner/aim/angle.hpp"
+#include "minescript_miner/scanner/branch_bound.hpp"
+#include "minescript_miner/catalog/catalog_contract.hpp"
+#include "minescript_miner/catalog/geometry_catalog.hpp"
+#include "minescript_miner/scanner/scan_region.hpp"
+#include "minescript_miner/scanner/target_solver.hpp"
 
 #include <algorithm>
 #include <cassert>

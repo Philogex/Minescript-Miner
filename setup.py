@@ -7,19 +7,20 @@ from setuptools import Extension, find_namespace_packages, setup
 native_source_dir = Path("native/src")
 native_sources = [
     native_source_dir / "module.cpp",
-    native_source_dir / "angle.cpp",
-    native_source_dir / "branch_bound.cpp",
-    native_source_dir / "clipping.cpp",
-    native_source_dir / "constraint_region.cpp",
-    native_source_dir / "geometry.cpp",
-    native_source_dir / "geometry_store.cpp",
-    native_source_dir / "projection.cpp",
-    native_source_dir / "geometry_catalog.cpp",
-    native_source_dir / "scan_region.cpp",
-    native_source_dir / "target_solver.cpp",
-    native_source_dir / "tri2.cpp",
-    native_source_dir / "vec.cpp",
-    native_source_dir / "visibility.cpp",
+    native_source_dir / "aim" / "angle.cpp",
+    native_source_dir / "catalog" / "geometry_catalog.cpp",
+    native_source_dir / "geometry" / "clipping.cpp",
+    native_source_dir / "geometry" / "constraint_region.cpp",
+    native_source_dir / "geometry" / "geometry.cpp",
+    native_source_dir / "geometry" / "geometry_store.cpp",
+    native_source_dir / "geometry" / "tri2.cpp",
+    native_source_dir / "geometry" / "vec.cpp",
+    native_source_dir / "scanner" / "branch_bound.cpp",
+    native_source_dir / "scanner" / "projection.cpp",
+    native_source_dir / "scanner" / "reach_projection.cpp",
+    native_source_dir / "scanner" / "scan_region.cpp",
+    native_source_dir / "scanner" / "target_solver.cpp",
+    native_source_dir / "scanner" / "view_projection.cpp",
 ]
 
 native_compile_args = (

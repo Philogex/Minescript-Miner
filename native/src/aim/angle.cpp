@@ -1,4 +1,4 @@
-#include "minescript_miner/angle.hpp"
+#include "minescript_miner/aim/angle.hpp"
 
 #include <algorithm>
 #include <cmath>

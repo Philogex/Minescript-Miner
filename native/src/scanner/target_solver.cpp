@@ -1,6 +1,6 @@
-#include "minescript_miner/target_solver.hpp"
+#include "minescript_miner/scanner/target_solver.hpp"
 
-#include "minescript_miner/clipping.hpp"
+#include "minescript_miner/geometry/clipping.hpp"
 
 #include <algorithm>
 #include <cmath>

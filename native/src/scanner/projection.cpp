@@ -1,4 +1,4 @@
-#include "minescript_miner/projection.hpp"
+#include "minescript_miner/scanner/projection.hpp"
 
 #include <algorithm>
 #include <array>

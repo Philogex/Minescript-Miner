@@ -16,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "catalog" / "shape_catalog.json"
 PYTHON_TARGET = ROOT / "src" / "minescript_miner" / "adapter" / "shape_catalog.py"
 PYTHON_CONTRACT_TARGET = ROOT / "src" / "minescript_miner" / "adapter" / "catalog_contract.py"
-CPP_CONTRACT_HEADER_TARGET = ROOT / "native" / "include" / "minescript_miner" / "catalog_contract.hpp"
-CPP_HEADER_TARGET = ROOT / "native" / "include" / "minescript_miner" / "geometry_catalog.hpp"
-CPP_DATA_HEADER_TARGET = ROOT / "native" / "include" / "minescript_miner" / "geometry_catalog_data.hpp"
+CPP_CONTRACT_HEADER_TARGET = ROOT / "native" / "include" / "minescript_miner" / "catalog" / "catalog_contract.hpp"
+CPP_HEADER_TARGET = ROOT / "native" / "include" / "minescript_miner" / "catalog" / "geometry_catalog.hpp"
+CPP_DATA_HEADER_TARGET = ROOT / "native" / "include" / "minescript_miner" / "catalog" / "geometry_catalog_data.hpp"
 
 Box = Tuple[int, int, int, int, int, int]
 Face = Tuple[str, int, int, int, int, int, int]
@@ -666,7 +666,7 @@ def render_header(catalog: Dict[str, Any], shapes: Sequence[Shape], box_count: i
 
 #pragma once
 
-#include "minescript_miner/catalog_contract.hpp"
+#include "minescript_miner/catalog/catalog_contract.hpp"
 
 #include <array>
 #include <cstddef>
@@ -749,7 +749,7 @@ def render_data_header(shapes: Sequence[Shape]) -> str:
 
 #pragma once
 
-#include "minescript_miner/geometry_catalog.hpp"
+#include "minescript_miner/catalog/geometry_catalog.hpp"
 
 #include <array>
 #include <cstdint>

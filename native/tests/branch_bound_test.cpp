@@ -1,4 +1,4 @@
-#include "minescript_miner/branch_bound.hpp"
+#include "minescript_miner/scanner/branch_bound.hpp"
 
 #include <algorithm>
 #include <cassert>

@@ -31,7 +31,7 @@ class NativeGeometryTest(unittest.TestCase):
                     "-I",
                     str(BOOST_INCLUDE),
                     str(project_root / "native/tests/geometry_test.cpp"),
-                    str(project_root / "native/src/geometry.cpp"),
+                    str(project_root / "native/src/geometry/geometry.cpp"),
                     "-o",
                     str(executable),
                 ],

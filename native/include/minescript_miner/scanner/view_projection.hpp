@@ -1,8 +1,7 @@
 #pragma once
 
-#include "minescript_miner/clipping.hpp"
-#include "minescript_miner/scan_region.hpp"
-#include "minescript_miner/tri2.hpp"
+#include "minescript_miner/geometry/tri2.hpp"
+#include "minescript_miner/scanner/scan_region.hpp"
 
 #include <array>
 #include <cstddef>
@@ -13,9 +12,6 @@ namespace minescript_miner {
 // Positive view-space depth prevents singular perspective projections.
 inline constexpr double PROJECTION_NEAR_DEPTH = 1.0e-6;
 inline constexpr std::size_t MAX_CLIP_VERTICES = 8;
-inline constexpr std::size_t MAX_REACH_FACE_VERTICES = 16;
-inline constexpr std::size_t MAX_REACH_FACE_PIECES =
-    MAX_REACH_FACE_VERTICES - 2;
 
 struct ViewBasis {
     Vec3 right{};
@@ -44,21 +40,6 @@ struct ProjectedFace {
     std::array<ProjectedPoint, MAX_CLIP_VERTICES> points{};
     std::uint8_t count = 0;
     InverseDepthPlane inverse_depth{};
-};
-
-struct ProjectedFacePieces {
-    std::array<ProjectedFace, MAX_REACH_FACE_PIECES> faces{};
-    std::uint8_t count = 0;
-};
-
-struct WorldFacePolygon {
-    std::array<Vec3, MAX_REACH_FACE_VERTICES> points{};
-    std::uint8_t count = 0;
-};
-
-struct ReachableWorldFacePieces {
-    std::array<WorldFacePolygon, MAX_REACH_FACE_PIECES> faces{};
-    std::uint8_t count = 0;
 };
 
 bool make_view_basis(const Vec3 &forward, ViewBasis &out);
@@ -95,26 +76,17 @@ constexpr double inverse_depth_at(const InverseDepthPlane &plane, Point2 point) 
     return plane.x * point.x + plane.y * point.y + plane.constant;
 }
 
+bool project_view_polygon(
+    const ViewPoint *points,
+    std::uint8_t count,
+    ProjectedFace &out
+);
+
 bool project_world_face(
     const WorldRectFace &face,
     const Vec3 &eye,
     const ViewBasis &basis,
     ProjectedFace &out
-);
-
-bool make_reachable_world_face_pieces(
-    const WorldRectFace &face,
-    const Vec3 &eye,
-    double reach,
-    ReachableWorldFacePieces &out
-);
-
-bool project_reachable_world_face(
-    const WorldRectFace &face,
-    const Vec3 &eye,
-    const ViewBasis &basis,
-    double reach,
-    ProjectedFacePieces &out
 );
 
 }

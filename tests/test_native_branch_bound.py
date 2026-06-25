@@ -34,20 +34,21 @@ class NativeBranchBoundTest(unittest.TestCase):
                         project_root
                         / "native/tests/branch_bound_test.cpp"
                     ),
-                    str(project_root / "native/src/angle.cpp"),
-                    str(project_root / "native/src/clipping.cpp"),
-                    str(project_root / "native/src/constraint_region.cpp"),
-                    str(project_root / "native/src/branch_bound.cpp"),
-                    str(project_root / "native/src/geometry.cpp"),
-                    str(project_root / "native/src/geometry_catalog.cpp"),
+                    str(project_root / "native/src/aim/angle.cpp"),
+                    str(project_root / "native/src/geometry/clipping.cpp"),
+                    str(project_root / "native/src/geometry/constraint_region.cpp"),
+                    str(project_root / "native/src/scanner/branch_bound.cpp"),
+                    str(project_root / "native/src/geometry/geometry.cpp"),
+                    str(project_root / "native/src/catalog/geometry_catalog.cpp"),
                     str(
                         project_root
-                        / "native/src/geometry_store.cpp"
+                        / "native/src/geometry/geometry_store.cpp"
                     ),
-                    str(project_root / "native/src/projection.cpp"),
-                    str(project_root / "native/src/scan_region.cpp"),
-                    str(project_root / "native/src/target_solver.cpp"),
-                    str(project_root / "native/src/visibility.cpp"),
+                    str(project_root / "native/src/scanner/projection.cpp"),
+                    str(project_root / "native/src/scanner/scan_region.cpp"),
+                    str(project_root / "native/src/scanner/target_solver.cpp"),
+                    str(project_root / "native/src/scanner/view_projection.cpp"),
+                    str(project_root / "native/src/scanner/reach_projection.cpp"),
                     "-o",
                     str(executable),
                 ],

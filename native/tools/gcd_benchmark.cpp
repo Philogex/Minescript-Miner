@@ -1,9 +1,9 @@
 #include "gcd_benchmark_support.hpp"
 
-#include "minescript_miner/angle.hpp"
-#include "minescript_miner/branch_bound.hpp"
-#include "minescript_miner/geometry_catalog.hpp"
-#include "minescript_miner/scan_region.hpp"
+#include "minescript_miner/aim/angle.hpp"
+#include "minescript_miner/scanner/branch_bound.hpp"
+#include "minescript_miner/catalog/geometry_catalog.hpp"
+#include "minescript_miner/scanner/scan_region.hpp"
 #include "scan_fixture.hpp"
 
 #include <boost/integer/common_factor_rt.hpp>

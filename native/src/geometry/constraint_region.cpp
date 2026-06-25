@@ -1,9 +1,9 @@
-#include "minescript_miner/geometry/constraint_region.hpp"
+#include "minecraft_miner/geometry/constraint_region.hpp"
 
 #include <algorithm>
 #include <stdexcept>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 namespace {
 
@@ -588,4 +588,4 @@ VertexIdSpan ConstraintRegionStore::vertex_span(
     };
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

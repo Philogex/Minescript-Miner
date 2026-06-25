@@ -1,12 +1,12 @@
 #pragma once
 
-#include "minescript_miner/geometry/tri2.hpp"
-#include "minescript_miner/geometry/vec.hpp"
+#include "minecraft_miner/geometry/tri2.hpp"
+#include "minecraft_miner/geometry/vec.hpp"
 
 #include <cstdint>
 #include <limits>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 struct TriangleAngleResult {
     Point2 point{};
@@ -43,4 +43,4 @@ TriangleAngleResult minimum_angle_to_triangle(
     const Vec3 &look_direction_in_view
 );
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

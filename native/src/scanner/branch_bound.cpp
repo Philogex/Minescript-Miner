@@ -1,8 +1,8 @@
-#include "minescript_miner/scanner/branch_bound.hpp"
+#include "minecraft_miner/scanner/branch_bound.hpp"
 
-#include "minescript_miner/geometry/constraint_region.hpp"
-#include "minescript_miner/scanner/projection.hpp"
-#include "minescript_miner/scanner/reach_projection.hpp"
+#include "minecraft_miner/geometry/constraint_region.hpp"
+#include "minecraft_miner/scanner/projection.hpp"
+#include "minecraft_miner/scanner/reach_projection.hpp"
 
 #include <algorithm>
 #include <array>
@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 namespace {
 
@@ -1449,4 +1449,4 @@ BranchBoundResult solve_visible_target(
     return result;
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

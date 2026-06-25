@@ -3,12 +3,12 @@
 
 #pragma once
 
-#include "minescript_miner/catalog/geometry_catalog.hpp"
+#include "minecraft_miner/catalog/geometry_catalog.hpp"
 
 #include <array>
 #include <cstdint>
 
-namespace minescript_miner::generated {
+namespace minecraft_miner::generated {
 
 struct ShapeBoxRange {
     std::uint16_t offset;
@@ -485,4 +485,4 @@ inline constexpr std::array<LocalAabb, GEOMETRY_BOX_COUNT> SHAPE_BOX_TABLE = {{
     {12, 28, 10, 20, 32, 22},
 }};
 
-}  // namespace minescript_miner::generated
+}  // namespace minecraft_miner::generated

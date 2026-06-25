@@ -1,13 +1,13 @@
 #pragma once
 
-#include "minescript_miner/geometry/tri2.hpp"
+#include "minecraft_miner/geometry/tri2.hpp"
 
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/rational.hpp>
 
 #include <cstdint>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 using ExactInt = boost::multiprecision::cpp_int;
 using ExactRational = boost::rational<ExactInt>;
@@ -77,4 +77,4 @@ bool is_finite(const ExactPoint2H &point);
 bool is_valid(const ExactPoint2H &point);
 bool is_valid(const ExactLine2 &line);
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

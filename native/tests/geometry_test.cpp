@@ -1,4 +1,4 @@
-#include "minescript_miner/geometry/geometry.hpp"
+#include "minecraft_miner/geometry/geometry.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -23,7 +23,7 @@ double from_bits(std::uint64_t bits) {
 }  // namespace
 
 int main() {
-    using namespace minescript_miner;
+    using namespace minecraft_miner;
 
     const double samples[]{
         0.0,

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minescript_miner/geometry/vec.hpp"
+#include "minecraft_miner/geometry/vec.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-namespace minescript_miner::test {
+namespace minecraft_miner::test {
 
 struct SparseBlock {
     std::uint16_t index = 0;
@@ -41,4 +41,4 @@ struct ScanFixture {
 
 ScanFixture load_scan_fixture(const std::string &path);
 
-}  // namespace minescript_miner::test
+}  // namespace minecraft_miner::test

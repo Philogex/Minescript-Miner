@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minescript_miner/geometry/geometry.hpp"
+#include "minecraft_miner/geometry/geometry.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace minescript_miner::gcd_benchmark {
+namespace minecraft_miner::gcd_benchmark {
 
 struct OperandPair {
     ExactInt lhs{};
@@ -63,4 +63,4 @@ inline void record_operands(const ExactInt &lhs, const ExactInt &rhs) {
 
 ExactInt legacy_integer_gcd(ExactInt lhs, ExactInt rhs);
 
-}  // namespace minescript_miner::gcd_benchmark
+}  // namespace minecraft_miner::gcd_benchmark

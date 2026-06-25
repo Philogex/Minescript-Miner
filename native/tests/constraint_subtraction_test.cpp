@@ -1,4 +1,4 @@
-#include "minescript_miner/geometry/constraint_region.hpp"
+#include "minecraft_miner/geometry/constraint_region.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -7,15 +7,15 @@
 
 namespace {
 
-using minescript_miner::ConstraintRegionStore;
-using minescript_miner::ExactGeometryStore;
-using minescript_miner::ExactInt;
-using minescript_miner::ExactLine2;
-using minescript_miner::ExactPoint2H;
-using minescript_miner::ExactRational;
-using minescript_miner::HalfPlaneId;
-using minescript_miner::RegionId;
-using minescript_miner::VertexId;
+using minecraft_miner::ConstraintRegionStore;
+using minecraft_miner::ExactGeometryStore;
+using minecraft_miner::ExactInt;
+using minecraft_miner::ExactLine2;
+using minecraft_miner::ExactPoint2H;
+using minecraft_miner::ExactRational;
+using minecraft_miner::HalfPlaneId;
+using minecraft_miner::RegionId;
+using minecraft_miner::VertexId;
 
 ExactLine2 line(ExactInt a, ExactInt b, ExactInt c) {
     return {std::move(a), std::move(b), std::move(c)};
@@ -41,7 +41,7 @@ ExactRational area2(
     const ConstraintRegionStore &regions,
     RegionId region
 ) {
-    const minescript_miner::VertexIdSpan vertices =
+    const minecraft_miner::VertexIdSpan vertices =
         regions.vertices(region);
     ExactRational area{0};
     for (std::size_t i = 0; i < vertices.size(); ++i) {
@@ -76,7 +76,7 @@ bool contains_any(
     const ExactRational &y
 ) {
     const VertexId point =
-        geometry.intern_vertex(minescript_miner::make_point(x, y));
+        geometry.intern_vertex(minecraft_miner::make_point(x, y));
     return std::any_of(
         pieces.begin(),
         pieces.end(),
@@ -105,7 +105,7 @@ std::vector<RegionId> subtract_all(
 }  // namespace
 
 int main() {
-    using namespace minescript_miner;
+    using namespace minecraft_miner;
 
     ExactGeometryStore geometry;
     ConstraintRegionStore regions{geometry};

@@ -1,9 +1,9 @@
-#include "minescript_miner/aim/angle.hpp"
-#include "minescript_miner/scanner/branch_bound.hpp"
-#include "minescript_miner/catalog/catalog_contract.hpp"
-#include "minescript_miner/catalog/geometry_catalog.hpp"
-#include "minescript_miner/scanner/scan_region.hpp"
-#include "minescript_miner/scanner/target_solver.hpp"
+#include "minecraft_miner/aim/angle.hpp"
+#include "minecraft_miner/scanner/branch_bound.hpp"
+#include "minecraft_miner/catalog/catalog_contract.hpp"
+#include "minecraft_miner/catalog/geometry_catalog.hpp"
+#include "minecraft_miner/scanner/scan_region.hpp"
+#include "minecraft_miner/scanner/target_solver.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -20,17 +20,17 @@
 
 namespace {
 
-using minescript_miner::BranchBoundResult;
-using minescript_miner::ScanRegionGeometry;
-using minescript_miner::TargetFaceCandidate;
-using minescript_miner::Vec3;
+using minecraft_miner::BranchBoundResult;
+using minecraft_miner::ScanRegionGeometry;
+using minecraft_miner::TargetFaceCandidate;
+using minecraft_miner::Vec3;
 
 struct RandomConfig {
     std::uint64_t seed = 0x4d595df4d0f33173ULL;
     std::uint32_t cases = 5;
     double density = 0.25;
     std::uint16_t target_count = 5;
-    std::int32_t side = minescript_miner::MAX_CUBE_SIDE;
+    std::int32_t side = minecraft_miner::MAX_CUBE_SIDE;
 };
 
 struct CaseData {
@@ -119,7 +119,7 @@ RandomConfig parse_config(int argc, char **argv) {
         throw std::invalid_argument("targets must be positive");
     }
     if (config.side <= 0 ||
-        config.side > minescript_miner::MAX_CUBE_SIDE) {
+        config.side > minecraft_miner::MAX_CUBE_SIDE) {
         throw std::invalid_argument("side must be in [1, MAX_CUBE_SIDE]");
     }
     const std::size_t block_count =
@@ -145,7 +145,7 @@ std::uint16_t center_index(std::int32_t side) {
 Vec3 random_look_direction(SplitMix64 &rng) {
     const double yaw = rng.unit() * 360.0 - 180.0;
     const double pitch = rng.unit() * 160.0 - 80.0;
-    return minescript_miner::look_direction_from_yaw_pitch(yaw, pitch);
+    return minecraft_miner::look_direction_from_yaw_pitch(yaw, pitch);
 }
 
 void shuffle_prefix(
@@ -170,7 +170,7 @@ CaseData make_case(const RandomConfig &config, std::uint64_t case_index) {
     const std::uint16_t center = center_index(config.side);
 
     CaseData data{};
-    data.shape_ids.assign(block_count, minescript_miner::SHAPE_EMPTY);
+    data.shape_ids.assign(block_count, minecraft_miner::SHAPE_EMPTY);
     std::vector<std::uint16_t> full_indices{};
     full_indices.reserve(static_cast<std::size_t>(
         static_cast<double>(block_count) * config.density + config.target_count
@@ -180,7 +180,7 @@ CaseData make_case(const RandomConfig &config, std::uint64_t case_index) {
         if (index == center || rng.unit() >= config.density) {
             continue;
         }
-        data.shape_ids[index] = minescript_miner::SHAPE_FULL_CUBE;
+        data.shape_ids[index] = minecraft_miner::SHAPE_FULL_CUBE;
         full_indices.push_back(static_cast<std::uint16_t>(index));
     }
 
@@ -189,10 +189,10 @@ CaseData make_case(const RandomConfig &config, std::uint64_t case_index) {
             rng.bounded(block_count)
         );
         if (index == center ||
-            data.shape_ids[index] == minescript_miner::SHAPE_FULL_CUBE) {
+            data.shape_ids[index] == minecraft_miner::SHAPE_FULL_CUBE) {
             continue;
         }
-        data.shape_ids[index] = minescript_miner::SHAPE_FULL_CUBE;
+        data.shape_ids[index] = minecraft_miner::SHAPE_FULL_CUBE;
         full_indices.push_back(index);
     }
 
@@ -210,7 +210,7 @@ BranchBoundResult solve_once(
     const Vec3 &eye,
     const Vec3 &look_direction
 ) {
-    return minescript_miner::solve_visible_target(
+    return minecraft_miner::solve_visible_target(
         geometry,
         eye,
         look_direction,
@@ -265,7 +265,7 @@ BranchBoundResult time_solve(Function &&function, std::uint64_t &elapsed_us) {
 }  // namespace
 
 int main(int argc, char **argv) {
-    using namespace minescript_miner;
+    using namespace minecraft_miner;
     const RandomConfig config = parse_config(argc, argv);
 
     SolveStats stats{};

@@ -1,4 +1,4 @@
-#include "minescript_miner/geometry/geometry.hpp"
+#include "minecraft_miner/geometry/geometry.hpp"
 
 #ifdef MINESCRIPT_MINER_GCD_BENCHMARK
 #include "gcd_benchmark_support.hpp"
@@ -13,7 +13,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 namespace {
 
@@ -351,4 +351,4 @@ bool is_valid(const ExactLine2 &line) {
     return line.a != 0 || line.b != 0 || line.c != 0;
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

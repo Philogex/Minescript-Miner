@@ -1,13 +1,13 @@
-#include "minescript_miner/scanner/view_projection.hpp"
+#include "minecraft_miner/scanner/view_projection.hpp"
 
-#include "minescript_miner/geometry/clipping.hpp"
+#include "minecraft_miner/geometry/clipping.hpp"
 
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 namespace {
 
@@ -246,4 +246,4 @@ static_assert(TEST_PROJECTED_POINT.point.y == 2.0);
 
 }  // namespace
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

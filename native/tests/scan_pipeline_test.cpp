@@ -1,8 +1,8 @@
-#include "minescript_miner/aim/angle.hpp"
-#include "minescript_miner/scanner/branch_bound.hpp"
-#include "minescript_miner/catalog/geometry_catalog.hpp"
-#include "minescript_miner/scanner/scan_region.hpp"
-#include "minescript_miner/scanner/target_solver.hpp"
+#include "minecraft_miner/aim/angle.hpp"
+#include "minecraft_miner/scanner/branch_bound.hpp"
+#include "minecraft_miner/catalog/geometry_catalog.hpp"
+#include "minecraft_miner/scanner/scan_region.hpp"
+#include "minecraft_miner/scanner/target_solver.hpp"
 #include "scan_fixture.hpp"
 
 #include <algorithm>
@@ -14,9 +14,9 @@
 #include <vector>
 
 int main(int argc, char **argv) {
-    using namespace minescript_miner;
-    using minescript_miner::test::ScanFixture;
-    using minescript_miner::test::SparseBlock;
+    using namespace minecraft_miner;
+    using minecraft_miner::test::ScanFixture;
+    using minecraft_miner::test::SparseBlock;
 
     assert(argc == 2);
     const Vec3 round_trip_direction =

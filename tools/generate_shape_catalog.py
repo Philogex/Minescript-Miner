@@ -16,9 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "catalog" / "shape_catalog.json"
 PYTHON_TARGET = ROOT / "src" / "minescript_miner" / "adapter" / "shape_catalog.py"
 PYTHON_CONTRACT_TARGET = ROOT / "src" / "minescript_miner" / "adapter" / "catalog_contract.py"
-CPP_CONTRACT_HEADER_TARGET = ROOT / "native" / "include" / "minescript_miner" / "catalog" / "catalog_contract.hpp"
-CPP_HEADER_TARGET = ROOT / "native" / "include" / "minescript_miner" / "catalog" / "geometry_catalog.hpp"
-CPP_DATA_HEADER_TARGET = ROOT / "native" / "include" / "minescript_miner" / "catalog" / "geometry_catalog_data.hpp"
+CPP_CONTRACT_HEADER_TARGET = ROOT / "native" / "include" / "minecraft_miner" / "catalog" / "catalog_contract.hpp"
+CPP_HEADER_TARGET = ROOT / "native" / "include" / "minecraft_miner" / "catalog" / "geometry_catalog.hpp"
+CPP_DATA_HEADER_TARGET = ROOT / "native" / "include" / "minecraft_miner" / "catalog" / "geometry_catalog_data.hpp"
 
 Box = Tuple[int, int, int, int, int, int]
 Face = Tuple[str, int, int, int, int, int, int]
@@ -644,7 +644,7 @@ def render_contract_header(catalog: Dict[str, Any], shapes: Sequence[Shape], box
 #include <cstddef>
 #include <cstdint>
 
-namespace minescript_miner {{
+namespace minecraft_miner {{
 
 inline constexpr int SHAPE_CATALOG_VERSION = {catalog["shape_catalog_version"]};
 inline constexpr int GEOMETRY_CATALOG_VERSION = {catalog["geometry_catalog_version"]};
@@ -666,13 +666,13 @@ def render_header(catalog: Dict[str, Any], shapes: Sequence[Shape], box_count: i
 
 #pragma once
 
-#include "minescript_miner/catalog/catalog_contract.hpp"
+#include "minecraft_miner/catalog/catalog_contract.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace minescript_miner {{
+namespace minecraft_miner {{
 
 inline constexpr std::int32_t SHAPE_EMPTY = 0;
 inline constexpr std::int32_t SHAPE_FULL_CUBE = 1;
@@ -749,12 +749,12 @@ def render_data_header(shapes: Sequence[Shape]) -> str:
 
 #pragma once
 
-#include "minescript_miner/catalog/geometry_catalog.hpp"
+#include "minecraft_miner/catalog/geometry_catalog.hpp"
 
 #include <array>
 #include <cstdint>
 
-namespace minescript_miner::generated {{
+namespace minecraft_miner::generated {{
 
 struct ShapeBoxRange {{
     std::uint16_t offset;
@@ -773,7 +773,7 @@ inline constexpr std::array<LocalAabb, GEOMETRY_BOX_COUNT> SHAPE_BOX_TABLE = {{{
 {chr(10).join(box_lines)}
 }}}};
 
-}}  // namespace minescript_miner::generated
+}}  // namespace minecraft_miner::generated
 """
 
 

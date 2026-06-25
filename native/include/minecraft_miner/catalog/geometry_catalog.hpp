@@ -3,13 +3,13 @@
 
 #pragma once
 
-#include "minescript_miner/catalog/catalog_contract.hpp"
+#include "minecraft_miner/catalog/catalog_contract.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 inline constexpr std::int32_t SHAPE_EMPTY = 0;
 inline constexpr std::int32_t SHAPE_FULL_CUBE = 1;

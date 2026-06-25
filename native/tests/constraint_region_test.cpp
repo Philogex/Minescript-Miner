@@ -1,4 +1,4 @@
-#include "minescript_miner/geometry/constraint_region.hpp"
+#include "minecraft_miner/geometry/constraint_region.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -7,10 +7,10 @@
 
 namespace {
 
-minescript_miner::ExactLine2 line(
-    minescript_miner::ExactInt a,
-    minescript_miner::ExactInt b,
-    minescript_miner::ExactInt c
+minecraft_miner::ExactLine2 line(
+    minecraft_miner::ExactInt a,
+    minecraft_miner::ExactInt b,
+    minecraft_miner::ExactInt c
 ) {
     return {std::move(a), std::move(b), std::move(c)};
 }
@@ -18,7 +18,7 @@ minescript_miner::ExactLine2 line(
 }  // namespace
 
 int main() {
-    using namespace minescript_miner;
+    using namespace minecraft_miner;
 
     ExactGeometryStore geometry;
     const LineId x_axis = geometry.intern_line(line(0, 7, 0));

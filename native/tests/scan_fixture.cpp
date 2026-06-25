@@ -4,7 +4,7 @@
 #include <sstream>
 #include <stdexcept>
 
-namespace minescript_miner::test {
+namespace minecraft_miner::test {
 namespace {
 
 std::string next_value(std::istringstream &line, const char *key) {
@@ -96,4 +96,4 @@ ScanFixture load_scan_fixture(const std::string &path) {
     return fixture;
 }
 
-}  // namespace minescript_miner::test
+}  // namespace minecraft_miner::test

@@ -1,14 +1,14 @@
 #pragma once
 
-#include "minescript_miner/catalog/geometry_catalog.hpp"
-#include "minescript_miner/geometry/vec.hpp"
+#include "minecraft_miner/catalog/geometry_catalog.hpp"
+#include "minecraft_miner/geometry/vec.hpp"
 
 #include <algorithm>
 #include <cstdint>
 #include <limits>
 #include <vector>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 struct BlockOffset {
     std::int32_t x = 0;
@@ -291,4 +291,4 @@ ScanRegionGeometry build_scan_region_geometry(
     double reach = std::numeric_limits<double>::infinity()
 );
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

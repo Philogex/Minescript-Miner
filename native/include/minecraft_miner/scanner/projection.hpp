@@ -1,14 +1,14 @@
 #pragma once
 
-#include "minescript_miner/geometry/geometry_store.hpp"
-#include "minescript_miner/scanner/scan_region.hpp"
-#include "minescript_miner/scanner/view_projection.hpp"
+#include "minecraft_miner/geometry/geometry_store.hpp"
+#include "minecraft_miner/scanner/scan_region.hpp"
+#include "minecraft_miner/scanner/view_projection.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 struct ExactVec3 {
     ExactRational x{0};
@@ -83,4 +83,4 @@ private:
     ExactRational near_depth_{0};
 };
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

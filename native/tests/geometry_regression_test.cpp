@@ -1,7 +1,7 @@
-#include "minescript_miner/scanner/branch_bound.hpp"
-#include "minescript_miner/geometry/clipping.hpp"
-#include "minescript_miner/scanner/target_solver.hpp"
-#include "minescript_miner/scanner/view_projection.hpp"
+#include "minecraft_miner/scanner/branch_bound.hpp"
+#include "minecraft_miner/geometry/clipping.hpp"
+#include "minecraft_miner/scanner/target_solver.hpp"
+#include "minecraft_miner/scanner/view_projection.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -11,23 +11,23 @@
 
 namespace {
 
-using minescript_miner::BranchBoundResult;
-using minescript_miner::PlaneAxis;
-using minescript_miner::Point2;
-using minescript_miner::ScanRegionGeometry;
-using minescript_miner::Vec3;
-using minescript_miner::ViewBasis;
-using minescript_miner::WorldPoint;
-using minescript_miner::WorldRectFace;
+using minecraft_miner::BranchBoundResult;
+using minecraft_miner::PlaneAxis;
+using minecraft_miner::Point2;
+using minecraft_miner::ScanRegionGeometry;
+using minecraft_miner::Vec3;
+using minecraft_miner::ViewBasis;
+using minecraft_miner::WorldPoint;
+using minecraft_miner::WorldRectFace;
 
 constexpr std::int32_t from_sixteenths(std::int32_t value) {
     // TODO: Rename this legacy test helper. The production geometry uses a
     // 32-unit grid; these regression literals are still written in historical
     // sixteenth-style coordinates and are scaled here to keep the cases stable.
     static_assert(
-        minescript_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
+        minecraft_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
     );
-    return value * (minescript_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
+    return value * (minecraft_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
 }
 
 constexpr WorldRectFace face_from_sixteenths(WorldRectFace face) {
@@ -71,9 +71,9 @@ bool robust_orientation_regression() {
     const Point2 c{-0.44282367504482284, -0.39010429715305583};
 
     // The exact determinant of these represented doubles is negative.
-    const minescript_miner::Orientation orientation =
-        minescript_miner::orient2d(a, b, c);
-    if (orientation != minescript_miner::Orientation::Clockwise) {
+    const minecraft_miner::Orientation orientation =
+        minecraft_miner::orient2d(a, b, c);
+    if (orientation != minecraft_miner::Orientation::Clockwise) {
         std::cerr
             << "orient2d orientation="
             << static_cast<int>(orientation)
@@ -100,8 +100,8 @@ bool near_plane_regression() {
         from_sixteenths(48),
     };
 
-    minescript_miner::ProjectedFace projection{};
-    const bool projected = minescript_miner::project_world_face(
+    minecraft_miner::ProjectedFace projection{};
+    const bool projected = minecraft_miner::project_world_face(
         crossing_face,
         eye,
         basis,
@@ -120,7 +120,7 @@ bool near_plane_regression() {
     }
     for (std::uint8_t i = 0; i < projection.count; ++i) {
         if (projection.points[i].depth <
-                minescript_miner::PROJECTION_NEAR_DEPTH ||
+                minecraft_miner::PROJECTION_NEAR_DEPTH ||
             !std::isfinite(projection.points[i].point.x) ||
             !std::isfinite(projection.points[i].point.y)) {
             std::cerr << "invalid projected near-plane point\n";
@@ -144,7 +144,7 @@ bool near_plane_regression() {
         from_sixteenths(16),
     };
     const Vec3 diagonal_eye{-0.5, 0.5, -0.5};
-    if (!minescript_miner::project_world_face(
+    if (!minecraft_miner::project_world_face(
             one_corner_behind,
             diagonal_eye,
             diagonal_basis,
@@ -168,10 +168,10 @@ bool reach_regression() {
 
     Vec3 look_direction{1.0, 0.0, 4.75};
     look_direction = look_direction * (
-        1.0 / std::sqrt(minescript_miner::length_squared(look_direction))
+        1.0 / std::sqrt(minecraft_miner::length_squared(look_direction))
     );
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(
+        minecraft_miner::solve_visible_target(
             geometry,
             {},
             look_direction,
@@ -196,7 +196,7 @@ bool thin_sliver_regression() {
     geometry.target_faces.push_back({0, 0.0});
 
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(
+        minecraft_miner::solve_visible_target(
             geometry,
             {},
             {0.0, 0.0, 1.0}
@@ -232,10 +232,10 @@ bool target_corner_regression() {
 
     Vec3 look_direction{-1.0, -1.0, 4.0};
     look_direction = look_direction * (
-        1.0 / std::sqrt(minescript_miner::length_squared(look_direction))
+        1.0 / std::sqrt(minecraft_miner::length_squared(look_direction))
     );
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(
+        minecraft_miner::solve_visible_target(
             geometry,
             {},
             look_direction
@@ -281,7 +281,7 @@ bool float_camera_edge_clearance_regression() {
         -0.7658945277075765,
     };
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(
+        minecraft_miner::solve_visible_target(
             geometry,
             eye,
             look_direction,
@@ -373,7 +373,7 @@ bool adjacent_full_cube_occlusion_regression() {
     geometry.target_faces.push_back({0, 0.0});
 
     const BranchBoundResult result =
-        minescript_miner::solve_visible_target(
+        minecraft_miner::solve_visible_target(
             geometry,
             eye,
             look_direction,

@@ -2,7 +2,7 @@
 
 #include <array>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 struct Point2 {
     double x = 0.0;
@@ -40,4 +40,4 @@ constexpr std::array<Tri2, 2> rect_to_tris(double min_x, double min_y, double ma
     return {tri2(p0, p1, p2), tri2(p0, p2, p3)};
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

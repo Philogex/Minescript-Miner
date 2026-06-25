@@ -1,1 +1,1 @@
-#include "minescript_miner/geometry/vec.hpp"
+#include "minecraft_miner/geometry/vec.hpp"

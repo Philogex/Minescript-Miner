@@ -1,5 +1,5 @@
-#include "minescript_miner/geometry/constraint_region.hpp"
-#include "minescript_miner/scanner/projection.hpp"
+#include "minecraft_miner/geometry/constraint_region.hpp"
+#include "minecraft_miner/scanner/projection.hpp"
 
 #include <algorithm>
 #include <array>
@@ -13,19 +13,19 @@ constexpr std::int32_t from_sixteenths(std::int32_t value) {
     // 32-unit grid; these regression literals are still written in historical
     // sixteenth-style coordinates and are scaled here to keep the cases stable.
     static_assert(
-        minescript_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
+        minecraft_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
     );
-    return value * (minescript_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
+    return value * (minecraft_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
 }
 
-minescript_miner::WorldRectFace z_face(
+minecraft_miner::WorldRectFace z_face(
     std::int32_t min_x,
     std::int32_t max_x,
     std::int32_t min_y,
     std::int32_t max_y,
     std::int32_t z
 ) {
-    using namespace minescript_miner;
+    using namespace minecraft_miner;
     return {
         PlaneAxis::Z,
         -1,
@@ -37,10 +37,10 @@ minescript_miner::WorldRectFace z_face(
     };
 }
 
-minescript_miner::HalfPlaneId footprint_on_line(
-    const minescript_miner::ExactGeometryStore &geometry,
-    const minescript_miner::ExactProjectedFace &face,
-    minescript_miner::LineId line
+minecraft_miner::HalfPlaneId footprint_on_line(
+    const minecraft_miner::ExactGeometryStore &geometry,
+    const minecraft_miner::ExactProjectedFace &face,
+    minecraft_miner::LineId line
 ) {
     for (std::uint8_t i = 0; i < face.count; ++i) {
         if (geometry.half_plane(face.footprint[i]).line == line) {
@@ -53,7 +53,7 @@ minescript_miner::HalfPlaneId footprint_on_line(
 }  // namespace
 
 int main() {
-    using namespace minescript_miner;
+    using namespace minecraft_miner;
 
     const ExactRational half{1, 2};
     const ExactRational quarter{1, 4};

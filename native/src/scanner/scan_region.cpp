@@ -1,6 +1,6 @@
-#include "minescript_miner/scanner/scan_region.hpp"
+#include "minecraft_miner/scanner/scan_region.hpp"
 
-#include "minescript_miner/aim/angle.hpp"
+#include "minecraft_miner/aim/angle.hpp"
 
 #include <algorithm>
 #include <array>
@@ -8,7 +8,7 @@
 #include <cmath>
 #include <limits>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 static_assert(index_to_offset(0, 3).x == 0);
 static_assert(index_to_offset(0, 3).y == 0);
@@ -394,4 +394,4 @@ ScanRegionGeometry build_scan_region_geometry(
     return geometry;
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

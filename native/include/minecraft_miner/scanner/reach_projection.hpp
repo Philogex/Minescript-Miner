@@ -1,12 +1,12 @@
 #pragma once
 
-#include "minescript_miner/scanner/view_projection.hpp"
+#include "minecraft_miner/scanner/view_projection.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 inline constexpr std::size_t MAX_REACH_FACE_VERTICES = 16;
 inline constexpr std::size_t MAX_REACH_FACE_PIECES =
@@ -42,4 +42,4 @@ bool project_reachable_world_face(
     ProjectedFacePieces &out
 );
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

@@ -1,4 +1,4 @@
-#include "minescript_miner/scanner/branch_bound.hpp"
+#include "minecraft_miner/scanner/branch_bound.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -11,19 +11,19 @@ constexpr std::int32_t from_sixteenths(std::int32_t value) {
     // 32-unit grid; these regression literals are still written in historical
     // sixteenth-style coordinates and are scaled here to keep the cases stable.
     static_assert(
-        minescript_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
+        minecraft_miner::GEOMETRY_UNITS_PER_BLOCK % 16 == 0
     );
-    return value * (minescript_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
+    return value * (minecraft_miner::GEOMETRY_UNITS_PER_BLOCK / 16);
 }
 
-minescript_miner::WorldRectFace z_face(
+minecraft_miner::WorldRectFace z_face(
     std::int32_t min_x,
     std::int32_t min_y,
     std::int32_t max_x,
     std::int32_t max_y,
     std::int32_t z
 ) {
-    using namespace minescript_miner;
+    using namespace minecraft_miner;
     const WorldRectFace face{
         PlaneAxis::Z,
         -1,
@@ -36,10 +36,10 @@ minescript_miner::WorldRectFace z_face(
     return face;
 }
 
-minescript_miner::ScanRegionGeometry target_with_occluder(
+minecraft_miner::ScanRegionGeometry target_with_occluder(
     bool full_occluder
 ) {
-    minescript_miner::ScanRegionGeometry geometry{};
+    minecraft_miner::ScanRegionGeometry geometry{};
     geometry.world_faces.push_back(
         z_face(-16, -16, 16, 16, 64)
     );
@@ -54,7 +54,7 @@ minescript_miner::ScanRegionGeometry target_with_occluder(
 }  // namespace
 
 int main() {
-    using namespace minescript_miner;
+    using namespace minecraft_miner;
 
     ScanRegionGeometry free_geometry{};
     free_geometry.world_faces.push_back(

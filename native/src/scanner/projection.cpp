@@ -1,11 +1,11 @@
-#include "minescript_miner/scanner/projection.hpp"
+#include "minecraft_miner/scanner/projection.hpp"
 
 #include <algorithm>
 #include <array>
 #include <stdexcept>
 #include <utility>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 namespace {
 
@@ -462,4 +462,4 @@ bool ExactProjector::project_view_polygon(
     return true;
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

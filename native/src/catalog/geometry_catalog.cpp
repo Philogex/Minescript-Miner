@@ -1,12 +1,12 @@
-#include "minescript_miner/catalog/geometry_catalog.hpp"
+#include "minecraft_miner/catalog/geometry_catalog.hpp"
 
-#include "minescript_miner/catalog/geometry_catalog_data.hpp"
+#include "minecraft_miner/catalog/geometry_catalog_data.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 namespace {
 

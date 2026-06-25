@@ -1,7 +1,7 @@
 #pragma once
 
-#include "minescript_miner/geometry/geometry_store.hpp"
-#include "minescript_miner/geometry/tri2.hpp"
+#include "minecraft_miner/geometry/geometry_store.hpp"
+#include "minecraft_miner/geometry/tri2.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -10,7 +10,7 @@
 #include <optional>
 #include <vector>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 using RegionId = GeometryId<struct RegionIdTag>;
 
@@ -171,4 +171,4 @@ private:
     std::map<std::vector<RegionConstraint>, RegionId> region_ids_;
 };
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

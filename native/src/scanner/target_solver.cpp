@@ -1,12 +1,12 @@
-#include "minescript_miner/scanner/target_solver.hpp"
+#include "minecraft_miner/scanner/target_solver.hpp"
 
-#include "minescript_miner/geometry/clipping.hpp"
+#include "minecraft_miner/geometry/clipping.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 namespace {
 
@@ -166,4 +166,4 @@ TriangleAngleResult minimum_angle_to_triangle(
     };
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

@@ -1,11 +1,11 @@
 #pragma once
 
-#include "minescript_miner/scanner/scan_region.hpp"
-#include "minescript_miner/scanner/target_solver.hpp"
+#include "minecraft_miner/scanner/scan_region.hpp"
+#include "minecraft_miner/scanner/target_solver.hpp"
 
 #include <cstdint>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 BranchBoundResult solve_visible_target_face(
     const ScanRegionGeometry &geometry,
@@ -25,4 +25,4 @@ BranchBoundResult solve_visible_target(
     BranchBoundOptions options = {}
 );
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

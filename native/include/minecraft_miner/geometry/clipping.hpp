@@ -1,10 +1,10 @@
 #pragma once
 
-#include "minescript_miner/geometry/tri2.hpp"
+#include "minecraft_miner/geometry/tri2.hpp"
 
 #include <cstdint>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 enum class Orientation : std::int8_t {
     Clockwise = -1,
@@ -21,4 +21,4 @@ constexpr double orient2d_determinant(Point2 a, Point2 b, Point2 point) {
 
 Orientation orient2d(Point2 a, Point2 b, Point2 point);
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

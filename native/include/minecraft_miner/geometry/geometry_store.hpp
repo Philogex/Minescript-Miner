@@ -1,6 +1,6 @@
 #pragma once
 
-#include "minescript_miner/geometry/geometry.hpp"
+#include "minecraft_miner/geometry/geometry.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 template <typename Tag>
 struct GeometryId {
@@ -90,4 +90,4 @@ private:
     std::map<std::pair<VertexId, HalfPlaneId>, ExactSign> classifications_;
 };
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

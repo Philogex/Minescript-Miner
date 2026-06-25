@@ -1,10 +1,10 @@
-#include "minescript_miner/aim/angle.hpp"
+#include "minecraft_miner/aim/angle.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 namespace {
 
@@ -65,4 +65,4 @@ double angle_to_tri_corners(
     });
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

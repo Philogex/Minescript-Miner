@@ -1,9 +1,9 @@
 #include "gcd_benchmark_support.hpp"
 
-#include "minescript_miner/aim/angle.hpp"
-#include "minescript_miner/scanner/branch_bound.hpp"
-#include "minescript_miner/catalog/geometry_catalog.hpp"
-#include "minescript_miner/scanner/scan_region.hpp"
+#include "minecraft_miner/aim/angle.hpp"
+#include "minecraft_miner/scanner/branch_bound.hpp"
+#include "minecraft_miner/catalog/geometry_catalog.hpp"
+#include "minecraft_miner/scanner/scan_region.hpp"
 #include "scan_fixture.hpp"
 
 #include <boost/integer/common_factor_rt.hpp>
@@ -24,9 +24,9 @@
 namespace {
 
 using Clock = std::chrono::steady_clock;
-using GcdFunction = minescript_miner::ExactInt (*)(
-    minescript_miner::ExactInt,
-    minescript_miner::ExactInt
+using GcdFunction = minecraft_miner::ExactInt (*)(
+    minecraft_miner::ExactInt,
+    minecraft_miner::ExactInt
 );
 
 struct ScanInput {
@@ -39,8 +39,8 @@ struct TimingResult {
     std::uint64_t checksum = 0;
 };
 
-ScanInput make_scan_input(const minescript_miner::test::ScanFixture &fixture) {
-    using namespace minescript_miner;
+ScanInput make_scan_input(const minecraft_miner::test::ScanFixture &fixture) {
+    using namespace minecraft_miner;
 
     if (fixture.fixture_version != 1) {
         throw std::runtime_error("unsupported fixture version");
@@ -94,26 +94,26 @@ std::size_t parse_positive_size(const char *value, const char *name) {
     return static_cast<std::size_t>(result);
 }
 
-minescript_miner::ExactInt boost_integer_gcd(
-    minescript_miner::ExactInt lhs,
-    minescript_miner::ExactInt rhs
+minecraft_miner::ExactInt boost_integer_gcd(
+    minecraft_miner::ExactInt lhs,
+    minecraft_miner::ExactInt rhs
 ) {
     return boost::integer::gcd(std::move(lhs), std::move(rhs));
 }
 
-std::uint64_t result_fragment(const minescript_miner::ExactInt &value) {
-    static const minescript_miner::ExactInt mask =
-        (minescript_miner::ExactInt{1} << 64U) - 1;
+std::uint64_t result_fragment(const minecraft_miner::ExactInt &value) {
+    static const minecraft_miner::ExactInt mask =
+        (minecraft_miner::ExactInt{1} << 64U) - 1;
     return (value & mask).convert_to<std::uint64_t>();
 }
 
 std::uint64_t run_once(
-    const std::vector<minescript_miner::gcd_benchmark::OperandPair> &samples,
+    const std::vector<minecraft_miner::gcd_benchmark::OperandPair> &samples,
     GcdFunction function
 ) {
     std::uint64_t checksum = 0;
     for (const auto &sample : samples) {
-        const minescript_miner::ExactInt result =
+        const minecraft_miner::ExactInt result =
             function(sample.lhs, sample.rhs);
         checksum ^= result_fragment(result) +
                     0x9e3779b97f4a7c15ULL +
@@ -124,7 +124,7 @@ std::uint64_t run_once(
 }
 
 TimingResult benchmark(
-    const std::vector<minescript_miner::gcd_benchmark::OperandPair> &samples,
+    const std::vector<minecraft_miner::gcd_benchmark::OperandPair> &samples,
     GcdFunction function,
     std::size_t rounds
 ) {
@@ -143,24 +143,24 @@ TimingResult benchmark(
     return {durations[durations.size() / 2], checksum};
 }
 
-std::size_t bit_length(const minescript_miner::ExactInt &value) {
+std::size_t bit_length(const minecraft_miner::ExactInt &value) {
     if (value == 0) {
         return 0;
     }
-    const minescript_miner::ExactInt magnitude =
+    const minecraft_miner::ExactInt magnitude =
         value < 0 ? -value : value;
     return boost::multiprecision::msb(magnitude) + 1;
 }
 
 void print_operand_statistics(
-    const std::vector<minescript_miner::gcd_benchmark::OperandPair> &samples
+    const std::vector<minecraft_miner::gcd_benchmark::OperandPair> &samples
 ) {
     std::size_t minimum = std::numeric_limits<std::size_t>::max();
     std::size_t maximum = 0;
     long double total = 0.0;
     std::uint64_t zero_operands = 0;
     for (const auto &sample : samples) {
-        for (const minescript_miner::ExactInt *value :
+        for (const minecraft_miner::ExactInt *value :
              {&sample.lhs, &sample.rhs}) {
             const std::size_t bits = bit_length(*value);
             minimum = std::min(minimum, bits);
@@ -187,7 +187,7 @@ void print_operand_statistics(
 }  // namespace
 
 int main(int argc, char **argv) {
-    using namespace minescript_miner;
+    using namespace minecraft_miner;
 
     if (argc < 2 || argc > 4) {
         std::cerr

@@ -1,6 +1,6 @@
 #pragma once
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 struct Vec3 {
     double x = 0.0;

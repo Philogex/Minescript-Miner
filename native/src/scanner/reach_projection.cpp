@@ -1,4 +1,4 @@
-#include "minescript_miner/scanner/reach_projection.hpp"
+#include "minecraft_miner/scanner/reach_projection.hpp"
 
 #include <algorithm>
 #include <array>
@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 namespace {
 
@@ -457,4 +457,4 @@ bool project_reachable_world_face(
     return out.count > 0;
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

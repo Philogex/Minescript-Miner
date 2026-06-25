@@ -1,10 +1,10 @@
-#include "minescript_miner/geometry/clipping.hpp"
+#include "minecraft_miner/geometry/clipping.hpp"
 
 #include <array>
 #include <cmath>
 #include <limits>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 static_assert(
     std::numeric_limits<double>::is_iec559,
@@ -181,4 +181,4 @@ Orientation orient2d(Point2 a, Point2 b, Point2 point) {
     return orientation_from_value(robust_orientation_value(a, b, point));
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

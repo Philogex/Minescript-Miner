@@ -1,9 +1,9 @@
-#include "minescript_miner/geometry/geometry_store.hpp"
+#include "minecraft_miner/geometry/geometry_store.hpp"
 
 #include <algorithm>
 #include <stdexcept>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 namespace {
 
@@ -239,4 +239,4 @@ std::size_t ExactGeometryStore::classification_cache_size() const {
     return classifications_.size();
 }
 
-}  // namespace minescript_miner
+}  // namespace minecraft_miner

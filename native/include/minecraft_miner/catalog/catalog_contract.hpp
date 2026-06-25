@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 inline constexpr int SHAPE_CATALOG_VERSION = 3;
 inline constexpr int GEOMETRY_CATALOG_VERSION = 3;

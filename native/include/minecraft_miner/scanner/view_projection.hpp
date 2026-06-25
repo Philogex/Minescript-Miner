@@ -1,13 +1,13 @@
 #pragma once
 
-#include "minescript_miner/geometry/tri2.hpp"
-#include "minescript_miner/scanner/scan_region.hpp"
+#include "minecraft_miner/geometry/tri2.hpp"
+#include "minecraft_miner/scanner/scan_region.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 // Positive view-space depth prevents singular perspective projections.
 inline constexpr double PROJECTION_NEAR_DEPTH = 1.0e-6;

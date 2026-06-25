@@ -1,8 +1,8 @@
 #pragma once
 
-#include "minescript_miner/geometry/vec.hpp"
+#include "minecraft_miner/geometry/vec.hpp"
 
-namespace minescript_miner {
+namespace minecraft_miner {
 
 struct YawPitch {
     double yaw = 0.0;

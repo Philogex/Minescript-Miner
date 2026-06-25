@@ -1,7 +1,7 @@
-#include "minescript_miner/aim/angle.hpp"
-#include "minescript_miner/scanner/branch_bound.hpp"
-#include "minescript_miner/catalog/geometry_catalog.hpp"
-#include "minescript_miner/scanner/scan_region.hpp"
+#include "minecraft_miner/aim/angle.hpp"
+#include "minecraft_miner/scanner/branch_bound.hpp"
+#include "minecraft_miner/catalog/geometry_catalog.hpp"
+#include "minecraft_miner/scanner/scan_region.hpp"
 #include "scan_fixture.hpp"
 
 #include <cmath>
@@ -31,8 +31,8 @@ struct ProfileOptions {
     std::uint64_t random_seed = 0x4d595df4d0f33173ULL;
 };
 
-ScanInput make_scan_input(const minescript_miner::test::ScanFixture &fixture) {
-    using namespace minescript_miner;
+ScanInput make_scan_input(const minecraft_miner::test::ScanFixture &fixture) {
+    using namespace minecraft_miner;
 
     if (fixture.fixture_version != 1) {
         throw std::runtime_error("unsupported fixture version");
@@ -119,7 +119,7 @@ ProfileOptions parse_options(int argc, char **argv) {
     return options;
 }
 
-minescript_miner::Vec3 random_unit_direction(std::mt19937_64 &rng) {
+minecraft_miner::Vec3 random_unit_direction(std::mt19937_64 &rng) {
     constexpr double pi = 3.141592653589793238462643383279502884;
     std::uniform_real_distribution<double> unit(0.0, 1.0);
     const double z = 2.0 * unit(rng) - 1.0;
@@ -129,9 +129,9 @@ minescript_miner::Vec3 random_unit_direction(std::mt19937_64 &rng) {
 }
 
 void validate_result(
-    const minescript_miner::test::ScanFixture &fixture,
-    const minescript_miner::ScanRegionGeometry &geometry,
-    const minescript_miner::BranchBoundResult &result,
+    const minecraft_miner::test::ScanFixture &fixture,
+    const minecraft_miner::ScanRegionGeometry &geometry,
+    const minecraft_miner::BranchBoundResult &result,
     bool random_look
 ) {
     if (fixture.has_expect_world_faces &&
@@ -161,7 +161,7 @@ void validate_result(
 }  // namespace
 
 int main(int argc, char **argv) {
-    using namespace minescript_miner;
+    using namespace minecraft_miner;
 
     if (argc < 2) {
         std::cerr << "usage: " << argv[0] << " FIXTURE [ITERATIONS] [--random-look[=SEED]]\n";

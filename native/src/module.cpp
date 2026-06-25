@@ -1,10 +1,10 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-#include "minescript_miner/aim/angle.hpp"
-#include "minescript_miner/scanner/branch_bound.hpp"
-#include "minescript_miner/catalog/geometry_catalog.hpp"
-#include "minescript_miner/scanner/scan_region.hpp"
+#include "minecraft_miner/aim/angle.hpp"
+#include "minecraft_miner/scanner/branch_bound.hpp"
+#include "minecraft_miner/catalog/geometry_catalog.hpp"
+#include "minecraft_miner/scanner/scan_region.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -43,7 +43,7 @@ static PyObject *geometry_catalog_debug(PyObject *, PyObject *) {
         return nullptr;
     }
 
-    const minescript_miner::GeometryCatalog &catalog = minescript_miner::geometry_catalog();
+    const minecraft_miner::GeometryCatalog &catalog = minecraft_miner::geometry_catalog();
     for (std::size_t i = 0; i < catalog.shapes.size(); ++i) {
         PyObject *python_name = PyUnicode_FromString(catalog.shape_names[i]);
         if (python_name == nullptr) {
@@ -61,8 +61,8 @@ static PyObject *geometry_catalog_debug(PyObject *, PyObject *) {
         }
         Py_DECREF(python_name);
 
-        const minescript_miner::ShapeGeometry &geometry = catalog.shapes[i];
-        PyObject *box_count = PyLong_FromLong(minescript_miner::shape_box_count(static_cast<std::int32_t>(i)));
+        const minecraft_miner::ShapeGeometry &geometry = catalog.shapes[i];
+        PyObject *box_count = PyLong_FromLong(minecraft_miner::shape_box_count(static_cast<std::int32_t>(i)));
         if (box_count == nullptr) {
             Py_DECREF(face_counts);
             Py_DECREF(box_counts);
@@ -98,13 +98,13 @@ static PyObject *geometry_catalog_debug(PyObject *, PyObject *) {
     PyObject *debug = Py_BuildValue(
         "{s:i,s:i,s:i,s:i,s:N,s:N,s:N}",
         "version",
-        minescript_miner::GEOMETRY_CATALOG_VERSION,
+        minecraft_miner::GEOMETRY_CATALOG_VERSION,
         "geometry_catalog_version",
-        minescript_miner::GEOMETRY_CATALOG_VERSION,
+        minecraft_miner::GEOMETRY_CATALOG_VERSION,
         "shape_catalog_version",
-        minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION,
+        minecraft_miner::GEOMETRY_SHAPE_CATALOG_VERSION,
         "shape_count",
-        minescript_miner::geometry_catalog_shape_count(),
+        minecraft_miner::geometry_catalog_shape_count(),
         "shape_names",
         shape_names,
         "box_counts",
@@ -212,7 +212,7 @@ static bool parse_uint16_values(
 
 struct UInt16Input {
     std::vector<std::uint16_t> storage{};
-    minescript_miner::UInt16View view{};
+    minecraft_miner::UInt16View view{};
 };
 
 static bool parse_uint16_input(
@@ -231,7 +231,7 @@ static bool parse_uint16_input(
         if (byte_count > 0) {
             std::memcpy(out.storage.data(), bytes, static_cast<std::size_t>(byte_count));
         }
-        out.view = minescript_miner::UInt16View{out.storage};
+        out.view = minecraft_miner::UInt16View{out.storage};
         return true;
     }
 
@@ -247,7 +247,7 @@ static bool parse_uint16_input(
     if (!parse_uint16_values(ids, out.storage, name)) {
         return false;
     }
-    out.view = minescript_miner::UInt16View{out.storage};
+    out.view = minecraft_miner::UInt16View{out.storage};
     return true;
 }
 
@@ -272,10 +272,10 @@ static void log_scan_input(
     const double (&position)[3],
     const double (&orientation)[2],
     int shape_catalog_version,
-    minescript_miner::UInt16View shape_ids,
-    minescript_miner::UInt16View target_indices,
-    const minescript_miner::ScanRegionGeometry &scan_geometry,
-    const minescript_miner::BranchBoundResult &solve_result,
+    minecraft_miner::UInt16View shape_ids,
+    minecraft_miner::UInt16View target_indices,
+    const minecraft_miner::ScanRegionGeometry &scan_geometry,
+    const minecraft_miner::BranchBoundResult &solve_result,
     int side,
     double geometry_ms,
     double solve_ms,
@@ -292,7 +292,7 @@ static void log_scan_input(
 
     std::size_t non_air_count = 0;
     for (const std::uint16_t shape_id : shape_ids) {
-        if (!minescript_miner::is_empty_shape(shape_id)) {
+        if (!minecraft_miner::is_empty_shape(shape_id)) {
             ++non_air_count;
         }
     }
@@ -305,14 +305,14 @@ static void log_scan_input(
     log << "  orientation_yaw_pitch: "
         << std::fixed << std::setprecision(3)
         << orientation[0] << ", " << orientation[1] << "\n";
-    const minescript_miner::Vec3 look_dir =
-        minescript_miner::look_direction_from_yaw_pitch(orientation[0], orientation[1]);
+    const minecraft_miner::Vec3 look_dir =
+        minecraft_miner::look_direction_from_yaw_pitch(orientation[0], orientation[1]);
     log << "  orientation_look_xyz_from_degrees: "
         << std::fixed << std::setprecision(6)
         << look_dir.x << ", " << look_dir.y << ", " << look_dir.z << "\n";
     log << "  shape_catalog_version: " << shape_catalog_version << "\n";
-    log << "  native_shape_catalog_version: " << minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION << "\n";
-    log << "  native_geometry_catalog_version: " << minescript_miner::GEOMETRY_CATALOG_VERSION << "\n";
+    log << "  native_shape_catalog_version: " << minecraft_miner::GEOMETRY_SHAPE_CATALOG_VERSION << "\n";
+    log << "  native_geometry_catalog_version: " << minecraft_miner::GEOMETRY_CATALOG_VERSION << "\n";
     log << "  block_count: " << shape_ids.size << "\n";
     log << "  target_block_count: " << target_indices.size << "\n";
     log << "  world_face_count: " << scan_geometry.world_faces.size() << "\n";
@@ -325,34 +325,34 @@ static void log_scan_input(
     log << "  solver_target_world_face_index: " << solve_result.target_world_face_index << "\n";
     if (solve_result.found &&
         solve_result.target_world_face_index < scan_geometry.world_faces.size()) {
-        const minescript_miner::WorldRectFace &target_face =
+        const minecraft_miner::WorldRectFace &target_face =
             scan_geometry.world_faces[solve_result.target_world_face_index];
-        const minescript_miner::Vec3 target_face_center =
-            minescript_miner::world_face_center(
+        const minecraft_miner::Vec3 target_face_center =
+            minecraft_miner::world_face_center(
                 scan_geometry,
                 solve_result.target_world_face_index
             );
-        const minescript_miner::Vec3 target_point{
+        const minecraft_miner::Vec3 target_point{
             position[0] + solve_result.direction.x * solve_result.distance,
             position[1] + solve_result.direction.y * solve_result.distance,
             position[2] + solve_result.direction.z * solve_result.distance,
         };
-        const minescript_miner::Vec3 normal =
-            minescript_miner::face_normal(target_face);
-        const minescript_miner::Vec3 owning_block_point =
+        const minecraft_miner::Vec3 normal =
+            minecraft_miner::face_normal(target_face);
+        const minecraft_miner::Vec3 owning_block_point =
             target_face_center - normal * 1.0e-6;
         log << std::setprecision(17);
         log << "  solver_target_face_center: "
             << target_face_center.x << ", "
             << target_face_center.y << ", "
             << target_face_center.z << "\n";
-        const minescript_miner::Vec3 target_face_p0 =
-            minescript_miner::world_point_to_vec3(
-                minescript_miner::face_p0(target_face)
+        const minecraft_miner::Vec3 target_face_p0 =
+            minecraft_miner::world_point_to_vec3(
+                minecraft_miner::face_p0(target_face)
             );
-        const minescript_miner::Vec3 target_face_p2 =
-            minescript_miner::world_point_to_vec3(
-                minescript_miner::face_p2(target_face)
+        const minecraft_miner::Vec3 target_face_p2 =
+            minecraft_miner::world_point_to_vec3(
+                minecraft_miner::face_p2(target_face)
             );
         log << "  solver_target_face_p0: "
             << target_face_p0.x << ", "
@@ -415,7 +415,7 @@ static void log_scan_input(
     log << "\n";
     log << "  first_shape_names:";
     for (std::size_t i = 0; i < sample_count; ++i) {
-        log << ' ' << minescript_miner::shape_id_name(shape_ids[i]);
+        log << ' ' << minecraft_miner::shape_id_name(shape_ids[i]);
     }
     if (sample_count < shape_ids.size) {
         log << " ...";
@@ -479,11 +479,11 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         return nullptr;
     }
 
-    if (shape_catalog_version != minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION) {
+    if (shape_catalog_version != minecraft_miner::GEOMETRY_SHAPE_CATALOG_VERSION) {
         PyErr_Format(
             PyExc_ValueError,
             "unsupported shape catalog version: expected %d, got %d",
-            minescript_miner::GEOMETRY_SHAPE_CATALOG_VERSION,
+            minecraft_miner::GEOMETRY_SHAPE_CATALOG_VERSION,
             shape_catalog_version
         );
         return nullptr;
@@ -496,11 +496,11 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     // API note: shape IDs and target block indices currently share the compact
     // uint16 payload format. Raising this limit should keep shape IDs as
     // uint16_t and introduce a wider target-index payload.
-    if (side > minescript_miner::MAX_CUBE_SIDE) {
+    if (side > minecraft_miner::MAX_CUBE_SIDE) {
         PyErr_Format(
             PyExc_ValueError,
             "side must be <= %d, got %d",
-            minescript_miner::MAX_CUBE_SIDE,
+            minecraft_miner::MAX_CUBE_SIDE,
             side
         );
         return nullptr;
@@ -543,12 +543,12 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         return nullptr;
     }
     for (const std::uint16_t shape_id : shape_ids.view) {
-        if (static_cast<std::size_t>(shape_id) >= minescript_miner::GEOMETRY_SHAPE_COUNT) {
+        if (static_cast<std::size_t>(shape_id) >= minecraft_miner::GEOMETRY_SHAPE_COUNT) {
             PyErr_Format(
                 PyExc_ValueError,
                 "shape_ids values must be valid shape ids "
                 "(expected < %zu, got %u)",
-                minescript_miner::GEOMETRY_SHAPE_COUNT,
+                minecraft_miner::GEOMETRY_SHAPE_COUNT,
                 static_cast<unsigned>(shape_id)
             );
             return nullptr;
@@ -567,17 +567,17 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         }
     }
 
-    const minescript_miner::Vec3 eye{position[0], position[1], position[2]};
-    const minescript_miner::Vec3 look_dir =
-        minescript_miner::look_direction_from_yaw_pitch(orientation[0], orientation[1]);
+    const minecraft_miner::Vec3 eye{position[0], position[1], position[2]};
+    const minecraft_miner::Vec3 look_dir =
+        minecraft_miner::look_direction_from_yaw_pitch(orientation[0], orientation[1]);
     const std::string native_log_path = configured_log_path();
     const bool log_native_scan = !native_log_path.empty();
     std::chrono::steady_clock::time_point geometry_start;
     if (log_native_scan) {
         geometry_start = std::chrono::steady_clock::now();
     }
-    const minescript_miner::ScanRegionGeometry scan_geometry =
-        minescript_miner::build_scan_region_geometry(
+    const minecraft_miner::ScanRegionGeometry scan_geometry =
+        minecraft_miner::build_scan_region_geometry(
             shape_ids.view,
             target_indices.view,
             eye,
@@ -590,8 +590,8 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         geometry_end = std::chrono::steady_clock::now();
     }
 
-    const minescript_miner::BranchBoundResult solve_result =
-        minescript_miner::solve_visible_target(
+    const minecraft_miner::BranchBoundResult solve_result =
+        minecraft_miner::solve_visible_target(
             scan_geometry,
             eye,
             look_dir,
@@ -605,8 +605,8 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     double returned_yaw = orientation[0];
     double returned_pitch = orientation[1];
     if (solve_result.found) {
-        const minescript_miner::YawPitch target_orientation =
-            minescript_miner::yaw_pitch_from_direction(solve_result.direction);
+        const minecraft_miner::YawPitch target_orientation =
+            minecraft_miner::yaw_pitch_from_direction(solve_result.direction);
         returned_yaw = target_orientation.yaw;
         returned_pitch = target_orientation.pitch;
     }

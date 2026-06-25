@@ -12,9 +12,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import AbstractSet, FrozenSet, List, Optional, Tuple, Union
 
+import minescript as m
+
 from minescript_miner.adapter.native_bridge import Orientation, ScanPosition, acquire_target
 from minescript_miner.adapter.shape_catalog import BlockShapeCatalog, DEFAULT_CATALOG
-from minescript_miner.minescript.world import AreaTimings, fixed_cube_bounds, get_area
+from minescript_miner.minescript.runtime import query
+from minescript_miner.minescript.world import (
+    AreaTimings,
+    BlockPos,
+    fixed_cube_bounds,
+    get_area,
+    read_block_region as world_read_block_region,
+)
 
 
 DEFAULT_TARGET_CONFIG = Path("targets.txt")
@@ -33,6 +42,14 @@ class ScanTimings:
 
 def elapsed_ms(start_ns: int) -> float:
     return (time.perf_counter_ns() - start_ns) / 1_000_000.0
+
+
+def player_position() -> Tuple[float, float, float]:
+    return query(m.player_position)
+
+
+def read_block_region(pos1: BlockPos, pos2: BlockPos):
+    return world_read_block_region(pos1, pos2)
 
 
 def load_target_blocks(path: Union[str, Path] = DEFAULT_TARGET_CONFIG) -> FrozenSet[str]:

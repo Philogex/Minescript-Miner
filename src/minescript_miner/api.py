@@ -19,3 +19,15 @@ def acquire_target(position, orientation, shape_catalog_version, side, reach, sh
         shape_ids,
         target_indices,
     )
+
+
+def get_angle_to_block(block_pos):
+    from minescript_miner.queries import get_angle_to_block as query_angle
+
+    return query_angle(block_pos)
+
+
+def can_see_block(source, block_pos):
+    from minescript_miner.queries import can_see_block as query_visibility
+
+    return query_visibility(source, block_pos)

@@ -22,6 +22,13 @@ class TargetMetrics:
     distance: float
 
 
+@dataclass(frozen=True)
+class AimPoint:
+    yaw: float
+    pitch: float
+    t_ms: float
+
+
 def _uint16_payload(values: Sequence[int]):
     if isinstance(values, array):
         if values.typecode != "H":
@@ -92,4 +99,47 @@ def acquire_target_metrics(
         float(width_yaw),
         float(width_pitch),
         float(distance),
+    )
+
+
+def _target_metrics_payload(metrics: TargetMetrics):
+    return (
+        metrics.yaw,
+        metrics.pitch,
+        metrics.width_yaw,
+        metrics.width_pitch,
+        metrics.distance,
+    )
+
+
+def generate_minimum_jerk_aim_path(
+    start_orientation: Orientation,
+    target_metrics: TargetMetrics,
+    angular_step_deg: float,
+    fitts_a_ms: float,
+    fitts_b_ms: float,
+    min_duration_ms: float,
+    max_duration_ms: float,
+    sample_hz: int,
+) -> Tuple[AimPoint, ...]:
+    """Return a native-generated minimum-jerk aim path.
+
+    The current native implementation is intentionally a placeholder with the
+    final API shape; it returns valid path samples but not the final motion
+    model yet.
+    """
+
+    result = native.generate_minimum_jerk_aim_path(
+        start_orientation,
+        _target_metrics_payload(target_metrics),
+        float(angular_step_deg),
+        float(fitts_a_ms),
+        float(fitts_b_ms),
+        float(min_duration_ms),
+        float(max_duration_ms),
+        int(sample_hz),
+    )
+    return tuple(
+        AimPoint(float(yaw), float(pitch), float(t_ms))
+        for yaw, pitch, t_ms in result
     )

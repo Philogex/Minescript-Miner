@@ -18,11 +18,16 @@ for path in (PROJECT_DIR, SRC_DIR):
     if path_string not in sys.path:
         sys.path.insert(0, path_string)
 
-from minescript_miner.aim import smooth_rotate_to
-from minescript_miner.minescript.io import (
-    acquire_current_target,
+from minescript_miner.adapter.target_pipeline import (
     block_id_literal,
     load_target_blocks,
+)
+from minescript_miner.minescript.io import (
+    player_orientation,
+    set_orientation,
+)
+from minescript_miner.minescript.scanner import (
+    acquire_current_target,
 )
 from minescript_miner.minescript.runtime import query
 
@@ -37,6 +42,34 @@ LOG_SCAN_TIMINGS = os.environ.get(
 ).lower() in {"1", "true", "yes"}
 
 active = threading.Event()
+
+
+def ease_in_out(t: float) -> float:
+    if t < 1.0:
+        return (t * t) / 2.0
+    t -= 1.0
+    return -(t * (t - 2.0) - 1.0) / 2.0
+
+
+def smooth_rotate_to(
+    target_yaw: float,
+    target_pitch: float,
+    duration: float,
+    step: float = 0.02,
+) -> None:
+    yaw_start, pitch_start = player_orientation()
+    yaw_delta = ((target_yaw - yaw_start + 180.0) % 360.0) - 180.0
+    pitch_delta = target_pitch - pitch_start
+
+    steps = max(1, int(duration / step))
+    for index in range(steps + 1):
+        t = index / steps * 2.0
+        factor = ease_in_out(t)
+        set_orientation(
+            (yaw_start + yaw_delta * factor) % 360.0,
+            pitch_start + pitch_delta * factor,
+        )
+        time.sleep(step)
 
 
 def listen_keys() -> None:

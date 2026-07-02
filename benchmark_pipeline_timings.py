@@ -20,10 +20,10 @@ for path in (PROJECT_DIR, SRC_DIR):
     if path_string not in sys.path:
         sys.path.insert(0, path_string)
 
-from minescript_miner.minescript.io import (
+from minescript_miner.adapter.target_pipeline import load_target_blocks
+from minescript_miner.minescript.scanner import (
     ScanTimings,
     acquire_current_target,
-    load_target_blocks,
 )
 from minescript_miner.minescript.runtime import query
 

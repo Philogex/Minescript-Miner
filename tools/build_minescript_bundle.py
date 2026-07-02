@@ -55,7 +55,7 @@ def build_bundle(wheel: Path, output: Path) -> None:
         bundle = Path(temp_dir) / BUNDLE_NAME
         bundle.mkdir()
 
-        for relative in ("miner.py", "targets.txt", "LICENSE"):
+        for relative in ("miner.py", "targets.txt", "aim_config.txt", "LICENSE"):
             shutil.copy2(PROJECT_ROOT / relative, bundle / relative)
         shutil.copy2(
             PROJECT_ROOT / "third_party/boost/LICENSE_1_0.txt",

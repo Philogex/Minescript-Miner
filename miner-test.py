@@ -12,10 +12,8 @@ for path in (PROJECT_DIR, SRC_DIR):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from minescript_miner.minescript.io import (
-    acquire_current_target,
-    load_target_blocks,
-)
+from minescript_miner.adapter.target_pipeline import load_target_blocks
+from minescript_miner.minescript.scanner import acquire_current_target
 from geometry_catalog_check import assert_geometry_catalog_parity
 
 

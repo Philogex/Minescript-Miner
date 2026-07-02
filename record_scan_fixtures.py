@@ -23,7 +23,7 @@ for path in (PROJECT_DIR, SRC_DIR):
         sys.path.insert(0, path_string)
 
 from minescript_miner.adapter.shape_catalog import DEFAULT_CATALOG, SHAPE_EMPTY
-from minescript_miner.minescript.io import block_id_literal, load_target_blocks
+from minescript_miner.adapter.target_pipeline import block_id_literal, load_target_blocks
 from minescript_miner.minescript.world import get_area
 
 

@@ -14,7 +14,7 @@ sys.modules.setdefault(
 )
 
 import benchmark_pipeline_timings as benchmark
-from minescript_miner.minescript.io import ScanTimings
+from minescript_miner.minescript.scanner import ScanTimings
 
 
 class BenchmarkPipelineTimingsTest(unittest.TestCase):

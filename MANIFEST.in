@@ -1,3 +1,4 @@
 recursive-include native/include *.hpp
+include aim_config.txt
 include tests/native_build_support.py
 recursive-include third_party/boost *.h *.hpp *.md *.txt BOOST_VERSION

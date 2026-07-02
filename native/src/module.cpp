@@ -171,6 +171,34 @@ static bool parse_orientation(PyObject *orientation, double (&out)[2]) {
     return true;
 }
 
+static bool parse_target_metrics(PyObject *metrics, double (&out)[5]) {
+    if (!PySequence_Check(metrics)) {
+        PyErr_SetString(PyExc_TypeError, "target_metrics must be a sequence of 5 floats");
+        return false;
+    }
+
+    const Py_ssize_t size = PySequence_Size(metrics);
+    if (size != 5) {
+        PyErr_SetString(PyExc_ValueError, "target_metrics must contain exactly 5 values");
+        return false;
+    }
+
+    for (Py_ssize_t i = 0; i < 5; ++i) {
+        PyObject *item = PySequence_GetItem(metrics, i);
+        if (item == nullptr) {
+            return false;
+        }
+        out[i] = PyFloat_AsDouble(item);
+        Py_DECREF(item);
+        if (PyErr_Occurred()) {
+            PyErr_SetString(PyExc_TypeError, "target_metrics values must be numbers");
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static bool parse_uint16_values(
     PyObject *ids,
     std::vector<std::uint16_t> &out,
@@ -686,6 +714,116 @@ static PyObject *acquire_target_metrics(PyObject *, PyObject *args) {
     );
 }
 
+static double signed_angle_delta_degrees(double value, double origin) {
+    double delta = value - origin;
+    while (delta <= -180.0) {
+        delta += 360.0;
+    }
+    while (delta > 180.0) {
+        delta -= 360.0;
+    }
+    return delta;
+}
+
+static double clamp_double(double value, double minimum, double maximum) {
+    return std::max(minimum, std::min(maximum, value));
+}
+
+static PyObject *generate_minimum_jerk_aim_path(PyObject *, PyObject *args) {
+    PyObject *start_orientation_object = nullptr;
+    PyObject *target_metrics_object = nullptr;
+    double angular_step_deg = 0.0;
+    double fitts_a_ms = 0.0;
+    double fitts_b_ms = 0.0;
+    double min_duration_ms = 0.0;
+    double max_duration_ms = 0.0;
+    int sample_hz = 0;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "OOdddddi:generate_minimum_jerk_aim_path",
+            &start_orientation_object,
+            &target_metrics_object,
+            &angular_step_deg,
+            &fitts_a_ms,
+            &fitts_b_ms,
+            &min_duration_ms,
+            &max_duration_ms,
+            &sample_hz
+        )) {
+        return nullptr;
+    }
+
+    double start_orientation[2] = {0.0, 0.0};
+    double target_metrics[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+    if (!parse_orientation(start_orientation_object, start_orientation) ||
+        !parse_target_metrics(target_metrics_object, target_metrics)) {
+        return nullptr;
+    }
+    if (!(angular_step_deg > 0.0) || !std::isfinite(angular_step_deg)) {
+        PyErr_SetString(PyExc_ValueError, "angular_step_deg must be a positive finite number");
+        return nullptr;
+    }
+    if (sample_hz <= 0) {
+        PyErr_SetString(PyExc_ValueError, "sample_hz must be a positive integer");
+        return nullptr;
+    }
+
+    const double target_yaw = target_metrics[0];
+    const double target_pitch = target_metrics[1];
+    const double width_yaw = std::max(0.0, target_metrics[2]);
+    const double width_pitch = std::max(0.0, target_metrics[3]);
+    const double yaw_delta =
+        signed_angle_delta_degrees(target_yaw, start_orientation[0]);
+    const double pitch_delta = target_pitch - start_orientation[1];
+    const double amplitude = std::hypot(yaw_delta, pitch_delta);
+    const double target_width =
+        std::max(angular_step_deg, std::min(width_yaw, width_pitch));
+    const double index_of_difficulty =
+        std::log2(amplitude / target_width + 1.0);
+    const double duration_ms = clamp_double(
+        fitts_a_ms + fitts_b_ms * index_of_difficulty,
+        min_duration_ms,
+        max_duration_ms
+    );
+
+    PyObject *path = PyTuple_New(2);
+    if (path == nullptr) {
+        return nullptr;
+    }
+    PyObject *start = Py_BuildValue(
+        "(ddd)",
+        start_orientation[0],
+        start_orientation[1],
+        0.0
+    );
+    PyObject *target = Py_BuildValue(
+        "(ddd)",
+        target_yaw,
+        target_pitch,
+        duration_ms
+    );
+    if (start == nullptr || target == nullptr) {
+        Py_XDECREF(start);
+        Py_XDECREF(target);
+        Py_DECREF(path);
+        return nullptr;
+    }
+    if (PyTuple_SetItem(path, 0, start) < 0) {
+        Py_DECREF(start);
+        Py_DECREF(target);
+        Py_DECREF(path);
+        return nullptr;
+    }
+    start = nullptr;
+    if (PyTuple_SetItem(path, 1, target) < 0) {
+        Py_DECREF(target);
+        Py_DECREF(path);
+        return nullptr;
+    }
+    return path;
+}
+
 
 static PyMethodDef module_methods[] = {
     {"hello", reinterpret_cast<PyCFunction>(hello), METH_NOARGS,
@@ -696,6 +834,8 @@ static PyMethodDef module_methods[] = {
      "Return the nearest visible target orientation as Minecraft yaw and pitch."},
     {"acquire_target_metrics", reinterpret_cast<PyCFunction>(acquire_target_metrics), METH_VARARGS,
      "Return target orientation plus local visible aim width and distance."},
+    {"generate_minimum_jerk_aim_path", reinterpret_cast<PyCFunction>(generate_minimum_jerk_aim_path), METH_VARARGS,
+     "Return a minimum-jerk aim path as yaw, pitch, and milliseconds samples."},
     {nullptr, nullptr, 0, nullptr},
 };
 

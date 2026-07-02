@@ -1,0 +1,19 @@
+# Aim path generator configuration.
+# Format: name: value
+
+aim_model: minimum_jerk
+
+# The live Minecraft sensitivity is read through Minescript's Java bridge.
+# This value is used only if the Minecraft internals differ or Java access fails.
+fallback_angular_step_deg: 0.15
+
+# Fitts-style movement timing.
+fitts_a_ms: 80
+fitts_b_ms: 110
+min_duration_ms: 60
+max_duration_ms: 450
+
+# Path construction.
+sample_hz: 120
+correction_probability: 0.6
+max_corrections: 3

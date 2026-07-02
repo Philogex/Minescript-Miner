@@ -5,6 +5,21 @@ import unittest
 from pathlib import Path
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+src_path = str(PROJECT_ROOT / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+loaded_package = sys.modules.get("minescript_miner")
+if loaded_package is not None:
+    package_path = getattr(loaded_package, "__file__", "")
+    if package_path and not package_path.startswith(src_path):
+        for module_name in list(sys.modules):
+            if module_name == "minescript_miner" or module_name.startswith(
+                "minescript_miner."
+            ):
+                del sys.modules[module_name]
+
 sys.modules.setdefault(
     "minescript",
     types.SimpleNamespace(await_loaded_region=lambda *_args: None),
@@ -12,14 +27,15 @@ sys.modules.setdefault(
 
 from minescript_miner.adapter.catalog_contract import SHAPE_CATALOG_VERSION
 from minescript_miner.adapter.shape_catalog import SHAPE_ID_BY_NAME
-from minescript_miner.minescript import io
+from minescript_miner.adapter import target_pipeline
+from minescript_miner.minescript import scanner
 
 
 class AcquireCurrentTargetTest(unittest.TestCase):
     def test_acquire_current_target_uses_preloaded_target_blocks(self):
-        original_get_area = io.get_area
-        original_acquire_target = io.acquire_target
-        original_load_target_blocks = io.load_target_blocks
+        original_get_area = scanner.get_area
+        original_acquire_target = target_pipeline.acquire_target
+        original_load_target_blocks = scanner.load_target_blocks
 
         def fake_get_area(position, reach, *, await_region=True):
             return [
@@ -28,29 +44,29 @@ class AcquireCurrentTargetTest(unittest.TestCase):
             ]
 
         try:
-            io.get_area = fake_get_area
-            io.acquire_target = lambda *_args: (1.0, 2.0)
-            io.load_target_blocks = lambda *_args: self.fail(
+            scanner.get_area = fake_get_area
+            target_pipeline.acquire_target = lambda *_args: (1.0, 2.0)
+            scanner.load_target_blocks = lambda *_args: self.fail(
                 "target config was read despite preloaded targets"
             )
 
-            result = io.acquire_current_target(
+            result = scanner.acquire_current_target(
                 (0.5, 0.5, 0.5),
                 (90.0, 10.0),
                 reach=0.5,
                 target_blocks=frozenset({"minecraft:stone"}),
             )
         finally:
-            io.get_area = original_get_area
-            io.acquire_target = original_acquire_target
-            io.load_target_blocks = original_load_target_blocks
+            scanner.get_area = original_get_area
+            target_pipeline.acquire_target = original_acquire_target
+            scanner.load_target_blocks = original_load_target_blocks
 
         self.assertEqual((1.0, 2.0), result)
 
     def test_acquire_current_target_encodes_blocks_before_native_bridge(self):
         captured = {}
-        original_get_area = io.get_area
-        original_acquire_target = io.acquire_target
+        original_get_area = scanner.get_area
+        original_acquire_target = target_pipeline.acquire_target
 
         def fake_get_area(position, reach, *, await_region=True):
             block_strings = [
@@ -90,18 +106,18 @@ class AcquireCurrentTargetTest(unittest.TestCase):
                 encoding="utf-8",
             )
             try:
-                io.get_area = fake_get_area
-                io.acquire_target = fake_acquire_target
+                scanner.get_area = fake_get_area
+                target_pipeline.acquire_target = fake_acquire_target
 
-                result = io.acquire_current_target(
+                result = scanner.acquire_current_target(
                     (0.5, 0.5, 0.5),
                     (90.0, 10.0),
                     reach=0.5,
                     target_config=target_config,
                 )
             finally:
-                io.get_area = original_get_area
-                io.acquire_target = original_acquire_target
+                scanner.get_area = original_get_area
+                target_pipeline.acquire_target = original_acquire_target
 
         self.assertEqual((0.25, -0.5), result)
         self.assertEqual((0.5, 0.5, 0.5), captured["position"])
@@ -117,7 +133,7 @@ class AcquireCurrentTargetTest(unittest.TestCase):
         self.assertEqual([1, 2], captured["target_indices"])
 
     def test_acquire_current_target_rejects_large_cube_before_uint16_targets(self):
-        original_get_area = io.get_area
+        original_get_area = scanner.get_area
         block_count = 41 * 41 * 41
 
         def fake_get_area(position, reach, *, await_region=True):
@@ -130,16 +146,16 @@ class AcquireCurrentTargetTest(unittest.TestCase):
             ]
 
         try:
-            io.get_area = fake_get_area
+            scanner.get_area = fake_get_area
             with self.assertRaisesRegex(ValueError, "side must be <= 39"):
-                io.acquire_current_target(
+                scanner.acquire_current_target(
                     (0.5, 0.5, 0.5),
                     (90.0, 10.0),
                     reach=20.0,
                     target_blocks=frozenset({"minecraft:stone"}),
                 )
         finally:
-            io.get_area = original_get_area
+            scanner.get_area = original_get_area
 
     def test_load_target_blocks_uses_literal_line_matching(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -154,12 +170,12 @@ class AcquireCurrentTargetTest(unittest.TestCase):
 
             self.assertEqual(
                 frozenset({"minecraft:stone", "minecraft:cobblestone"}),
-                io.load_target_blocks(target_config),
+                target_pipeline.load_target_blocks(target_config),
             )
 
     def test_acquire_current_target_skips_native_call_without_targets(self):
-        original_get_area = io.get_area
-        original_acquire_target = io.acquire_target
+        original_get_area = scanner.get_area
+        original_acquire_target = target_pipeline.acquire_target
         native_called = False
 
         def fake_get_area(position, reach, *, await_region=True):
@@ -177,24 +193,24 @@ class AcquireCurrentTargetTest(unittest.TestCase):
             target_config = Path(temp_dir) / "targets.txt"
             target_config.write_text("minecraft:stone\n", encoding="utf-8")
             try:
-                io.get_area = fake_get_area
-                io.acquire_target = fake_acquire_target
-                result = io.acquire_current_target(
+                scanner.get_area = fake_get_area
+                target_pipeline.acquire_target = fake_acquire_target
+                result = scanner.acquire_current_target(
                     (0.5, 0.5, 0.5),
                     (90.0, 10.0),
                     reach=0.5,
                     target_config=target_config,
                 )
             finally:
-                io.get_area = original_get_area
-                io.acquire_target = original_acquire_target
+                scanner.get_area = original_get_area
+                target_pipeline.acquire_target = original_acquire_target
 
         self.assertIsNone(result)
         self.assertFalse(native_called)
 
     def test_acquire_current_target_records_python_and_native_timings(self):
-        original_get_area = io.get_area
-        original_acquire_target = io.acquire_target
+        original_get_area = scanner.get_area
+        original_acquire_target = target_pipeline.acquire_target
 
         def fake_get_area(
             position,
@@ -216,11 +232,11 @@ class AcquireCurrentTargetTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             target_config = Path(temp_dir) / "targets.txt"
             target_config.write_text("minecraft:stone\n", encoding="utf-8")
-            timings = io.ScanTimings()
+            timings = scanner.ScanTimings()
             try:
-                io.get_area = fake_get_area
-                io.acquire_target = fake_acquire_target
-                result = io.acquire_current_target(
+                scanner.get_area = fake_get_area
+                target_pipeline.acquire_target = fake_acquire_target
+                result = scanner.acquire_current_target(
                     (0.5, 0.5, 0.5),
                     (90.0, 10.0),
                     reach=0.5,
@@ -228,8 +244,8 @@ class AcquireCurrentTargetTest(unittest.TestCase):
                     timings=timings,
                 )
             finally:
-                io.get_area = original_get_area
-                io.acquire_target = original_acquire_target
+                scanner.get_area = original_get_area
+                target_pipeline.acquire_target = original_acquire_target
 
         self.assertEqual((0.0, 0.0), result)
         self.assertEqual(1.0, timings.area.total_ms)

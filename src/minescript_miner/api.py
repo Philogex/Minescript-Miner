@@ -1,4 +1,8 @@
 import _minescript_miner_native as native
+from minescript_miner.adapter.native_bridge import (
+    TargetMetrics,
+    acquire_target_metrics as bridged_acquire_target_metrics,
+)
 
 
 def hello() -> str:
@@ -11,6 +15,18 @@ def geometry_catalog_debug():
 
 def acquire_target(position, orientation, shape_catalog_version, side, reach, shape_ids, target_indices):
     return native.acquire_target(
+        position,
+        orientation,
+        shape_catalog_version,
+        side,
+        reach,
+        shape_ids,
+        target_indices,
+    )
+
+
+def acquire_target_metrics(position, orientation, shape_catalog_version, side, reach, shape_ids, target_indices):
+    return bridged_acquire_target_metrics(
         position,
         orientation,
         shape_catalog_version,

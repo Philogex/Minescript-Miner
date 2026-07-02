@@ -1,5 +1,6 @@
 #include "minecraft_miner/scanner/branch_bound.hpp"
 
+#include "minecraft_miner/aim/angle.hpp"
 #include "minecraft_miner/geometry/constraint_region.hpp"
 #include "minecraft_miner/scanner/projection.hpp"
 #include "minecraft_miner/scanner/reach_projection.hpp"
@@ -66,6 +67,11 @@ struct RegionCandidate {
     Point2 point{};
     double angle = std::numeric_limits<double>::infinity();
     Tri2 triangle{};
+};
+
+struct AngularSize {
+    double width_yaw = 0.0;
+    double width_pitch = 0.0;
 };
 
 using OccluderTraversalStateId = std::uint32_t;
@@ -342,6 +348,17 @@ Point2 triangle_incenter(const Tri2 &triangle) {
          weight_b * triangle.b.y +
          weight_c * triangle.c.y) / perimeter,
     };
+}
+
+double signed_angle_delta_degrees(double value, double origin) {
+    double delta = value - origin;
+    while (delta <= -180.0) {
+        delta += 360.0;
+    }
+    while (delta > 180.0) {
+        delta -= 360.0;
+    }
+    return delta;
 }
 
 bool face_points_to_eye(
@@ -1143,6 +1160,63 @@ private:
                ) >= required_world_edge_clearance(distance);
     }
 
+    AngularSize angular_size_for_region(
+        RegionId region,
+        const Vec3 &target_direction
+    ) {
+        const std::vector<Point2> points =
+            regions_.approximate_vertices(region);
+        if (points.size() < 3 || length_squared(target_direction) <= 0.0) {
+            return {};
+        }
+
+        const YawPitch target_orientation =
+            yaw_pitch_from_direction(target_direction);
+        double min_yaw = 0.0;
+        double max_yaw = 0.0;
+        double min_pitch = 0.0;
+        double max_pitch = 0.0;
+        bool initialized = false;
+
+        for (const Point2 point : points) {
+            const Vec3 direction =
+                normalized_world_direction(basis_, point);
+            if (length_squared(direction) <= 0.0) {
+                continue;
+            }
+            const YawPitch orientation =
+                yaw_pitch_from_direction(direction);
+            const double yaw_delta =
+                signed_angle_delta_degrees(
+                    orientation.yaw,
+                    target_orientation.yaw
+                );
+            const double pitch_delta =
+                orientation.pitch - target_orientation.pitch;
+
+            if (!initialized) {
+                min_yaw = yaw_delta;
+                max_yaw = yaw_delta;
+                min_pitch = pitch_delta;
+                max_pitch = pitch_delta;
+                initialized = true;
+            } else {
+                min_yaw = std::min(min_yaw, yaw_delta);
+                max_yaw = std::max(max_yaw, yaw_delta);
+                min_pitch = std::min(min_pitch, pitch_delta);
+                max_pitch = std::max(max_pitch, pitch_delta);
+            }
+        }
+
+        if (!initialized) {
+            return {};
+        }
+        return {
+            std::max(0.0, max_yaw - min_yaw),
+            std::max(0.0, max_pitch - min_pitch),
+        };
+    }
+
     void update_best(
         RegionId region,
         const RegionCandidate &bound
@@ -1179,6 +1253,10 @@ private:
         result_.direction = direction;
         result_.angle = angle;
         result_.distance = distance;
+        const AngularSize angular_size =
+            angular_size_for_region(region, direction);
+        result_.width_yaw = angular_size.width_yaw;
+        result_.width_pitch = angular_size.width_pitch;
     }
 
     void solve_branch(const Branch &branch) {

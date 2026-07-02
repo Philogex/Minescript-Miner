@@ -5,6 +5,23 @@ import tempfile
 import unittest
 from array import array
 from pathlib import Path
+import sys
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+src_path = str(PROJECT_ROOT / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+loaded_package = sys.modules.get("minescript_miner")
+if loaded_package is not None:
+    package_path = getattr(loaded_package, "__file__", "")
+    if package_path and not package_path.startswith(src_path):
+        for module_name in list(sys.modules):
+            if module_name == "minescript_miner" or module_name.startswith(
+                "minescript_miner."
+            ):
+                del sys.modules[module_name]
 
 from minescript_miner.adapter.catalog_contract import (
     MAX_CUBE_SIDE,
@@ -16,7 +33,11 @@ from minescript_miner.adapter.shape_catalog import (
     SHAPE_NAMES,
 )
 from minescript_miner.adapter.native_bridge import acquire_target as bridged_acquire_target
-from minescript_miner.api import acquire_target, geometry_catalog_debug
+from minescript_miner.api import (
+    acquire_target,
+    acquire_target_metrics,
+    geometry_catalog_debug,
+)
 
 
 class GeometryCatalogTest(unittest.TestCase):
@@ -180,6 +201,28 @@ class GeometryCatalogTest(unittest.TestCase):
                 target_indices.tobytes(),
             ),
         )
+
+    def test_native_acquire_target_metrics_returns_local_visible_size(self):
+        shape_ids = [SHAPE_ID_BY_NAME["empty"]] * 27
+        shape_ids[16] = SHAPE_ID_BY_NAME["full_cube"]
+
+        metrics = acquire_target_metrics(
+            (0.5, 0.5, 0.5),
+            (0.0, 0.0),
+            SHAPE_CATALOG_VERSION,
+            3,
+            4.8,
+            shape_ids,
+            [16],
+        )
+
+        self.assertIsNotNone(metrics)
+        self.assertAlmostEqual(0.0, metrics.yaw)
+        self.assertAlmostEqual(0.0, metrics.pitch)
+        self.assertGreater(metrics.width_yaw, 0.0)
+        self.assertGreater(metrics.width_pitch, 0.0)
+        self.assertTrue(math.isfinite(metrics.distance))
+        self.assertGreater(metrics.distance, 0.0)
 
     def test_native_bridge_rejects_non_uint16_arrays(self):
         shape_ids = array("I", [SHAPE_ID_BY_NAME["empty"]] * 27)

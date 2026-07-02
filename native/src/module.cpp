@@ -322,6 +322,8 @@ static void log_scan_input(
     log << "  solver_found: " << (solve_result.found ? 1 : 0) << "\n";
     log << "  solver_angle_rad: " << solve_result.angle << "\n";
     log << "  solver_distance: " << solve_result.distance << "\n";
+    log << "  solver_width_yaw_deg: " << solve_result.width_yaw << "\n";
+    log << "  solver_width_pitch_deg: " << solve_result.width_pitch << "\n";
     log << "  solver_target_world_face_index: " << solve_result.target_world_face_index << "\n";
     if (solve_result.found &&
         solve_result.target_world_face_index < scan_geometry.world_faces.size()) {
@@ -456,7 +458,17 @@ static void log_scan_input(
         << returned_yaw << ", " << returned_pitch << "\n\n";
 }
 
-static PyObject *acquire_target(PyObject *, PyObject *args) {
+struct NativeTargetSolveResult {
+    bool found = false;
+    double yaw = 0.0;
+    double pitch = 0.0;
+    minecraft_miner::BranchBoundResult solve_result{};
+};
+
+static bool solve_acquire_target(
+    PyObject *args,
+    NativeTargetSolveResult &output
+) {
     PyObject *position_object = nullptr;
     PyObject *orientation_object = nullptr;
     PyObject *shape_ids_object = nullptr;
@@ -467,7 +479,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
 
     if (!PyArg_ParseTuple(
             args,
-            "OOiidOO:acquire_target",
+            "OOiidOO",
             &position_object,
             &orientation_object,
             &shape_catalog_version,
@@ -476,7 +488,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
             &shape_ids_object,
             &target_indices_object
         )) {
-        return nullptr;
+        return false;
     }
 
     if (shape_catalog_version != minecraft_miner::GEOMETRY_SHAPE_CATALOG_VERSION) {
@@ -486,12 +498,12 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
             minecraft_miner::GEOMETRY_SHAPE_CATALOG_VERSION,
             shape_catalog_version
         );
-        return nullptr;
+        return false;
     }
 
     if (side <= 0) {
         PyErr_SetString(PyExc_ValueError, "side must be a positive integer");
-        return nullptr;
+        return false;
     }
     // API note: shape IDs and target block indices currently share the compact
     // uint16 payload format. Raising this limit should keep shape IDs as
@@ -503,11 +515,11 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
             minecraft_miner::MAX_CUBE_SIDE,
             side
         );
-        return nullptr;
+        return false;
     }
     if (!(reach > 0.0) || !std::isfinite(reach)) {
         PyErr_SetString(PyExc_ValueError, "reach must be a positive finite number");
-        return nullptr;
+        return false;
     }
 
     double position[3] = {0.0, 0.0, 0.0};
@@ -515,16 +527,16 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     UInt16Input shape_ids;
     UInt16Input target_indices;
     if (!parse_position(position_object, position)) {
-        return nullptr;
+        return false;
     }
     if (!parse_orientation(orientation_object, orientation)) {
-        return nullptr;
+        return false;
     }
     if (!parse_uint16_input(shape_ids_object, shape_ids, "shape_ids")) {
-        return nullptr;
+        return false;
     }
     if (!parse_uint16_input(target_indices_object, target_indices, "target_indices")) {
-        return nullptr;
+        return false;
     }
 
     const std::size_t expected_count =
@@ -540,7 +552,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
             expected_count,
             shape_ids.view.size
         );
-        return nullptr;
+        return false;
     }
     for (const std::uint16_t shape_id : shape_ids.view) {
         if (static_cast<std::size_t>(shape_id) >= minecraft_miner::GEOMETRY_SHAPE_COUNT) {
@@ -551,7 +563,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
                 minecraft_miner::GEOMETRY_SHAPE_COUNT,
                 static_cast<unsigned>(shape_id)
             );
-            return nullptr;
+            return false;
         }
     }
     for (const std::uint16_t target_index : target_indices.view) {
@@ -563,7 +575,7 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
                 expected_count,
                 static_cast<unsigned>(target_index)
             );
-            return nullptr;
+            return false;
         }
     }
 
@@ -634,9 +646,44 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
         );
     }
     if (!solve_result.found) {
+        output = {};
+        return true;
+    }
+
+    output.found = true;
+    output.yaw = returned_yaw;
+    output.pitch = returned_pitch;
+    output.solve_result = solve_result;
+    return true;
+}
+
+static PyObject *acquire_target(PyObject *, PyObject *args) {
+    NativeTargetSolveResult result{};
+    if (!solve_acquire_target(args, result)) {
+        return nullptr;
+    }
+    if (!result.found) {
         Py_RETURN_NONE;
     }
-    return Py_BuildValue("(dd)", returned_yaw, returned_pitch);
+    return Py_BuildValue("(dd)", result.yaw, result.pitch);
+}
+
+static PyObject *acquire_target_metrics(PyObject *, PyObject *args) {
+    NativeTargetSolveResult result{};
+    if (!solve_acquire_target(args, result)) {
+        return nullptr;
+    }
+    if (!result.found) {
+        Py_RETURN_NONE;
+    }
+    return Py_BuildValue(
+        "(ddddd)",
+        result.yaw,
+        result.pitch,
+        result.solve_result.width_yaw,
+        result.solve_result.width_pitch,
+        result.solve_result.distance
+    );
 }
 
 
@@ -647,6 +694,8 @@ static PyMethodDef module_methods[] = {
      "Return the native geometry catalog version, shape names, and geometry counts for parity checks."},
     {"acquire_target", reinterpret_cast<PyCFunction>(acquire_target), METH_VARARGS,
      "Return the nearest visible target orientation as Minecraft yaw and pitch."},
+    {"acquire_target_metrics", reinterpret_cast<PyCFunction>(acquire_target_metrics), METH_VARARGS,
+     "Return target orientation plus local visible aim width and distance."},
     {nullptr, nullptr, 0, nullptr},
 };
 

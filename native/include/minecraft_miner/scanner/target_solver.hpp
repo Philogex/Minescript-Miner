@@ -35,6 +35,8 @@ struct BranchBoundResult {
     Vec3 direction{};
     double angle = std::numeric_limits<double>::infinity();
     double distance = std::numeric_limits<double>::infinity();
+    double width_yaw = 0.0;
+    double width_pitch = 0.0;
     BranchBoundStats stats{};
 };
 

@@ -102,15 +102,16 @@ def native_minimum_jerk(
     config: AimConfig,
     angular_step_deg: float,
 ) -> tuple[AimPoint, ...]:
+    minimum = config.minimum_jerk
     return generate_minimum_jerk_aim_path(
         start_orientation,
         target,
         angular_step_deg,
-        config.fitts_a_ms,
-        config.fitts_b_ms,
-        config.min_duration_ms,
-        config.max_duration_ms,
-        config.sample_hz,
+        minimum.fitts_a_ms,
+        minimum.fitts_b_ms,
+        minimum.min_duration_ms,
+        minimum.max_duration_ms,
+        minimum.sample_hz,
     )
 
 
@@ -226,9 +227,12 @@ def print_summary(
     )
     print(
         "Aim config: "
-        f"sample_hz={config.sample_hz}, "
-        f"fitts=({config.fitts_a_ms:.3f}, {config.fitts_b_ms:.3f}), "
-        f"duration=[{config.min_duration_ms:.3f}, {config.max_duration_ms:.3f}], "
+        f"model={config.aim_model}, "
+        f"sample_hz={config.minimum_jerk.sample_hz}, "
+        f"fitts=({config.minimum_jerk.fitts_a_ms:.3f}, "
+        f"{config.minimum_jerk.fitts_b_ms:.3f}), "
+        f"duration=[{config.minimum_jerk.min_duration_ms:.3f}, "
+        f"{config.minimum_jerk.max_duration_ms:.3f}], "
         f"angular_step_deg={angular_step_deg:.6f}"
     )
     for path in paths:

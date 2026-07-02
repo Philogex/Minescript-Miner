@@ -1,5 +1,9 @@
 # Aim path generator configuration.
-# Format: name: value
+# Format:
+#   global_parameter: value
+#   generator_name[
+#       parameter: value
+#   ]
 
 aim_model: minimum_jerk
 
@@ -7,13 +11,52 @@ aim_model: minimum_jerk
 # This value is used only if the Minecraft internals differ or Java access fails.
 fallback_angular_step_deg: 0.15
 
-# Fitts-style movement timing.
-fitts_a_ms: 80
-fitts_b_ms: 110
-min_duration_ms: 60
-max_duration_ms: 450
+minimum_jerk[
+    # Fitts-style movement timing.
+    fitts_a_ms: 80
+    fitts_b_ms: 110
+    min_duration_ms: 60
+    max_duration_ms: 450
 
-# Path construction.
-sample_hz: 120
-correction_probability: 0.6
-max_corrections: 3
+    # Path construction. Correction fields are reserved for later generators.
+    sample_hz: 120
+    correction_probability: 0.6
+    max_corrections: 3
+]
+
+sigmadrift[
+    # Baseline inspired by ck0i/SigmaDrift:
+    # https://github.com/ck0i/SigmaDrift
+    #
+    # The upstream project currently has no repository license. Keep this as a
+    # reference parameter baseline unless/until license terms allow direct code use.
+    fitts_a: 50
+    fitts_b: 150
+    target_width: 20
+
+    undershoot_min: 0.92
+    undershoot_max: 0.97
+    peak_time_ratio: 0.35
+    primary_sigma_min: 0.18
+    primary_sigma_max: 0.28
+
+    overshoot_prob: 0.15
+    overshoot_min: 1.02
+    overshoot_max: 1.08
+    correction_sigma_min: 0.12
+    correction_sigma_max: 0.20
+    second_correction_prob: 0.25
+
+    curvature_scale: 0.025
+    ou_theta: 3.5
+    ou_sigma: 1.2
+
+    tremor_freq_min: 8.0
+    tremor_freq_max: 12.0
+    tremor_amp_min: 0.15
+    tremor_amp_max: 0.55
+
+    sdn_k: 0.04
+    sample_dt_mean: 7.8
+    gamma_shape: 3.5
+]

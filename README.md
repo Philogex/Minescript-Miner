@@ -65,6 +65,31 @@ minecraft:deepslate_diamond_ore # valuable target
 The file is loaded once when the script starts. Restart the script after
 changing it.
 
+## Aim Configuration
+
+`aim_config.txt` configures the active aim-path generator and keeps
+generator-specific parameters in separate blocks:
+
+```text
+aim_model: minimum_jerk
+fallback_angular_step_deg: 0.15
+
+minimum_jerk[
+    fitts_a_ms: 80
+    fitts_b_ms: 110
+]
+
+sigmadrift[
+    target_width: 20
+    overshoot_prob: 0.15
+]
+```
+
+The `sigmadrift` block is a parameter baseline inspired by
+[ck0i/SigmaDrift](https://github.com/ck0i/SigmaDrift). That upstream
+repository currently has no repository license, so it is referenced as design
+context rather than vendored code.
+
 The main runtime constants are currently defined near the top of `miner.py`:
 
 - `TOGGLE_KEY`: activation key

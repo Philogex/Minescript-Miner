@@ -33,6 +33,7 @@ class AimConfigTest(unittest.TestCase):
                         "# comment",
                         "aim_model: minimum_jerk",
                         "fallback_angular_step_deg: 0.2",
+                        "minimum_jerk[",
                         "fitts_a_ms: 10",
                         "fitts_b_ms: 20",
                         "min_duration_ms: 30",
@@ -40,6 +41,12 @@ class AimConfigTest(unittest.TestCase):
                         "sample_hz: 60",
                         "correction_probability: 0.25",
                         "max_corrections: 2",
+                        "]",
+                        "sigmadrift[",
+                        "target_width: 12",
+                        "overshoot_prob: 0.2",
+                        "sample_dt_mean: 6.5",
+                        "]",
                     ]
                 ),
                 encoding="utf-8",
@@ -49,13 +56,36 @@ class AimConfigTest(unittest.TestCase):
 
         self.assertEqual("minimum_jerk", config.aim_model)
         self.assertEqual(0.2, config.fallback_angular_step_deg)
-        self.assertEqual(10.0, config.fitts_a_ms)
-        self.assertEqual(20.0, config.fitts_b_ms)
-        self.assertEqual(30.0, config.min_duration_ms)
-        self.assertEqual(300.0, config.max_duration_ms)
-        self.assertEqual(60, config.sample_hz)
-        self.assertEqual(0.25, config.correction_probability)
-        self.assertEqual(2, config.max_corrections)
+        self.assertEqual(10.0, config.minimum_jerk.fitts_a_ms)
+        self.assertEqual(20.0, config.minimum_jerk.fitts_b_ms)
+        self.assertEqual(30.0, config.minimum_jerk.min_duration_ms)
+        self.assertEqual(300.0, config.minimum_jerk.max_duration_ms)
+        self.assertEqual(60, config.minimum_jerk.sample_hz)
+        self.assertEqual(0.25, config.minimum_jerk.correction_probability)
+        self.assertEqual(2, config.minimum_jerk.max_corrections)
+        self.assertEqual(12.0, config.sigmadrift.target_width)
+        self.assertEqual(0.2, config.sigmadrift.overshoot_prob)
+        self.assertEqual(6.5, config.sigmadrift.sample_dt_mean)
+
+    def test_load_aim_config_accepts_legacy_top_level_minimum_jerk_values(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "aim_config.txt"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        "fitts_a_ms: 10",
+                        "fitts_b_ms: 20",
+                        "sample_hz: 60",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            config = aim.load_aim_config(config_path)
+
+        self.assertEqual(10.0, config.minimum_jerk.fitts_a_ms)
+        self.assertEqual(20.0, config.minimum_jerk.fitts_b_ms)
+        self.assertEqual(60, config.minimum_jerk.sample_hz)
 
     def test_load_aim_config_rejects_unknown_keys(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -80,11 +110,13 @@ class AimConfigTest(unittest.TestCase):
             ),
             aim.AimConfig(
                 fallback_angular_step_deg=0.15,
-                fitts_a_ms=50.0,
-                fitts_b_ms=100.0,
-                min_duration_ms=25.0,
-                max_duration_ms=500.0,
-                sample_hz=120,
+                minimum_jerk=aim.MinimumJerkConfig(
+                    fitts_a_ms=50.0,
+                    fitts_b_ms=100.0,
+                    min_duration_ms=25.0,
+                    max_duration_ms=500.0,
+                    sample_hz=120,
+                ),
             ),
             angular_step_deg=0.15,
         )

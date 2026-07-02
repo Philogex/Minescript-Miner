@@ -2,6 +2,7 @@
 #include <Python.h>
 
 #include "minecraft_miner/aim/angle.hpp"
+#include "minecraft_miner/aim/path.hpp"
 #include "minecraft_miner/scanner/branch_bound.hpp"
 #include "minecraft_miner/catalog/geometry_catalog.hpp"
 #include "minecraft_miner/scanner/scan_region.hpp"
@@ -714,114 +715,125 @@ static PyObject *acquire_target_metrics(PyObject *, PyObject *args) {
     );
 }
 
-static double signed_angle_delta_degrees(double value, double origin) {
-    double delta = value - origin;
-    while (delta <= -180.0) {
-        delta += 360.0;
-    }
-    while (delta > 180.0) {
-        delta -= 360.0;
-    }
-    return delta;
-}
+using AimPathGenerator = minecraft_miner::aim::AimPath (*)(
+    const minecraft_miner::aim::Orientation &,
+    const minecraft_miner::aim::TargetMetrics &,
+    const minecraft_miner::aim::AimPathConfig &
+);
 
-static double clamp_double(double value, double minimum, double maximum) {
-    return std::max(minimum, std::min(maximum, value));
-}
-
-static PyObject *generate_minimum_jerk_aim_path(PyObject *, PyObject *args) {
+static bool parse_aim_path_request(
+    PyObject *args,
+    const char *function_name,
+    minecraft_miner::aim::Orientation &start_orientation,
+    minecraft_miner::aim::TargetMetrics &target_metrics,
+    minecraft_miner::aim::AimPathConfig &config
+) {
     PyObject *start_orientation_object = nullptr;
     PyObject *target_metrics_object = nullptr;
-    double angular_step_deg = 0.0;
-    double fitts_a_ms = 0.0;
-    double fitts_b_ms = 0.0;
-    double min_duration_ms = 0.0;
-    double max_duration_ms = 0.0;
-    int sample_hz = 0;
+    std::string format = "OOdddddi:";
+    format += function_name;
 
     if (!PyArg_ParseTuple(
             args,
-            "OOdddddi:generate_minimum_jerk_aim_path",
+            format.c_str(),
             &start_orientation_object,
             &target_metrics_object,
-            &angular_step_deg,
-            &fitts_a_ms,
-            &fitts_b_ms,
-            &min_duration_ms,
-            &max_duration_ms,
-            &sample_hz
+            &config.angular_step_deg,
+            &config.fitts_a_ms,
+            &config.fitts_b_ms,
+            &config.min_duration_ms,
+            &config.max_duration_ms,
+            &config.sample_hz
+        )) {
+        return false;
+    }
+
+    double raw_start_orientation[2] = {0.0, 0.0};
+    double raw_target_metrics[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+    if (!parse_orientation(start_orientation_object, raw_start_orientation) ||
+        !parse_target_metrics(target_metrics_object, raw_target_metrics)) {
+        return false;
+    }
+
+    if (!(config.angular_step_deg > 0.0) || !std::isfinite(config.angular_step_deg)) {
+        PyErr_SetString(PyExc_ValueError, "angular_step_deg must be a positive finite number");
+        return false;
+    }
+    if (config.sample_hz <= 0) {
+        PyErr_SetString(PyExc_ValueError, "sample_hz must be a positive integer");
+        return false;
+    }
+
+    start_orientation = {
+        raw_start_orientation[0],
+        raw_start_orientation[1],
+    };
+    target_metrics = {
+        raw_target_metrics[0],
+        raw_target_metrics[1],
+        raw_target_metrics[2],
+        raw_target_metrics[3],
+        raw_target_metrics[4],
+    };
+    return true;
+}
+
+static PyObject *build_aim_path_tuple(const minecraft_miner::aim::AimPath &samples) {
+    PyObject *path = PyTuple_New(static_cast<Py_ssize_t>(samples.size()));
+    if (path == nullptr) {
+        return nullptr;
+    }
+
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+        const minecraft_miner::aim::AimSample &sample = samples[i];
+        PyObject *item = Py_BuildValue(
+            "(ddd)",
+            sample.yaw,
+            sample.pitch,
+            sample.t_ms
+        );
+        if (item == nullptr) {
+            Py_DECREF(path);
+            return nullptr;
+        }
+        if (PyTuple_SetItem(path, static_cast<Py_ssize_t>(i), item) < 0) {
+            Py_DECREF(item);
+            Py_DECREF(path);
+            return nullptr;
+        }
+    }
+    return path;
+}
+
+static PyObject *generate_aim_path_with(
+    PyObject *args,
+    const char *function_name,
+    AimPathGenerator generator
+) {
+    minecraft_miner::aim::Orientation start_orientation{};
+    minecraft_miner::aim::TargetMetrics target_metrics{};
+    minecraft_miner::aim::AimPathConfig config{};
+    if (!parse_aim_path_request(
+            args,
+            function_name,
+            start_orientation,
+            target_metrics,
+            config
         )) {
         return nullptr;
     }
 
-    double start_orientation[2] = {0.0, 0.0};
-    double target_metrics[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
-    if (!parse_orientation(start_orientation_object, start_orientation) ||
-        !parse_target_metrics(target_metrics_object, target_metrics)) {
-        return nullptr;
-    }
-    if (!(angular_step_deg > 0.0) || !std::isfinite(angular_step_deg)) {
-        PyErr_SetString(PyExc_ValueError, "angular_step_deg must be a positive finite number");
-        return nullptr;
-    }
-    if (sample_hz <= 0) {
-        PyErr_SetString(PyExc_ValueError, "sample_hz must be a positive integer");
-        return nullptr;
-    }
+    const minecraft_miner::aim::AimPath path =
+        generator(start_orientation, target_metrics, config);
+    return build_aim_path_tuple(path);
+}
 
-    const double target_yaw = target_metrics[0];
-    const double target_pitch = target_metrics[1];
-    const double width_yaw = std::max(0.0, target_metrics[2]);
-    const double width_pitch = std::max(0.0, target_metrics[3]);
-    const double yaw_delta =
-        signed_angle_delta_degrees(target_yaw, start_orientation[0]);
-    const double pitch_delta = target_pitch - start_orientation[1];
-    const double amplitude = std::hypot(yaw_delta, pitch_delta);
-    const double target_width =
-        std::max(angular_step_deg, std::min(width_yaw, width_pitch));
-    const double index_of_difficulty =
-        std::log2(amplitude / target_width + 1.0);
-    const double duration_ms = clamp_double(
-        fitts_a_ms + fitts_b_ms * index_of_difficulty,
-        min_duration_ms,
-        max_duration_ms
+static PyObject *generate_minimum_jerk_aim_path(PyObject *, PyObject *args) {
+    return generate_aim_path_with(
+        args,
+        "generate_minimum_jerk_aim_path",
+        minecraft_miner::aim::generate_minimum_jerk_path
     );
-
-    PyObject *path = PyTuple_New(2);
-    if (path == nullptr) {
-        return nullptr;
-    }
-    PyObject *start = Py_BuildValue(
-        "(ddd)",
-        start_orientation[0],
-        start_orientation[1],
-        0.0
-    );
-    PyObject *target = Py_BuildValue(
-        "(ddd)",
-        target_yaw,
-        target_pitch,
-        duration_ms
-    );
-    if (start == nullptr || target == nullptr) {
-        Py_XDECREF(start);
-        Py_XDECREF(target);
-        Py_DECREF(path);
-        return nullptr;
-    }
-    if (PyTuple_SetItem(path, 0, start) < 0) {
-        Py_DECREF(start);
-        Py_DECREF(target);
-        Py_DECREF(path);
-        return nullptr;
-    }
-    start = nullptr;
-    if (PyTuple_SetItem(path, 1, target) < 0) {
-        Py_DECREF(target);
-        Py_DECREF(path);
-        return nullptr;
-    }
-    return path;
 }
 
 

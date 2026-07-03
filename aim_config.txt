@@ -25,11 +25,6 @@ minimum_jerk[
 ]
 
 sigmadrift[
-    # Baseline inspired by ck0i/SigmaDrift:
-    # https://github.com/ck0i/SigmaDrift
-    #
-    # The upstream project currently has no repository license. Keep this as a
-    # reference parameter baseline unless/until license terms allow direct code use.
     fitts_a: 50
     fitts_b: 150
     target_width: 20

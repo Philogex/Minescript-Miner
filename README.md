@@ -85,10 +85,11 @@ sigmadrift[
 ]
 ```
 
-The `sigmadrift` block is a parameter baseline inspired by
-[ck0i/SigmaDrift](https://github.com/ck0i/SigmaDrift). That upstream
-repository currently has no repository license, so it is referenced as design
-context rather than vendored code.
+The `sigmadrift` path generator is planned as an adapted variant of
+[ck0i/SigmaDrift](https://github.com/ck0i/SigmaDrift), and the `sigmadrift`
+block mirrors its initial parameter baseline. The upstream repository
+currently has no repository license; usage permission was granted informally
+by the author for this public non-commercial project.
 
 The main runtime constants are currently defined near the top of `miner.py`:
 

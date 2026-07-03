@@ -85,7 +85,7 @@ sigmadrift[
 ]
 ```
 
-The `sigmadrift` path generator is planned as an adapted variant of
+The `sigmadrift` path generator is an adapted variant of
 [ck0i/SigmaDrift](https://github.com/ck0i/SigmaDrift), and the `sigmadrift`
 block mirrors its initial parameter baseline. The upstream repository
 currently has no repository license; usage permission was granted informally

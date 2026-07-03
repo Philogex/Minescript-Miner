@@ -143,3 +143,23 @@ def generate_minimum_jerk_aim_path(
         AimPoint(float(yaw), float(pitch), float(t_ms))
         for yaw, pitch, t_ms in result
     )
+
+
+def generate_sigmadrift_aim_path(
+    start_orientation: Orientation,
+    target_metrics: TargetMetrics,
+    angular_step_deg: float,
+    config_values: Sequence[float],
+) -> Tuple[AimPoint, ...]:
+    """Return a native-generated SigmaDrift aim path."""
+
+    result = native.generate_sigmadrift_aim_path(
+        start_orientation,
+        _target_metrics_payload(target_metrics),
+        float(angular_step_deg),
+        tuple(float(value) for value in config_values),
+    )
+    return tuple(
+        AimPoint(float(yaw), float(pitch), float(t_ms))
+        for yaw, pitch, t_ms in result
+    )

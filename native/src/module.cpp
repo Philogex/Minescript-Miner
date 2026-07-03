@@ -778,6 +778,122 @@ static bool parse_aim_path_request(
     return true;
 }
 
+static bool parse_sigmadrift_config(
+    PyObject *config_object,
+    minecraft_miner::aim::SigmaDriftConfig &config
+) {
+    if (!PySequence_Check(config_object)) {
+        PyErr_SetString(PyExc_TypeError, "sigmadrift config must be a sequence");
+        return false;
+    }
+
+    constexpr Py_ssize_t expected_size = 24;
+    const Py_ssize_t size = PySequence_Size(config_object);
+    if (size != expected_size) {
+        PyErr_Format(
+            PyExc_ValueError,
+            "sigmadrift config must contain exactly %zd values",
+            expected_size
+        );
+        return false;
+    }
+
+    double values[expected_size] = {};
+    for (Py_ssize_t i = 0; i < expected_size; ++i) {
+        PyObject *item = PySequence_GetItem(config_object, i);
+        if (item == nullptr) {
+            return false;
+        }
+        values[i] = PyFloat_AsDouble(item);
+        Py_DECREF(item);
+        if (PyErr_Occurred()) {
+            PyErr_SetString(PyExc_TypeError, "sigmadrift config values must be numbers");
+            return false;
+        }
+        if (!std::isfinite(values[i])) {
+            PyErr_SetString(PyExc_ValueError, "sigmadrift config values must be finite");
+            return false;
+        }
+    }
+
+    config = minecraft_miner::aim::SigmaDriftConfig{
+        values[0],
+        values[1],
+        values[2],
+        values[3],
+        values[4],
+        values[5],
+        values[6],
+        values[7],
+        values[8],
+        values[9],
+        values[10],
+        values[11],
+        values[12],
+        values[13],
+        values[14],
+        values[15],
+        values[16],
+        values[17],
+        values[18],
+        values[19],
+        values[20],
+        values[21],
+        values[22],
+        values[23],
+    };
+    return true;
+}
+
+static bool parse_sigmadrift_aim_path_request(
+    PyObject *args,
+    minecraft_miner::aim::Orientation &start_orientation,
+    minecraft_miner::aim::TargetMetrics &target_metrics,
+    double &angular_step_deg,
+    minecraft_miner::aim::SigmaDriftConfig &config
+) {
+    PyObject *start_orientation_object = nullptr;
+    PyObject *target_metrics_object = nullptr;
+    PyObject *config_object = nullptr;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "OOdO:generate_sigmadrift_aim_path",
+            &start_orientation_object,
+            &target_metrics_object,
+            &angular_step_deg,
+            &config_object
+        )) {
+        return false;
+    }
+
+    double raw_start_orientation[2] = {0.0, 0.0};
+    double raw_target_metrics[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+    if (!parse_orientation(start_orientation_object, raw_start_orientation) ||
+        !parse_target_metrics(target_metrics_object, raw_target_metrics) ||
+        !parse_sigmadrift_config(config_object, config)) {
+        return false;
+    }
+
+    if (!(angular_step_deg > 0.0) || !std::isfinite(angular_step_deg)) {
+        PyErr_SetString(PyExc_ValueError, "angular_step_deg must be a positive finite number");
+        return false;
+    }
+
+    start_orientation = {
+        raw_start_orientation[0],
+        raw_start_orientation[1],
+    };
+    target_metrics = {
+        raw_target_metrics[0],
+        raw_target_metrics[1],
+        raw_target_metrics[2],
+        raw_target_metrics[3],
+        raw_target_metrics[4],
+    };
+    return true;
+}
+
 static PyObject *build_aim_path_tuple(const minecraft_miner::aim::AimPath &samples) {
     PyObject *path = PyTuple_New(static_cast<Py_ssize_t>(samples.size()));
     if (path == nullptr) {
@@ -836,6 +952,31 @@ static PyObject *generate_minimum_jerk_aim_path(PyObject *, PyObject *args) {
     );
 }
 
+static PyObject *generate_sigmadrift_aim_path(PyObject *, PyObject *args) {
+    minecraft_miner::aim::Orientation start_orientation{};
+    minecraft_miner::aim::TargetMetrics target_metrics{};
+    minecraft_miner::aim::SigmaDriftConfig config{};
+    double angular_step_deg = 0.0;
+    if (!parse_sigmadrift_aim_path_request(
+            args,
+            start_orientation,
+            target_metrics,
+            angular_step_deg,
+            config
+        )) {
+        return nullptr;
+    }
+
+    const minecraft_miner::aim::AimPath path =
+        minecraft_miner::aim::generate_sigmadrift_path(
+            start_orientation,
+            target_metrics,
+            angular_step_deg,
+            config
+        );
+    return build_aim_path_tuple(path);
+}
+
 
 static PyMethodDef module_methods[] = {
     {"hello", reinterpret_cast<PyCFunction>(hello), METH_NOARGS,
@@ -848,6 +989,8 @@ static PyMethodDef module_methods[] = {
      "Return target orientation plus local visible aim width and distance."},
     {"generate_minimum_jerk_aim_path", reinterpret_cast<PyCFunction>(generate_minimum_jerk_aim_path), METH_VARARGS,
      "Return a minimum-jerk aim path as yaw, pitch, and milliseconds samples."},
+    {"generate_sigmadrift_aim_path", reinterpret_cast<PyCFunction>(generate_sigmadrift_aim_path), METH_VARARGS,
+     "Return a SigmaDrift aim path as yaw, pitch, and milliseconds samples."},
     {nullptr, nullptr, 0, nullptr},
 };
 

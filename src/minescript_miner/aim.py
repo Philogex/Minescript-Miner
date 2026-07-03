@@ -11,13 +11,14 @@ from minescript_miner.adapter.native_bridge import (
     Orientation,
     TargetMetrics,
     generate_minimum_jerk_aim_path as _generate_minimum_jerk_aim_path,
+    generate_sigmadrift_aim_path as _generate_sigmadrift_aim_path,
 )
 
 
 DEFAULT_AIM_CONFIG = Path("aim_config.txt")
 DEFAULT_FALLBACK_ANGULAR_STEP_DEG = 0.15
 SUPPORTED_AIM_MODELS = frozenset({"minimum_jerk", "sigmadrift"})
-IMPLEMENTED_AIM_MODELS = frozenset({"minimum_jerk"})
+IMPLEMENTED_AIM_MODELS = frozenset({"minimum_jerk", "sigmadrift"})
 
 
 @dataclass(frozen=True)
@@ -273,6 +274,35 @@ def sensitivity_to_angular_step_deg(sensitivity: float) -> float:
     return ((sensitivity * 0.6 + 0.2) ** 3) * 1.2
 
 
+def _sigmadrift_payload(config: SigmaDriftConfig) -> tuple[float, ...]:
+    return (
+        config.fitts_a,
+        config.fitts_b,
+        config.target_width,
+        config.undershoot_min,
+        config.undershoot_max,
+        config.peak_time_ratio,
+        config.primary_sigma_min,
+        config.primary_sigma_max,
+        config.overshoot_prob,
+        config.overshoot_min,
+        config.overshoot_max,
+        config.correction_sigma_min,
+        config.correction_sigma_max,
+        config.second_correction_prob,
+        config.curvature_scale,
+        config.ou_theta,
+        config.ou_sigma,
+        config.tremor_freq_min,
+        config.tremor_freq_max,
+        config.tremor_amp_min,
+        config.tremor_amp_max,
+        config.sdn_k,
+        config.sample_dt_mean,
+        config.gamma_shape,
+    )
+
+
 def generate_aim_path(
     start_orientation: Orientation,
     target: TargetMetrics,
@@ -296,5 +326,12 @@ def generate_aim_path(
             minimum.min_duration_ms,
             minimum.max_duration_ms,
             minimum.sample_hz,
+        )
+    if resolved_config.aim_model == "sigmadrift":
+        return _generate_sigmadrift_aim_path(
+            start_orientation,
+            target,
+            angular_step_deg,
+            _sigmadrift_payload(resolved_config.sigmadrift),
         )
     raise ValueError(f"unsupported aim_model {resolved_config.aim_model!r}")

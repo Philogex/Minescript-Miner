@@ -19,11 +19,13 @@ for path in (PROJECT_ROOT, SRC_DIR):
         sys.path.insert(0, path_string)
 
 from minescript_miner.aim import AimConfig, load_aim_config
+from minescript_miner.aim import _sigmadrift_payload
 from minescript_miner.adapter.native_bridge import (
     AimPoint,
     Orientation,
     TargetMetrics,
     generate_minimum_jerk_aim_path,
+    generate_sigmadrift_aim_path,
 )
 
 
@@ -115,8 +117,23 @@ def native_minimum_jerk(
     )
 
 
+def native_sigmadrift(
+    start_orientation: Orientation,
+    target: TargetMetrics,
+    config: AimConfig,
+    angular_step_deg: float,
+) -> tuple[AimPoint, ...]:
+    return generate_sigmadrift_aim_path(
+        start_orientation,
+        target,
+        angular_step_deg,
+        _sigmadrift_payload(config.sigmadrift),
+    )
+
+
 GENERATORS: dict[str, PathGenerator] = {
     "minimum_jerk": native_minimum_jerk,
+    "sigmadrift": native_sigmadrift,
 }
 
 
@@ -231,6 +248,8 @@ def print_summary(
         f"sample_hz={config.minimum_jerk.sample_hz}, "
         f"fitts=({config.minimum_jerk.fitts_a_ms:.3f}, "
         f"{config.minimum_jerk.fitts_b_ms:.3f}), "
+        f"sigma_fitts=({config.sigmadrift.fitts_a:.3f}, "
+        f"{config.sigmadrift.fitts_b:.3f}), "
         f"duration=[{config.minimum_jerk.min_duration_ms:.3f}, "
         f"{config.minimum_jerk.max_duration_ms:.3f}], "
         f"angular_step_deg={angular_step_deg:.6f}"

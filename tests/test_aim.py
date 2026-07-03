@@ -128,6 +128,27 @@ class AimConfigTest(unittest.TestCase):
         self.assertEqual(-5.0, path[-1].pitch)
         self.assertGreater(path[-1].t_ms, 0.0)
 
+    def test_generate_aim_path_dispatches_to_sigmadrift_native_generator(self):
+        path = aim.generate_aim_path(
+            (0.0, 0.0),
+            TargetMetrics(
+                yaw=12.0,
+                pitch=-4.0,
+                width_yaw=2.0,
+                width_pitch=1.0,
+                distance=4.0,
+            ),
+            aim.AimConfig(aim_model="sigmadrift"),
+            angular_step_deg=0.15,
+        )
+
+        self.assertGreater(len(path), 2)
+        self.assertIsInstance(path[0], AimPoint)
+        self.assertEqual((0.0, 0.0, 0.0), (path[0].yaw, path[0].pitch, path[0].t_ms))
+        self.assertEqual(12.0, path[-1].yaw)
+        self.assertEqual(-4.0, path[-1].pitch)
+        self.assertGreater(path[-1].t_ms, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

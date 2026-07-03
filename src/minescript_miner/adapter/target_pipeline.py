@@ -7,7 +7,13 @@ from array import array
 from pathlib import Path
 from typing import AbstractSet, Optional, Sequence, Tuple, Union
 
-from minescript_miner.adapter.native_bridge import Orientation, ScanPosition, acquire_target
+from minescript_miner.adapter.native_bridge import (
+    Orientation,
+    ScanPosition,
+    TargetMetrics,
+    acquire_target,
+    acquire_target_metrics,
+)
 from minescript_miner.adapter.shape_catalog import BlockShapeCatalog, DEFAULT_CATALOG
 
 
@@ -83,6 +89,58 @@ def acquire_target_from_area(
     target_indices = array("H", target_index_values)
     native_start = time.perf_counter_ns() if timings is not None else 0
     result = acquire_target(
+        position,
+        orientation,
+        encoded.shape_catalog_version,
+        encoded.side,
+        reach,
+        encoded.shape_ids,
+        target_indices,
+    )
+    if timings is not None:
+        timings.native_call_ms = elapsed_ms(native_start)
+    return result
+
+
+def acquire_target_metrics_from_area(
+    position: ScanPosition,
+    orientation: Orientation,
+    reach: float,
+    *,
+    min_pos: BlockPos,
+    max_pos: BlockPos,
+    area: Sequence[BlockSample],
+    target_blocks: AbstractSet[str],
+    catalog: BlockShapeCatalog = DEFAULT_CATALOG,
+    timings=None,
+) -> Optional[TargetMetrics]:
+    match_start = time.perf_counter_ns() if timings is not None else 0
+    block_strings: list[Optional[str]] = []
+    target_index_values: list[int] = []
+    for index, (_pos, block_string) in enumerate(area):
+        block_strings.append(block_string)
+        if block_id_literal(block_string) in target_blocks:
+            target_index_values.append(index)
+    if timings is not None:
+        timings.target_match_ms = elapsed_ms(match_start)
+
+    side = max_pos[0] - min_pos[0] + 1
+    if (
+        max_pos[1] - min_pos[1] + 1 != side
+        or max_pos[2] - min_pos[2] + 1 != side
+    ):
+        raise ValueError(f"Expected a cube region, got min={min_pos} max={max_pos}")
+
+    encode_start = time.perf_counter_ns() if timings is not None else 0
+    encoded = catalog.encode_region(side, block_strings)
+    if timings is not None:
+        timings.shape_encode_ms = elapsed_ms(encode_start)
+    if not target_index_values:
+        return None
+
+    target_indices = array("H", target_index_values)
+    native_start = time.perf_counter_ns() if timings is not None else 0
+    result = acquire_target_metrics(
         position,
         orientation,
         encoded.shape_catalog_version,

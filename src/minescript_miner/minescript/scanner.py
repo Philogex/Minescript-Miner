@@ -7,11 +7,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import AbstractSet, Optional, Union
 
-from minescript_miner.adapter.native_bridge import Orientation, ScanPosition
+from minescript_miner.adapter.native_bridge import Orientation, ScanPosition, TargetMetrics
 from minescript_miner.adapter.shape_catalog import BlockShapeCatalog, DEFAULT_CATALOG
 from minescript_miner.adapter.target_pipeline import (
     DEFAULT_TARGET_CONFIG,
     acquire_target_from_area,
+    acquire_target_metrics_from_area,
     elapsed_ms,
     load_target_blocks,
 )
@@ -58,6 +59,51 @@ def acquire_current_target(
         )
 
     result = acquire_target_from_area(
+        position,
+        orientation,
+        reach,
+        min_pos=min_pos,
+        max_pos=max_pos,
+        area=area,
+        target_blocks=target_blocks,
+        catalog=catalog,
+        timings=timings,
+    )
+    if timings is not None:
+        timings.total_ms = elapsed_ms(total_start)
+    return result
+
+
+def acquire_current_target_metrics(
+    position: ScanPosition,
+    orientation: Orientation,
+    reach: float = 4.8,
+    *,
+    catalog: BlockShapeCatalog = DEFAULT_CATALOG,
+    target_config: Union[str, Path] = DEFAULT_TARGET_CONFIG,
+    target_blocks: Optional[AbstractSet[str]] = None,
+    await_region: bool = True,
+    timings: Optional[ScanTimings] = None,
+) -> Optional[TargetMetrics]:
+    total_start = time.perf_counter_ns() if timings is not None else 0
+    min_pos, max_pos = fixed_cube_bounds(position, reach)
+    if target_blocks is None:
+        config_start = time.perf_counter_ns() if timings is not None else 0
+        target_blocks = load_target_blocks(target_config)
+        if timings is not None:
+            timings.target_config_ms = elapsed_ms(config_start)
+
+    if timings is None:
+        area = get_area(position, reach, await_region=await_region)
+    else:
+        area = get_area(
+            position,
+            reach,
+            await_region=await_region,
+            timings=timings.area,
+        )
+
+    result = acquire_target_metrics_from_area(
         position,
         orientation,
         reach,

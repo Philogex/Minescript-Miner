@@ -149,6 +149,24 @@ class AimConfigTest(unittest.TestCase):
         self.assertEqual(-4.0, path[-1].pitch)
         self.assertGreater(path[-1].t_ms, 0.0)
 
+    def test_execute_aim_path_applies_samples_with_relative_delays(self):
+        applied = []
+        delays = []
+
+        completed = aim.execute_aim_path(
+            (
+                AimPoint(1.0, 2.0, 0.0),
+                AimPoint(3.0, 4.0, 25.0),
+                AimPoint(5.0, 6.0, 40.0),
+            ),
+            lambda yaw, pitch: applied.append((yaw, pitch)),
+            sleep=delays.append,
+        )
+
+        self.assertTrue(completed)
+        self.assertEqual([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)], applied)
+        self.assertEqual([0.025, 0.015], delays)
+
 
 if __name__ == "__main__":
     unittest.main()

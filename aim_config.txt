@@ -5,7 +5,7 @@
 #       parameter: value
 #   ]
 
-aim_model: minimum_jerk
+aim_model: sigmadrift
 
 # The live Minecraft sensitivity is read through Minescript's Java bridge.
 # This value is used only if the Minecraft internals differ or Java access fails.

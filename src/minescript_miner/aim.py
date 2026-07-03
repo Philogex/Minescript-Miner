@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Mapping, Union
@@ -335,3 +336,25 @@ def generate_aim_path(
             _sigmadrift_payload(resolved_config.sigmadrift),
         )
     raise ValueError(f"unsupported aim_model {resolved_config.aim_model!r}")
+
+
+def execute_aim_path(
+    path: tuple[AimPoint, ...],
+    set_orientation: Callable[[float, float], None],
+    *,
+    sleep: Callable[[float], None] = time.sleep,
+    is_active: Callable[[], bool] | None = None,
+) -> bool:
+    previous_t_ms: float | None = None
+    for point in path:
+        if is_active is not None and not is_active():
+            return False
+        if previous_t_ms is not None:
+            delay_s = max(0.0, (point.t_ms - previous_t_ms) / 1000.0)
+            if delay_s > 0.0:
+                sleep(delay_s)
+            if is_active is not None and not is_active():
+                return False
+        set_orientation(point.yaw, point.pitch)
+        previous_t_ms = point.t_ms
+    return bool(path)

@@ -27,6 +27,12 @@ from minescript_miner.adapter.native_bridge import (
     generate_minimum_jerk_aim_path,
     generate_sigmadrift_aim_path,
 )
+from minescript_miner.aim_analysis import (
+    AimPathFeatures,
+    compute_aim_path_features,
+    shortest_yaw_delta,
+    unwrap_yaws,
+)
 
 
 DEFAULT_OUTPUT = PROJECT_ROOT / "build" / "aim-path" / "aim_path.png"
@@ -137,20 +143,6 @@ GENERATORS: dict[str, PathGenerator] = {
 }
 
 
-def shortest_yaw_delta(source: float, target: float) -> float:
-    return ((target - source + 180.0) % 360.0) - 180.0
-
-
-def unwrap_yaws(points: Sequence[AimPoint]) -> list[float]:
-    if not points:
-        return []
-
-    unwrapped = [points[0].yaw]
-    for point in points[1:]:
-        unwrapped.append(unwrapped[-1] + shortest_yaw_delta(unwrapped[-1], point.yaw))
-    return unwrapped
-
-
 def angular_velocity_segments(
     points: Sequence[AimPoint],
 ) -> list[VelocitySegment]:
@@ -229,6 +221,58 @@ def generate_paths(
     return paths
 
 
+FEATURE_NAMES = (
+    "fitts_mt",
+    "fitts_id",
+    "fitts_residual",
+    "fitts_residual_ratio",
+    "sub_peak_count",
+    "sub_primary_amp_ratio",
+    "sub_correction_onset",
+    "sub_interpeak_cv",
+    "sub_peak_speed_ratio",
+    "geo_path_efficiency",
+    "geo_max_deviation",
+    "geo_angular_dev_at_peak",
+    "geo_curvature_integral",
+)
+
+
+def compute_features_for_generator(
+    path: GeneratedPath,
+    target: TargetMetrics,
+    config: AimConfig,
+    angular_step_deg: float,
+) -> AimPathFeatures:
+    if path.name == "sigmadrift":
+        return compute_aim_path_features(
+            path.points,
+            target,
+            fitts_a_ms=config.sigmadrift.fitts_a,
+            fitts_b_ms=config.sigmadrift.fitts_b,
+            fallback_width_deg=max(angular_step_deg, config.sigmadrift.target_width * angular_step_deg),
+        )
+    return compute_aim_path_features(
+        path.points,
+        target,
+        fitts_a_ms=config.minimum_jerk.fitts_a_ms,
+        fitts_b_ms=config.minimum_jerk.fitts_b_ms,
+        fallback_width_deg=angular_step_deg,
+    )
+
+
+def format_feature_value(value: float | int) -> str:
+    if isinstance(value, int):
+        return str(value)
+    if math.isnan(value):
+        return "nan"
+    if abs(value) >= 100.0:
+        return f"{value:.2f}"
+    if abs(value) >= 10.0:
+        return f"{value:.3f}"
+    return f"{value:.4f}"
+
+
 def print_summary(
     paths: Sequence[GeneratedPath],
     target: TargetMetrics,
@@ -274,11 +318,21 @@ def print_summary(
             f"final_delta_deg={final_delta:.6f}, "
             f"max_velocity_deg_s={max_velocity:.3f}"
         )
+        features = compute_features_for_generator(
+            path,
+            target,
+            config,
+            angular_step_deg,
+        )
+        for name in FEATURE_NAMES:
+            print(f"  {name}={format_feature_value(getattr(features, name))}")
 
 
 def plot_paths(
     paths: Sequence[GeneratedPath],
     target: TargetMetrics,
+    config: AimConfig,
+    angular_step_deg: float,
     *,
     output: Path | None,
     show: bool,
@@ -290,17 +344,20 @@ def plot_paths(
     import matplotlib.pyplot as plt
 
     figure, axes = plt.subplots(
-        2,
+        3,
         1,
-        figsize=(11, 8),
+        figsize=(13, 12),
         sharex=False,
         constrained_layout=True,
+        gridspec_kw={"height_ratios": [1.0, 1.0, 1.2]},
     )
     figure.suptitle("Native Aim Path Generators")
 
     velocity_axis = axes[0]
     delta_axis = axes[1]
+    feature_axis = axes[2]
     plotted_any = False
+    feature_columns = []
     for path in paths:
         if not path.points:
             continue
@@ -345,6 +402,15 @@ def plot_paths(
             alpha=0.65,
             label=f"{path.name} pitch",
         )
+        features = compute_features_for_generator(
+            path,
+            target,
+            config,
+            angular_step_deg,
+        )
+        feature_columns.append(
+            [format_feature_value(getattr(features, name)) for name in FEATURE_NAMES]
+        )
         plotted_any = True
 
     velocity_axis.set_title("Angular Velocity")
@@ -373,6 +439,18 @@ def plot_paths(
                 va="center",
                 transform=axis.transAxes,
             )
+    else:
+        feature_axis.axis("off")
+        table = feature_axis.table(
+            cellText=list(map(list, zip(*feature_columns))),
+            rowLabels=FEATURE_NAMES,
+            colLabels=[path.name for path in paths if path.points],
+            loc="center",
+        )
+        table.auto_set_font_size(False)
+        table.set_fontsize(8)
+        table.scale(1.0, 1.25)
+        feature_axis.set_title("Kinematic Feature Summary")
 
     if output is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -406,7 +484,14 @@ def main() -> None:
     output = None if str(args.output) == "-" else args.output
     if output is None and not args.show:
         return
-    plot_paths(paths, target, output=output, show=args.show)
+    plot_paths(
+        paths,
+        target,
+        config,
+        args.angular_step_deg,
+        output=output,
+        show=args.show,
+    )
 
 
 if __name__ == "__main__":

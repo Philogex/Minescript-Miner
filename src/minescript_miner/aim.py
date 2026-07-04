@@ -343,10 +343,12 @@ def execute_aim_path(
     *,
     sleep: Callable[[float], None] = time.sleep,
     is_active: Callable[[], bool] | None = None,
+    settle_delay_s: float = 0.0,
 ) -> bool:
     from minescript_miner.minescript.io import set_orientation
 
     previous_t_ms: float | None = None
+    last_point: AimPoint | None = None
     for point in path:
         if is_active is not None and not is_active():
             return False
@@ -358,4 +360,13 @@ def execute_aim_path(
                 return False
         set_orientation(point.yaw, point.pitch)
         previous_t_ms = point.t_ms
-    return bool(path)
+        last_point = point
+
+    if last_point is None:
+        return False
+    if settle_delay_s > 0.0:
+        sleep(settle_delay_s)
+        if is_active is not None and not is_active():
+            return False
+        set_orientation(last_point.yaw, last_point.pitch)
+    return True

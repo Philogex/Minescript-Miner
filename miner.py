@@ -41,6 +41,7 @@ TOGGLE_KEY = "o"
 REACH = 4.5
 IDLE_DELAY = 0.25
 BREAK_POLL_DELAY = 0.05
+AIM_SETTLE_DELAY = 0.05
 LOG_SCAN_TIMINGS = os.environ.get(
     "MINESCRIPT_MINER_LOG_TIMINGS", ""
 ).lower() in {"1", "true", "yes"}
@@ -158,6 +159,7 @@ def run() -> None:
             execute_aim_path(
                 aim_path,
                 is_active=active.is_set,
+                settle_delay_s=AIM_SETTLE_DELAY,
             )
             if active.is_set():
                 mine_targeted_block(target_blocks)

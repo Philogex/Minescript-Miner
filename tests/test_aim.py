@@ -188,6 +188,28 @@ class AimConfigTest(unittest.TestCase):
         self.assertEqual([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)], applied)
         self.assertEqual([0.025, 0.015], delays)
 
+    def test_execute_aim_path_repeats_final_sample_after_settle_delay(self):
+        applied = []
+        delays = []
+
+        original_set_orientation = io.set_orientation
+        try:
+            io.set_orientation = lambda yaw, pitch: applied.append((yaw, pitch))
+            completed = aim.execute_aim_path(
+                (
+                    AimPoint(1.0, 2.0, 0.0),
+                    AimPoint(3.0, 4.0, 10.0),
+                ),
+                sleep=delays.append,
+                settle_delay_s=0.05,
+            )
+        finally:
+            io.set_orientation = original_set_orientation
+
+        self.assertTrue(completed)
+        self.assertEqual([(1.0, 2.0), (3.0, 4.0), (3.0, 4.0)], applied)
+        self.assertEqual([0.01, 0.05], delays)
+
 
 if __name__ == "__main__":
     unittest.main()

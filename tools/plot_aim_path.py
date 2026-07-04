@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import sys
 from dataclasses import dataclass
@@ -55,6 +56,12 @@ class VelocitySegment:
     velocity_deg_s: float
 
 
+@dataclass(frozen=True)
+class ReferenceSummary:
+    name: str
+    features: dict[str, dict[str, float]]
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -95,6 +102,15 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_OUTPUT,
         help="PNG path to write. Use '-' to skip writing.",
+    )
+    parser.add_argument(
+        "--reference-summary",
+        action="append",
+        type=Path,
+        help=(
+            "Precomputed human/reference summary JSON. Can be passed more than "
+            "once; p50 and p95 are added to the feature table."
+        ),
     )
     parser.add_argument(
         "--show",
@@ -261,6 +277,17 @@ def compute_features_for_generator(
     )
 
 
+def load_reference_summary(path: Path) -> ReferenceSummary:
+    with path.open("r") as file:
+        data = json.load(file)
+    source = str(data.get("source", path.stem))
+    split = data.get("split")
+    name = source
+    if split:
+        name = f"{name} {split}"
+    return ReferenceSummary(name=name, features=data.get("features", {}))
+
+
 def format_feature_value(value: float | int) -> str:
     if isinstance(value, int):
         return str(value)
@@ -278,6 +305,7 @@ def print_summary(
     target: TargetMetrics,
     config: AimConfig,
     angular_step_deg: float,
+    reference_summaries: Sequence[ReferenceSummary],
 ) -> None:
     print(
         "Target metrics: "
@@ -326,6 +354,17 @@ def print_summary(
         )
         for name in FEATURE_NAMES:
             print(f"  {name}={format_feature_value(getattr(features, name))}")
+    for summary in reference_summaries:
+        print(f"{summary.name}: precomputed reference")
+        for name in FEATURE_NAMES:
+            values = summary.features.get(name, {})
+            p50 = values.get("p50", math.nan)
+            p95 = values.get("p95", math.nan)
+            print(
+                f"  {name}: "
+                f"p50={format_feature_value(p50)}, "
+                f"p95={format_feature_value(p95)}"
+            )
 
 
 def plot_paths(
@@ -333,6 +372,7 @@ def plot_paths(
     target: TargetMetrics,
     config: AimConfig,
     angular_step_deg: float,
+    reference_summaries: Sequence[ReferenceSummary],
     *,
     output: Path | None,
     show: bool,
@@ -358,6 +398,7 @@ def plot_paths(
     feature_axis = axes[2]
     plotted_any = False
     feature_columns = []
+    feature_column_labels = []
     for path in paths:
         if not path.points:
             continue
@@ -411,6 +452,19 @@ def plot_paths(
         feature_columns.append(
             [format_feature_value(getattr(features, name)) for name in FEATURE_NAMES]
         )
+        feature_column_labels.append(path.name)
+        plotted_any = True
+    for summary in reference_summaries:
+        p50_column = []
+        p95_column = []
+        for name in FEATURE_NAMES:
+            values = summary.features.get(name, {})
+            p50_column.append(format_feature_value(values.get("p50", math.nan)))
+            p95_column.append(format_feature_value(values.get("p95", math.nan)))
+        feature_columns.append(p50_column)
+        feature_column_labels.append(f"{summary.name} p50")
+        feature_columns.append(p95_column)
+        feature_column_labels.append(f"{summary.name} p95")
         plotted_any = True
 
     velocity_axis.set_title("Angular Velocity")
@@ -444,7 +498,7 @@ def plot_paths(
         table = feature_axis.table(
             cellText=list(map(list, zip(*feature_columns))),
             rowLabels=FEATURE_NAMES,
-            colLabels=[path.name for path in paths if path.points],
+            colLabels=feature_column_labels,
             loc="center",
         )
         table.auto_set_font_size(False)
@@ -479,7 +533,17 @@ def main() -> None:
         config,
         args.angular_step_deg,
     )
-    print_summary(paths, target, config, args.angular_step_deg)
+    reference_summaries = tuple(
+        load_reference_summary(path)
+        for path in (args.reference_summary or ())
+    )
+    print_summary(
+        paths,
+        target,
+        config,
+        args.angular_step_deg,
+        reference_summaries,
+    )
 
     output = None if str(args.output) == "-" else args.output
     if output is None and not args.show:
@@ -489,6 +553,7 @@ def main() -> None:
         target,
         config,
         args.angular_step_deg,
+        reference_summaries,
         output=output,
         show=args.show,
     )

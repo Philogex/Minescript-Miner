@@ -20,7 +20,7 @@ if loaded_package is not None:
                 del sys.modules[module_name]
 
 from minescript_miner.adapter.native_bridge import AimPoint, TargetMetrics
-from minescript_miner.aim_analysis import compute_aim_path_features
+from minescript_miner.aim_analysis import compute_aim_path_features, unwrap_yaws
 
 
 class AimAnalysisTest(unittest.TestCase):
@@ -73,7 +73,15 @@ class AimAnalysisTest(unittest.TestCase):
         self.assertEqual(0, features.sub_peak_count)
         self.assertTrue(math.isnan(features.geo_path_efficiency))
 
+    def test_screen_coordinate_mode_does_not_wrap_x_axis(self):
+        path = (
+            AimPoint(350.0, 0.0, 0.0),
+            AimPoint(10.0, 0.0, 10.0),
+        )
+
+        self.assertEqual([350.0, 370.0], unwrap_yaws(path))
+        self.assertEqual([350.0, 10.0], unwrap_yaws(path, wrap_yaw=False))
+
 
 if __name__ == "__main__":
     unittest.main()
-

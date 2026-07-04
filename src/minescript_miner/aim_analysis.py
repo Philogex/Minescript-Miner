@@ -40,18 +40,30 @@ def shortest_yaw_delta(source: float, target: float) -> float:
     return ((target - source + 180.0) % 360.0) - 180.0
 
 
-def unwrap_yaws(points: Sequence[AimPoint]) -> list[float]:
+def _axis_delta(source: float, target: float, *, wrap_yaw: bool) -> float:
+    if wrap_yaw:
+        return shortest_yaw_delta(source, target)
+    return target - source
+
+
+def unwrap_yaws(points: Sequence[AimPoint], *, wrap_yaw: bool = True) -> list[float]:
     if not points:
         return []
 
     unwrapped = [points[0].yaw]
     for point in points[1:]:
-        unwrapped.append(unwrapped[-1] + shortest_yaw_delta(unwrapped[-1], point.yaw))
+        unwrapped.append(
+            unwrapped[-1] + _axis_delta(unwrapped[-1], point.yaw, wrap_yaw=wrap_yaw)
+        )
     return unwrapped
 
 
-def aim_path_series(points: Sequence[AimPoint]) -> AimPathSeries:
-    yaws = tuple(unwrap_yaws(points))
+def aim_path_series(
+    points: Sequence[AimPoint],
+    *,
+    wrap_yaw: bool = True,
+) -> AimPathSeries:
+    yaws = tuple(unwrap_yaws(points, wrap_yaw=wrap_yaw))
     pitches = tuple(point.pitch for point in points)
     times = tuple(point.t_ms for point in points)
     speeds = []
@@ -84,9 +96,11 @@ def _straight_distance(
     start_yaw: float,
     start_pitch: float,
     target: TargetMetrics,
+    *,
+    wrap_yaw: bool,
 ) -> float:
     return math.hypot(
-        shortest_yaw_delta(start_yaw, target.yaw),
+        _axis_delta(start_yaw, target.yaw, wrap_yaw=wrap_yaw),
         target.pitch - start_pitch,
     )
 
@@ -147,8 +161,10 @@ def _max_perpendicular_deviation(
     start_yaw: float,
     start_pitch: float,
     target: TargetMetrics,
+    *,
+    wrap_yaw: bool,
 ) -> float:
-    vx = shortest_yaw_delta(start_yaw, target.yaw)
+    vx = _axis_delta(start_yaw, target.yaw, wrap_yaw=wrap_yaw)
     vy = target.pitch - start_pitch
     length = math.hypot(vx, vy)
     if length == 0.0:
@@ -167,13 +183,15 @@ def _angular_deviation_at_peak(
     start_yaw: float,
     start_pitch: float,
     target: TargetMetrics,
+    *,
+    wrap_yaw: bool,
 ) -> float:
     if not series.speeds_deg_s:
         return math.nan
     peak_index = max(range(len(series.speeds_deg_s)), key=series.speeds_deg_s.__getitem__)
     dx = series.yaws[peak_index + 1] - series.yaws[peak_index]
     dy = series.pitches[peak_index + 1] - series.pitches[peak_index]
-    tx = shortest_yaw_delta(start_yaw, target.yaw)
+    tx = _axis_delta(start_yaw, target.yaw, wrap_yaw=wrap_yaw)
     ty = target.pitch - start_pitch
     move_length = math.hypot(dx, dy)
     target_length = math.hypot(tx, ty)
@@ -211,6 +229,7 @@ def compute_aim_path_features(
     fitts_a_ms: float,
     fitts_b_ms: float,
     fallback_width_deg: float,
+    wrap_yaw: bool = True,
 ) -> AimPathFeatures:
     if len(points) < 2:
         nan = math.nan
@@ -231,11 +250,16 @@ def compute_aim_path_features(
             geo_curvature_integral=nan,
         )
 
-    series = aim_path_series(points)
+    series = aim_path_series(points, wrap_yaw=wrap_yaw)
     start_yaw = points[0].yaw
     start_pitch = points[0].pitch
     movement_time = points[-1].t_ms - points[0].t_ms
-    straight_distance = _straight_distance(start_yaw, start_pitch, target)
+    straight_distance = _straight_distance(
+        start_yaw,
+        start_pitch,
+        target,
+        wrap_yaw=wrap_yaw,
+    )
     target_width = max(
         fallback_width_deg,
         min(
@@ -289,13 +313,14 @@ def compute_aim_path_features(
             start_yaw,
             start_pitch,
             target,
+            wrap_yaw=wrap_yaw,
         ),
         geo_angular_dev_at_peak=_angular_deviation_at_peak(
             series,
             start_yaw,
             start_pitch,
             target,
+            wrap_yaw=wrap_yaw,
         ),
         geo_curvature_integral=_curvature_integral(series),
     )
-

@@ -30,7 +30,6 @@ from minescript_miner.aim import (
 )
 from minescript_miner.minescript.io import (
     minecraft_angular_step_deg,
-    set_orientation,
 )
 from minescript_miner.minescript.scanner import (
     acquire_current_target_metrics,
@@ -158,7 +157,6 @@ def run() -> None:
             )
             execute_aim_path(
                 aim_path,
-                set_orientation,
                 is_active=active.is_set,
             )
             if active.is_set():

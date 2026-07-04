@@ -340,11 +340,12 @@ def generate_aim_path(
 
 def execute_aim_path(
     path: tuple[AimPoint, ...],
-    set_orientation: Callable[[float, float], None],
     *,
     sleep: Callable[[float], None] = time.sleep,
     is_active: Callable[[], bool] | None = None,
 ) -> bool:
+    from minescript_miner.minescript.io import set_orientation
+
     previous_t_ms: float | None = None
     for point in path:
         if is_active is not None and not is_active():

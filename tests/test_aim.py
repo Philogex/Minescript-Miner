@@ -1,6 +1,8 @@
 import sys
 import tempfile
+import types
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 
 
@@ -19,8 +21,23 @@ if loaded_package is not None:
             ):
                 del sys.modules[module_name]
 
+minescript = sys.modules.setdefault(
+    "minescript",
+    types.SimpleNamespace(
+        script_loop=nullcontext(),
+        player_set_orientation=lambda _yaw, _pitch: None,
+    ),
+)
+minescript.script_loop = getattr(minescript, "script_loop", nullcontext())
+minescript.player_set_orientation = getattr(
+    minescript,
+    "player_set_orientation",
+    lambda _yaw, _pitch: None,
+)
+
 from minescript_miner import aim
 from minescript_miner.adapter.native_bridge import AimPoint, TargetMetrics
+from minescript_miner.minescript import io
 
 
 class AimConfigTest(unittest.TestCase):
@@ -153,15 +170,19 @@ class AimConfigTest(unittest.TestCase):
         applied = []
         delays = []
 
-        completed = aim.execute_aim_path(
-            (
-                AimPoint(1.0, 2.0, 0.0),
-                AimPoint(3.0, 4.0, 25.0),
-                AimPoint(5.0, 6.0, 40.0),
-            ),
-            lambda yaw, pitch: applied.append((yaw, pitch)),
-            sleep=delays.append,
-        )
+        original_set_orientation = io.set_orientation
+        try:
+            io.set_orientation = lambda yaw, pitch: applied.append((yaw, pitch))
+            completed = aim.execute_aim_path(
+                (
+                    AimPoint(1.0, 2.0, 0.0),
+                    AimPoint(3.0, 4.0, 25.0),
+                    AimPoint(5.0, 6.0, 40.0),
+                ),
+                sleep=delays.append,
+            )
+        finally:
+            io.set_orientation = original_set_orientation
 
         self.assertTrue(completed)
         self.assertEqual([(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)], applied)

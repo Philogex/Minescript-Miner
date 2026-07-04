@@ -27,6 +27,9 @@ minimum_jerk[
 sigmadrift[
     fitts_a: 50
     fitts_b: 150
+
+    # Fallback in SigmaDrift units when solver target-width metrics are missing.
+    # Normal mining uses the dynamically computed visible target width instead.
     target_width: 20
 
     undershoot_min: 0.92

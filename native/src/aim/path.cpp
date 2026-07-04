@@ -78,12 +78,12 @@ double quantized_target_width(
     double angular_step_deg,
     const SigmaDriftConfig &config
 ) {
-    const double angular_width =
-        std::max(angular_step_deg, std::min(
-            std::max(0.0, target.width_yaw),
-            std::max(0.0, target.width_pitch)
-        ));
-    return std::max(1.0, std::max(config.target_width, angular_width / angular_step_deg));
+    const double width_yaw = std::max(0.0, target.width_yaw);
+    const double width_pitch = std::max(0.0, target.width_pitch);
+    if (width_yaw > 0.0 && width_pitch > 0.0) {
+        return std::max(1.0, std::min(width_yaw, width_pitch) / angular_step_deg);
+    }
+    return std::max(1.0, config.target_width);
 }
 
 struct Correction {

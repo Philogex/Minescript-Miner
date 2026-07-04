@@ -80,6 +80,7 @@ minimum_jerk[
 ]
 
 sigmadrift[
+    # Used only when solver target-width metrics are missing.
     target_width: 20
     overshoot_prob: 0.15
 ]
@@ -91,11 +92,14 @@ block mirrors its initial parameter baseline. The upstream repository
 currently has no repository license; usage permission was granted informally
 by the author for this public non-commercial project.
 
+During mining, aim timing uses the dynamically computed visible target width
+from the native solver. The `sigmadrift.target_width` setting is only a
+fallback for synthetic or degenerate target metrics.
+
 The main runtime constants are currently defined near the top of `miner.py`:
 
 - `TOGGLE_KEY`: activation key
 - `REACH`: maximum mining reach
-- `ROTATION_DURATION`: camera rotation duration
 - `IDLE_DELAY`: delay while no target is available
 - `BREAK_POLL_DELAY`: interval used while monitoring a mined block
 

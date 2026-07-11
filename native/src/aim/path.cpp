@@ -127,7 +127,8 @@ AimPath generate_sigmadrift_path(
     const Orientation &start,
     const TargetMetrics &target,
     double angular_step_deg,
-    const SigmaDriftConfig &config
+    const SigmaDriftConfig &config,
+    std::uint64_t seed
 ) {
     const double step = std::max(1.0e-9, angular_step_deg);
     const double dx = signed_angle_delta_degrees(target.yaw, start.yaw) / step;
@@ -141,8 +142,7 @@ AimPath generate_sigmadrift_path(
         };
     }
 
-    std::random_device random_device;
-    std::mt19937_64 rng(random_device());
+    std::mt19937_64 rng(seed);
     auto uniform = [&](double lo, double hi) {
         return std::uniform_real_distribution<double>(lo, hi)(rng);
     };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 namespace minecraft_miner::aim {
@@ -71,7 +72,8 @@ AimPath generate_sigmadrift_path(
     const Orientation &start,
     const TargetMetrics &target,
     double angular_step_deg,
-    const SigmaDriftConfig &config
+    const SigmaDriftConfig &config,
+    std::uint64_t seed
 );
 
 }  // namespace minecraft_miner::aim

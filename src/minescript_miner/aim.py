@@ -311,6 +311,7 @@ def generate_aim_path(
     *,
     angular_step_deg: float,
     synthetic_export_root: Path | None = None,
+    seed: int | None = None,
 ) -> tuple[AimPoint, ...]:
     resolved_config = config if config is not None else load_aim_config()
     if resolved_config.aim_model not in IMPLEMENTED_AIM_MODELS:
@@ -335,6 +336,7 @@ def generate_aim_path(
             target,
             angular_step_deg,
             _sigmadrift_payload(resolved_config.sigmadrift),
+            seed,
         )
     else:
         raise ValueError(f"unsupported aim_model {resolved_config.aim_model!r}")

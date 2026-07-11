@@ -891,7 +891,8 @@ static bool parse_sigmadrift_aim_path_request(
     minecraft_miner::aim::Orientation &start_orientation,
     minecraft_miner::aim::TargetMetrics &target_metrics,
     double &angular_step_deg,
-    minecraft_miner::aim::SigmaDriftConfig &config
+    minecraft_miner::aim::SigmaDriftConfig &config,
+    unsigned long long &seed
 ) {
     PyObject *start_orientation_object = nullptr;
     PyObject *target_metrics_object = nullptr;
@@ -899,11 +900,12 @@ static bool parse_sigmadrift_aim_path_request(
 
     if (!PyArg_ParseTuple(
             args,
-            "OOdO:generate_sigmadrift_aim_path",
+            "OOdOK:generate_sigmadrift_aim_path",
             &start_orientation_object,
             &target_metrics_object,
             &angular_step_deg,
-            &config_object
+            &config_object,
+            &seed
         )) {
         return false;
     }
@@ -998,12 +1000,14 @@ static PyObject *generate_sigmadrift_aim_path(PyObject *, PyObject *args) {
     minecraft_miner::aim::TargetMetrics target_metrics{};
     minecraft_miner::aim::SigmaDriftConfig config{};
     double angular_step_deg = 0.0;
+    unsigned long long seed = 0;
     if (!parse_sigmadrift_aim_path_request(
             args,
             start_orientation,
             target_metrics,
             angular_step_deg,
-            config
+            config,
+            seed
         )) {
         return nullptr;
     }
@@ -1013,7 +1017,8 @@ static PyObject *generate_sigmadrift_aim_path(PyObject *, PyObject *args) {
             start_orientation,
             target_metrics,
             angular_step_deg,
-            config
+            config,
+            static_cast<std::uint64_t>(seed)
         );
     return build_aim_path_tuple(path);
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from array import array
 from dataclasses import dataclass
+import secrets
 from typing import Optional, Sequence, Tuple
 
 import _minescript_miner_native as native
@@ -167,14 +168,19 @@ def generate_sigmadrift_aim_path(
     target_metrics: TargetMetrics,
     angular_step_deg: float,
     config_values: Sequence[float],
+    seed: int | None = None,
 ) -> Tuple[AimPoint, ...]:
     """Return a native-generated SigmaDrift aim path."""
 
+    resolved_seed = secrets.randbits(64) if seed is None else int(seed)
+    if not 0 <= resolved_seed <= (1 << 64) - 1:
+        raise ValueError("seed must fit in an unsigned 64-bit integer")
     result = native.generate_sigmadrift_aim_path(
         start_orientation,
         _target_metrics_payload(target_metrics),
         float(angular_step_deg),
         tuple(float(value) for value in config_values),
+        resolved_seed,
     )
     return tuple(
         AimPoint(float(yaw), float(pitch), float(t_ms))

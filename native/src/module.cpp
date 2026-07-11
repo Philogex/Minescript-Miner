@@ -491,8 +491,27 @@ struct NativeTargetSolveResult {
     bool found = false;
     double yaw = 0.0;
     double pitch = 0.0;
+    std::int32_t target_x = 0;
+    std::int32_t target_y = 0;
+    std::int32_t target_z = 0;
+    const char *face_id = "";
+    double hit_x = 0.0;
+    double hit_y = 0.0;
+    double hit_z = 0.0;
     minecraft_miner::BranchBoundResult solve_result{};
 };
+
+static const char *minecraft_face_id(const minecraft_miner::WorldRectFace &face) {
+    switch (face.axis) {
+        case minecraft_miner::PlaneAxis::X:
+            return face.normal_sign > 0 ? "east" : "west";
+        case minecraft_miner::PlaneAxis::Y:
+            return face.normal_sign > 0 ? "up" : "down";
+        case minecraft_miner::PlaneAxis::Z:
+            return face.normal_sign > 0 ? "south" : "north";
+    }
+    return "";
+}
 
 static bool solve_acquire_target(
     PyObject *args,
@@ -650,6 +669,21 @@ static bool solve_acquire_target(
             minecraft_miner::yaw_pitch_from_direction(solve_result.direction);
         returned_yaw = target_orientation.yaw;
         returned_pitch = target_orientation.pitch;
+
+        const minecraft_miner::WorldRectFace &target_face =
+            scan_geometry.world_faces[solve_result.target_world_face_index];
+        const minecraft_miner::Vec3 owning_block_point =
+            minecraft_miner::world_face_center(
+                scan_geometry,
+                solve_result.target_world_face_index
+            ) - minecraft_miner::face_normal(target_face) * 1.0e-6;
+        output.target_x = static_cast<std::int32_t>(std::floor(owning_block_point.x));
+        output.target_y = static_cast<std::int32_t>(std::floor(owning_block_point.y));
+        output.target_z = static_cast<std::int32_t>(std::floor(owning_block_point.z));
+        output.face_id = minecraft_face_id(target_face);
+        output.hit_x = position[0] + solve_result.direction.x * solve_result.distance;
+        output.hit_y = position[1] + solve_result.direction.y * solve_result.distance;
+        output.hit_z = position[2] + solve_result.direction.z * solve_result.distance;
     }
 
     if (log_native_scan) {
@@ -706,12 +740,19 @@ static PyObject *acquire_target_metrics(PyObject *, PyObject *args) {
         Py_RETURN_NONE;
     }
     return Py_BuildValue(
-        "(ddddd)",
+        "(ddddd(iii)s(ddd))",
         result.yaw,
         result.pitch,
         result.solve_result.width_yaw,
         result.solve_result.width_pitch,
-        result.solve_result.distance
+        result.solve_result.distance,
+        result.target_x,
+        result.target_y,
+        result.target_z,
+        result.face_id,
+        result.hit_x,
+        result.hit_y,
+        result.hit_z
     );
 }
 

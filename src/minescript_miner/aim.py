@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable, Mapping, Union
 
@@ -310,6 +310,7 @@ def generate_aim_path(
     config: AimConfig | None = None,
     *,
     angular_step_deg: float,
+    synthetic_export_root: Path | None = None,
 ) -> tuple[AimPoint, ...]:
     resolved_config = config if config is not None else load_aim_config()
     if resolved_config.aim_model not in IMPLEMENTED_AIM_MODELS:
@@ -318,7 +319,7 @@ def generate_aim_path(
         )
     if resolved_config.aim_model == "minimum_jerk":
         minimum = resolved_config.minimum_jerk
-        return _generate_minimum_jerk_aim_path(
+        path = _generate_minimum_jerk_aim_path(
             start_orientation,
             target,
             angular_step_deg,
@@ -328,14 +329,31 @@ def generate_aim_path(
             minimum.max_duration_ms,
             minimum.sample_hz,
         )
-    if resolved_config.aim_model == "sigmadrift":
-        return _generate_sigmadrift_aim_path(
+    elif resolved_config.aim_model == "sigmadrift":
+        path = _generate_sigmadrift_aim_path(
             start_orientation,
             target,
             angular_step_deg,
             _sigmadrift_payload(resolved_config.sigmadrift),
         )
-    raise ValueError(f"unsupported aim_model {resolved_config.aim_model!r}")
+    else:
+        raise ValueError(f"unsupported aim_model {resolved_config.aim_model!r}")
+
+    if synthetic_export_root is not None:
+        from minescript_miner.adapter.trajectory_export import (
+            write_synthetic_trajectory_session,
+        )
+
+        write_synthetic_trajectory_session(
+            synthetic_export_root,
+            path,
+            start_orientation,
+            target,
+            generator=resolved_config.aim_model,
+            angular_step_deg=angular_step_deg,
+            generator_config=asdict(resolved_config),
+        )
+    return path
 
 
 def execute_aim_path(

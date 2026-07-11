@@ -20,6 +20,11 @@ class TargetMetrics:
     width_yaw: float
     width_pitch: float
     distance: float
+    target_block: Tuple[int, int, int] | None = None
+    face_id: str | None = None
+    hit_point: Tuple[float, float, float] | None = None
+    block_state_before: str | None = None
+    neighbors: Tuple[Tuple[int, int, int, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -92,13 +97,25 @@ def acquire_target_metrics(
     if result is None:
         return None
 
-    yaw, pitch, width_yaw, width_pitch, distance = result
+    (
+        yaw,
+        pitch,
+        width_yaw,
+        width_pitch,
+        distance,
+        target_block,
+        face_id,
+        hit_point,
+    ) = result
     return TargetMetrics(
         float(yaw),
         float(pitch),
         float(width_yaw),
         float(width_pitch),
         float(distance),
+        tuple(int(coordinate) for coordinate in target_block),
+        str(face_id) or None,
+        tuple(float(coordinate) for coordinate in hit_point),
     )
 
 

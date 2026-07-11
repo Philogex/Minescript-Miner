@@ -96,6 +96,12 @@ During mining, aim timing uses the dynamically computed visible target width
 from the native solver. The `sigmadrift.target_width` setting is only a
 fallback for synthetic or degenerate target metrics.
 
+For offline generator comparison, `generate_aim_path()` accepts an optional
+`synthetic_export_root=Path(...)`. When set, it writes a DAQ-compatible
+`synthetic-*` recording directory after generation. The export is disabled by
+default and records `metadata.json` beside the CSV files to distinguish
+observed data from derived orientation-step mouse deltas and placeholders.
+
 The main runtime constants are currently defined near the top of `miner.py`:
 
 - `TOGGLE_KEY`: activation key

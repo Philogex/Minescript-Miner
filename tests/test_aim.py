@@ -1,3 +1,5 @@
+import csv
+import json
 import sys
 import tempfile
 import types
@@ -165,6 +167,49 @@ class AimConfigTest(unittest.TestCase):
         self.assertEqual(12.0, path[-1].yaw)
         self.assertEqual(-4.0, path[-1].pitch)
         self.assertGreater(path[-1].t_ms, 0.0)
+
+    def test_generate_aim_path_exports_synthetic_daq_session_on_request(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = aim.generate_aim_path(
+                (0.0, 0.0),
+                TargetMetrics(
+                    yaw=10.0,
+                    pitch=-5.0,
+                    width_yaw=2.0,
+                    width_pitch=1.0,
+                    distance=4.0,
+                    target_block=(4, 70, -3),
+                    face_id="north",
+                    hit_point=(4.5, 70.2, -3.0),
+                    block_state_before="minecraft:diamond_ore",
+                    neighbors=((0, 1, 0, "minecraft:air"),),
+                ),
+                aim.AimConfig(),
+                angular_step_deg=0.15,
+                synthetic_export_root=Path(temp_dir),
+            )
+            sessions = list(Path(temp_dir).glob("synthetic-*"))
+
+            self.assertEqual(1, len(sessions))
+            session = sessions[0]
+            metadata = json.loads((session / "metadata.json").read_text())
+            self.assertEqual("minescript-miner-synthetic", metadata["source"])
+            self.assertEqual("minimum_jerk", metadata["generator"])
+            self.assertTrue((session / "events.csv").is_file())
+            self.assertTrue((session / "state_samples.csv").is_file())
+            self.assertTrue((session / "mouse_trajectory.csv").is_file())
+            with (session / "events.csv").open(newline="") as file:
+                event = next(csv.DictReader(file))
+            self.assertEqual("4", event["target_x"])
+            self.assertEqual("70", event["target_y"])
+            self.assertEqual("-3", event["target_z"])
+            self.assertEqual("north", event["face_id"])
+            self.assertEqual("minecraft:diamond_ore", event["block_state_before"])
+            self.assertEqual(
+                [{"dx": 0, "dy": 1, "dz": 0, "state": "minecraft:air"}],
+                json.loads(event["neighbors_json"]),
+            )
+            self.assertEqual(2, len(path))
 
     def test_execute_aim_path_applies_samples_with_relative_delays(self):
         applied = []

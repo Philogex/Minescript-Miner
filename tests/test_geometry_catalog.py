@@ -223,6 +223,9 @@ class GeometryCatalogTest(unittest.TestCase):
         self.assertGreater(metrics.width_pitch, 0.0)
         self.assertTrue(math.isfinite(metrics.distance))
         self.assertGreater(metrics.distance, 0.0)
+        self.assertIsNotNone(metrics.target_block)
+        self.assertIsNotNone(metrics.face_id)
+        self.assertIsNotNone(metrics.hit_point)
 
     def test_native_bridge_rejects_non_uint16_arrays(self):
         shape_ids = array("I", [SHAPE_ID_BY_NAME["empty"]] * 27)

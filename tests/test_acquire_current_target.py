@@ -28,10 +28,55 @@ sys.modules.setdefault(
 from minescript_miner.adapter.catalog_contract import SHAPE_CATALOG_VERSION
 from minescript_miner.adapter.shape_catalog import SHAPE_ID_BY_NAME
 from minescript_miner.adapter import target_pipeline
+from minescript_miner.adapter.native_bridge import TargetMetrics
 from minescript_miner.minescript import scanner
 
 
 class AcquireCurrentTargetTest(unittest.TestCase):
+    def test_acquire_current_target_metrics_retains_solver_and_area_context(self):
+        original_get_area = scanner.get_area
+        original_acquire_target_metrics = target_pipeline.acquire_target_metrics
+
+        area = [
+            (
+                (x, y, z),
+                "minecraft:diamond_ore" if (x, y, z) == (0, 0, 1) else "minecraft:stone",
+            )
+            for x in (-1, 0, 1)
+            for y in (-1, 0, 1)
+            for z in (-1, 0, 1)
+        ]
+
+        try:
+            scanner.get_area = lambda *_args, **_kwargs: area
+            target_pipeline.acquire_target_metrics = lambda *_args: TargetMetrics(
+                yaw=0.0,
+                pitch=0.0,
+                width_yaw=1.0,
+                width_pitch=1.0,
+                distance=1.0,
+                target_block=(0, 0, 1),
+                face_id="north",
+                hit_point=(0.5, 0.5, 1.0),
+            )
+            result = scanner.acquire_current_target_metrics(
+                (0.5, 0.5, 0.5),
+                (0.0, 0.0),
+                reach=0.5,
+                target_blocks=frozenset({"minecraft:diamond_ore"}),
+            )
+        finally:
+            scanner.get_area = original_get_area
+            target_pipeline.acquire_target_metrics = original_acquire_target_metrics
+
+        self.assertIsNotNone(result)
+        self.assertEqual((0, 0, 1), result.target_block)
+        self.assertEqual("north", result.face_id)
+        self.assertEqual((0.5, 0.5, 1.0), result.hit_point)
+        self.assertEqual("minecraft:diamond_ore", result.block_state_before)
+        self.assertEqual(26, len(result.neighbors))
+        self.assertIn((-1, 0, 0, "minecraft:stone"), result.neighbors)
+
     def test_acquire_current_target_uses_preloaded_target_blocks(self):
         original_get_area = scanner.get_area
         original_acquire_target = target_pipeline.acquire_target

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from array import array
+from dataclasses import replace
 from pathlib import Path
 from typing import AbstractSet, Optional, Sequence, Tuple, Union
 
@@ -48,6 +49,46 @@ def block_id_literal(block_string: Optional[str]) -> str:
     if not raw:
         return AIR_BLOCK
     return raw.split("[", 1)[0].strip()
+
+
+def _block_state(block_string: Optional[str]) -> str:
+    return block_string.strip().lower() if block_string else AIR_BLOCK
+
+
+def _with_area_context(
+    metrics: TargetMetrics,
+    area: Sequence[BlockSample],
+) -> TargetMetrics:
+    if metrics.target_block is None:
+        return metrics
+
+    states_by_position = {
+        position: _block_state(block_string) for position, block_string in area
+    }
+    target_x, target_y, target_z = metrics.target_block
+    neighbors = tuple(
+        (
+            dx,
+            dy,
+            dz,
+            states_by_position.get(
+                (target_x + dx, target_y + dy, target_z + dz),
+                "synthetic:unobserved",
+            ),
+        )
+        for dx in (-1, 0, 1)
+        for dy in (-1, 0, 1)
+        for dz in (-1, 0, 1)
+        if (dx, dy, dz) != (0, 0, 0)
+    )
+    return replace(
+        metrics,
+        block_state_before=states_by_position.get(
+            metrics.target_block,
+            "synthetic:unobserved",
+        ),
+        neighbors=neighbors,
+    )
 
 
 def acquire_target_from_area(
@@ -151,4 +192,6 @@ def acquire_target_metrics_from_area(
     )
     if timings is not None:
         timings.native_call_ms = elapsed_ms(native_start)
-    return result
+    if result is None:
+        return None
+    return _with_area_context(result, area)

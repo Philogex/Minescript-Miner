@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <utility>
 
 namespace minecraft_miner::aim {
@@ -9,6 +10,7 @@ namespace minecraft_miner::aim {
 namespace {
 
 constexpr double PROJECTION_EPSILON = 1.0e-12;
+constexpr double SAFE_INTERIOR_BLEND = 1.0e-3;
 
 bool finite(const Vec3 &value) {
     return std::isfinite(value.x) &&
@@ -58,20 +60,19 @@ double polygon_orientation(const std::vector<Point2> &vertices) {
     return area_twice > 0.0 ? 1.0 : -1.0;
 }
 
-bool point_in_component(
-    const ProjectedTargetComponent &component,
+bool point_in_polygon(
+    const std::vector<Point2> &vertices,
+    double orientation,
     Point2 point
 ) {
     for (std::size_t index = 0;
-         index < component.vertices.size();
+         index < vertices.size();
          ++index) {
-        const Point2 a = component.vertices[index];
-        const Point2 b = component.vertices[
-            (index + 1) % component.vertices.size()
-        ];
+        const Point2 a = vertices[index];
+        const Point2 b = vertices[(index + 1) % vertices.size()];
         const Point2 edge{b.x - a.x, b.y - a.y};
         const Point2 relative{point.x - a.x, point.y - a.y};
-        const double side = component.orientation * cross2(edge, relative);
+        const double side = orientation * cross2(edge, relative);
         const double scale = std::max({
             1.0,
             std::abs(edge.x),
@@ -84,6 +85,131 @@ bool point_in_component(
         }
     }
     return true;
+}
+
+double inset_side(
+    Point2 a,
+    Point2 b,
+    Point2 point,
+    double orientation,
+    double margin
+) {
+    const Point2 edge{b.x - a.x, b.y - a.y};
+    const Point2 relative{point.x - a.x, point.y - a.y};
+    return orientation * cross2(edge, relative) -
+        margin * std::hypot(edge.x, edge.y);
+}
+
+std::vector<Point2> inset_component(
+    const ProjectedTargetComponent &component,
+    double margin
+) {
+    std::vector<Point2> polygon = component.vertices;
+    for (std::size_t edge_index = 0;
+         edge_index < component.vertices.size() && !polygon.empty();
+         ++edge_index) {
+        const Point2 a = component.vertices[edge_index];
+        const Point2 b = component.vertices[
+            (edge_index + 1) % component.vertices.size()
+        ];
+        std::vector<Point2> clipped;
+        clipped.reserve(polygon.size() + 1);
+
+        Point2 previous = polygon.back();
+        double previous_side = inset_side(
+            a,
+            b,
+            previous,
+            component.orientation,
+            margin
+        );
+        bool previous_inside = previous_side >= -PROJECTION_EPSILON;
+        for (const Point2 current : polygon) {
+            const double current_side = inset_side(
+                a,
+                b,
+                current,
+                component.orientation,
+                margin
+            );
+            const bool current_inside =
+                current_side >= -PROJECTION_EPSILON;
+            if (current_inside != previous_inside) {
+                const double denominator = previous_side - current_side;
+                if (std::abs(denominator) > PROJECTION_EPSILON) {
+                    const double t = previous_side / denominator;
+                    clipped.push_back({
+                        previous.x + (current.x - previous.x) * t,
+                        previous.y + (current.y - previous.y) * t,
+                    });
+                }
+            }
+            if (current_inside) {
+                clipped.push_back(current);
+            }
+            previous = current;
+            previous_side = current_side;
+            previous_inside = current_inside;
+        }
+        polygon = std::move(clipped);
+    }
+    return polygon;
+}
+
+bool valid_polygon(const std::vector<Point2> &vertices) {
+    return vertices.size() >= 3 && polygon_orientation(vertices) != 0.0;
+}
+
+std::vector<Point2> safe_component_vertices(
+    const ProjectedTargetComponent &component,
+    double requested_margin
+) {
+    double margin = std::max(0.0, requested_margin);
+    for (int attempt = 0; attempt < 12; ++attempt) {
+        std::vector<Point2> vertices = inset_component(component, margin);
+        if (valid_polygon(vertices)) {
+            return vertices;
+        }
+        margin *= 0.5;
+    }
+    return component.vertices;
+}
+
+Point2 closest_point_on_segment(Point2 point, Point2 a, Point2 b) {
+    const double dx = b.x - a.x;
+    const double dy = b.y - a.y;
+    const double length_squared = dx * dx + dy * dy;
+    if (!(length_squared > PROJECTION_EPSILON * PROJECTION_EPSILON)) {
+        return a;
+    }
+    const double t = std::clamp(
+        ((point.x - a.x) * dx + (point.y - a.y) * dy) /
+            length_squared,
+        0.0,
+        1.0
+    );
+    return {a.x + dx * t, a.y + dy * t};
+}
+
+double distance_squared(Point2 lhs, Point2 rhs) {
+    const double dx = lhs.x - rhs.x;
+    const double dy = lhs.y - rhs.y;
+    return dx * dx + dy * dy;
+}
+
+bool direction_from_projected_point(
+    const TargetProjection &projection,
+    Point2 point,
+    Vec3 &out
+) {
+    return normalize({
+        projection.forward.x + projection.right.x * point.x +
+            projection.up.x * point.y,
+        projection.forward.y + projection.right.y * point.x +
+            projection.up.y * point.y,
+        projection.forward.z + projection.right.z * point.x +
+            projection.up.z * point.y,
+    }, out);
 }
 
 }  // namespace
@@ -203,9 +329,97 @@ bool point_in_visible_region(
         region.components.begin(),
         region.components.end(),
         [projected](const ProjectedTargetComponent &component) {
-            return point_in_component(component, projected);
+            return point_in_polygon(
+                component.vertices,
+                component.orientation,
+                projected
+            );
         }
     );
+}
+
+bool point_in_visible_region_with_margin(
+    const ProjectedTargetRegion &region,
+    const Vec3 &direction,
+    double margin
+) {
+    Point2 projected{};
+    if (region.components.empty() || !std::isfinite(margin) || margin < 0.0 ||
+        !project_target_direction(region.projection, direction, projected)) {
+        return false;
+    }
+    return std::any_of(
+        region.components.begin(),
+        region.components.end(),
+        [projected, margin](const ProjectedTargetComponent &component) {
+            const std::vector<Point2> safe_vertices =
+                safe_component_vertices(component, margin);
+            return point_in_polygon(
+                safe_vertices,
+                polygon_orientation(safe_vertices),
+                projected
+            );
+        }
+    );
+}
+
+bool closest_safe_direction_in_visible_region(
+    const ProjectedTargetRegion &region,
+    const Vec3 &direction,
+    double margin,
+    Vec3 &out
+) {
+    if (region.components.empty() || !std::isfinite(margin) || margin < 0.0) {
+        out = {};
+        return false;
+    }
+
+    Point2 query{};
+    project_target_direction(region.projection, direction, query);
+    Point2 best{};
+    double best_distance = std::numeric_limits<double>::infinity();
+    for (const ProjectedTargetComponent &component : region.components) {
+        const std::vector<Point2> vertices =
+            safe_component_vertices(component, margin);
+        const double orientation = polygon_orientation(vertices);
+        if (orientation == 0.0) {
+            continue;
+        }
+
+        if (point_in_polygon(vertices, orientation, query)) {
+            best = query;
+            best_distance = 0.0;
+            break;
+        }
+        Point2 centroid{};
+        for (const Point2 vertex : vertices) {
+            centroid.x += vertex.x;
+            centroid.y += vertex.y;
+        }
+        centroid.x /= static_cast<double>(vertices.size());
+        centroid.y /= static_cast<double>(vertices.size());
+        for (std::size_t index = 0; index < vertices.size(); ++index) {
+            Point2 candidate = closest_point_on_segment(
+                query,
+                vertices[index],
+                vertices[(index + 1) % vertices.size()]
+            );
+            candidate.x += (centroid.x - candidate.x) * SAFE_INTERIOR_BLEND;
+            candidate.y += (centroid.y - candidate.y) * SAFE_INTERIOR_BLEND;
+            const double candidate_distance =
+                distance_squared(query, candidate);
+            if (candidate_distance < best_distance) {
+                best = candidate;
+                best_distance = candidate_distance;
+            }
+        }
+    }
+    if (!std::isfinite(best_distance) ||
+        !direction_from_projected_point(region.projection, best, out)) {
+        out = {};
+        return false;
+    }
+    return true;
 }
 
 }  // namespace minecraft_miner::aim

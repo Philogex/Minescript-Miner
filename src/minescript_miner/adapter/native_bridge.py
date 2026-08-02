@@ -210,6 +210,7 @@ def generate_geometry_feedback_sigmadrift_aim_path(
     target_metrics: TargetMetrics,
     angular_step_deg: float,
     config_values: Sequence[float],
+    feedback_config_values: Sequence[float],
     seed: int | None = None,
 ) -> Tuple[AimPoint, ...]:
     """Return a native-generated geometry-feedback SigmaDrift path."""
@@ -220,6 +221,7 @@ def generate_geometry_feedback_sigmadrift_aim_path(
         target_metrics.visible_components,
         float(angular_step_deg),
         tuple(float(value) for value in config_values),
+        tuple(feedback_config_values),
         _resolved_seed(seed),
     )
     return tuple(

@@ -68,11 +68,21 @@ class SigmaDriftConfig:
 
 
 @dataclass(frozen=True)
+class GeometryFeedbackSigmaDriftConfig:
+    feedback_latency_ms: float = 100.0
+    safe_margin_steps: float = 1.0
+    max_corrections: int = 3
+
+
+@dataclass(frozen=True)
 class AimConfig:
     aim_model: str = "minimum_jerk"
     fallback_angular_step_deg: float = DEFAULT_FALLBACK_ANGULAR_STEP_DEG
     minimum_jerk: MinimumJerkConfig = field(default_factory=MinimumJerkConfig)
     sigmadrift: SigmaDriftConfig = field(default_factory=SigmaDriftConfig)
+    geometry_feedback_sigmadrift: GeometryFeedbackSigmaDriftConfig = field(
+        default_factory=GeometryFeedbackSigmaDriftConfig
+    )
 
 
 def _parse_float(value: str, name: str) -> float:
@@ -139,10 +149,17 @@ SIGMADRIFT_PARSERS: Mapping[str, Parser] = {
     "gamma_shape": _parse_float,
 }
 
+GEOMETRY_FEEDBACK_SIGMADRIFT_PARSERS: Mapping[str, Parser] = {
+    "feedback_latency_ms": _parse_float,
+    "safe_margin_steps": _parse_float,
+    "max_corrections": _parse_int,
+}
+
 SECTION_PARSERS: Mapping[str, Mapping[str, Parser]] = {
     "global": GLOBAL_PARSERS,
     "minimum_jerk": MINIMUM_JERK_PARSERS,
     "sigmadrift": SIGMADRIFT_PARSERS,
+    "geometry_feedback_sigmadrift": GEOMETRY_FEEDBACK_SIGMADRIFT_PARSERS,
 }
 
 
@@ -155,6 +172,7 @@ def _parse_config_values(path: Path) -> dict[str, dict[str, object]]:
         "global": {},
         "minimum_jerk": {},
         "sigmadrift": {},
+        "geometry_feedback_sigmadrift": {},
     }
     section = "global"
 
@@ -201,6 +219,9 @@ def _build_config(values: Mapping[str, Mapping[str, object]]) -> AimConfig:
         **values["global"],
         minimum_jerk=MinimumJerkConfig(**values["minimum_jerk"]),
         sigmadrift=SigmaDriftConfig(**values["sigmadrift"]),
+        geometry_feedback_sigmadrift=GeometryFeedbackSigmaDriftConfig(
+            **values["geometry_feedback_sigmadrift"]
+        ),
     )
 
 
@@ -265,6 +286,24 @@ def _validate_config(config: AimConfig) -> None:
             f"sigmadrift.{upper}",
         )
 
+    feedback = config.geometry_feedback_sigmadrift
+    if feedback.feedback_latency_ms < 0.0:
+        raise ValueError(
+            "geometry_feedback_sigmadrift.feedback_latency_ms must be >= 0"
+        )
+    if feedback.safe_margin_steps < 0.0:
+        raise ValueError(
+            "geometry_feedback_sigmadrift.safe_margin_steps must be >= 0"
+        )
+    if feedback.max_corrections < 0:
+        raise ValueError(
+            "geometry_feedback_sigmadrift.max_corrections must be >= 0"
+        )
+    if feedback.max_corrections > 64:
+        raise ValueError(
+            "geometry_feedback_sigmadrift.max_corrections must be <= 64"
+        )
+
 
 def load_aim_config(path: Union[str, Path] = DEFAULT_AIM_CONFIG) -> AimConfig:
     config_path = Path(path)
@@ -309,6 +348,16 @@ def _sigmadrift_payload(config: SigmaDriftConfig) -> tuple[float, ...]:
     )
 
 
+def _geometry_feedback_sigmadrift_payload(
+    config: GeometryFeedbackSigmaDriftConfig,
+) -> tuple[float, float, int]:
+    return (
+        config.feedback_latency_ms,
+        config.safe_margin_steps,
+        config.max_corrections,
+    )
+
+
 def generate_aim_path(
     start_orientation: Orientation,
     target: TargetMetrics,
@@ -349,6 +398,9 @@ def generate_aim_path(
             target,
             angular_step_deg,
             _sigmadrift_payload(resolved_config.sigmadrift),
+            _geometry_feedback_sigmadrift_payload(
+                resolved_config.geometry_feedback_sigmadrift
+            ),
             seed,
         )
     else:

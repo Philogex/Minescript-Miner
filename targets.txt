@@ -1,3 +1,4 @@
 minecraft:stone
 minecraft:cobblestone
 minecraft:dirt
+minecraft:diamond_ore

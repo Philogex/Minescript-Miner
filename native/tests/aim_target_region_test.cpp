@@ -1,3 +1,4 @@
+#include "minecraft_miner/aim/angle.hpp"
 #include "minecraft_miner/aim/geometry_feedback_sigmadrift.hpp"
 #include "minecraft_miner/aim/target_region.hpp"
 
@@ -77,6 +78,27 @@ int main() {
     assert(point_in_visible_region(square, z_direction(0.25, 0.0)));
     assert(!point_in_visible_region(square, z_direction(0.2501, 0.0)));
     assert(!point_in_visible_region(square, {0.0, 0.0, -1.0}));
+    assert(point_in_visible_region_with_margin(
+        square,
+        z_direction(0.19, 0.0),
+        0.05
+    ));
+    assert(!point_in_visible_region_with_margin(
+        square,
+        z_direction(0.21, 0.0),
+        0.05
+    ));
+    Vec3 closest_safe{};
+    assert(closest_safe_direction_in_visible_region(
+        square,
+        z_direction(0.4, 0.0),
+        0.05,
+        closest_safe
+    ));
+    assert(project_target_direction(identity, closest_safe, projected));
+    assert(projected.x < 0.2);
+    assert(projected.x > 0.19);
+    assert(std::abs(projected.y) < 1.0e-12);
 
     VisibleDirectionComponent clockwise =
         rectangle(-0.25, -0.25, 0.25, 0.25);
@@ -158,27 +180,88 @@ int main() {
         4.0,
         2.0,
     };
-    const AimPath dummy_path =
+    SigmaDriftConfig deterministic{};
+    deterministic.undershoot_min = 0.5;
+    deterministic.undershoot_max = 0.5;
+    deterministic.overshoot_prob = 0.0;
+    deterministic.curvature_scale = 0.0;
+    deterministic.ou_sigma = 0.0;
+    deterministic.tremor_amp_min = 0.0;
+    deterministic.tremor_amp_max = 0.0;
+    deterministic.sdn_k = 0.0;
+    const VisibleDirectionComponents narrow_target{
+        rectangle(-0.02, -0.02, 0.02, 0.02),
+    };
+    const GeometryFeedbackSigmaDriftConfig feedback{0.0, 0.5, 3};
+    const AimPath corrected_path =
         generate_geometry_feedback_sigmadrift_path(
             {10.0, -2.0},
             target,
-            {rectangle(-0.25, -0.25, 0.25, 0.25)},
+            narrow_target,
             0.15,
-            {},
+            deterministic,
+            feedback,
             1234
         );
-    assert(dummy_path.size() == 2);
-    assert(dummy_path.front().yaw == 10.0);
-    assert(dummy_path.front().pitch == -2.0);
-    assert(dummy_path.front().t_ms == 0.0);
-    assert(dummy_path.back().yaw == target.yaw);
-    assert(dummy_path.back().pitch == target.pitch);
-    assert(dummy_path.back().t_ms == 100.0);
+    assert(corrected_path.size() > 2);
+    assert(corrected_path.front().yaw == 10.0);
+    assert(corrected_path.front().pitch == -2.0);
+    assert(corrected_path.front().t_ms == 0.0);
+    for (std::size_t index = 1; index < corrected_path.size(); ++index) {
+        assert(corrected_path[index].t_ms > corrected_path[index - 1].t_ms);
+    }
+    const AimSample corrected_end = corrected_path.back();
+    ProjectedTargetRegion narrow_region{};
+    assert(project_visible_target_region(
+        {0.0, 0.0, 1.0},
+        narrow_target,
+        narrow_region
+    ));
+    assert(point_in_visible_region(
+        narrow_region,
+        minecraft_miner::look_direction_from_yaw_pitch(
+            corrected_end.yaw,
+            corrected_end.pitch
+        )
+    ));
+    const AimPath uncorrected_path =
+        generate_geometry_feedback_sigmadrift_path(
+            {10.0, -2.0},
+            target,
+            narrow_target,
+            0.15,
+            deterministic,
+            {0.0, 0.5, 0},
+            1234
+        );
+    assert(!point_in_visible_region(
+        narrow_region,
+        minecraft_miner::look_direction_from_yaw_pitch(
+            uncorrected_path.back().yaw,
+            uncorrected_path.back().pitch
+        )
+    ));
+    const AimPath repeated_path = generate_geometry_feedback_sigmadrift_path(
+        {10.0, -2.0},
+        target,
+        narrow_target,
+        0.15,
+        deterministic,
+        feedback,
+        1234
+    );
+    assert(corrected_path.size() == repeated_path.size());
+    for (std::size_t index = 0; index < corrected_path.size(); ++index) {
+        assert(corrected_path[index].yaw == repeated_path[index].yaw);
+        assert(corrected_path[index].pitch == repeated_path[index].pitch);
+        assert(corrected_path[index].t_ms == repeated_path[index].t_ms);
+    }
     assert(generate_geometry_feedback_sigmadrift_path(
         {10.0, -2.0},
         target,
         {},
         0.15,
+        {},
         {},
         1234
     ).empty());

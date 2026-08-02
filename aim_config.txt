@@ -5,7 +5,7 @@
 #       parameter: value
 #   ]
 
-aim_model: sigmadrift
+aim_model: geometry_feedback_sigmadrift
 
 # The live Minecraft sensitivity is read through Minescript's Java bridge.
 # This value is used only if the Minecraft internals differ or Java access fails.
@@ -59,5 +59,13 @@ sigmadrift[
     gamma_shape: 3.5
 ]
 
-# geometry_feedback_sigmadrift currently reuses the sigmadrift parameters.
-# Dedicated feedback parameters will be added with the stateful generator.
+geometry_feedback_sigmadrift[
+    # Delay between a submovement's speed peak and geometric feedback.
+    feedback_latency_ms: 100
+
+    # Clearance from the visible-region boundary in angular input steps.
+    safe_margin_steps: 1
+
+    # Hard limit for state-dependent corrective submovements.
+    max_corrections: 3
+]

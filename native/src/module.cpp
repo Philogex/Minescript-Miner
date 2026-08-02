@@ -1141,6 +1141,61 @@ static bool parse_sigmadrift_aim_path_request(
     return true;
 }
 
+static bool parse_geometry_feedback_sigmadrift_config(
+    PyObject *config_object,
+    minecraft_miner::aim::GeometryFeedbackSigmaDriftConfig &config
+) {
+    if (!PySequence_Check(config_object) ||
+        PySequence_Size(config_object) != 3) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "geometry-feedback config must contain exactly 3 values"
+        );
+        return false;
+    }
+
+    PyObject *latency_object = PySequence_GetItem(config_object, 0);
+    PyObject *margin_object = PySequence_GetItem(config_object, 1);
+    PyObject *corrections_object = PySequence_GetItem(config_object, 2);
+    if (latency_object == nullptr || margin_object == nullptr ||
+        corrections_object == nullptr) {
+        Py_XDECREF(latency_object);
+        Py_XDECREF(margin_object);
+        Py_XDECREF(corrections_object);
+        return false;
+    }
+
+    const double feedback_latency_ms = PyFloat_AsDouble(latency_object);
+    const double safe_margin_steps = PyFloat_AsDouble(margin_object);
+    const long max_corrections = PyLong_AsLong(corrections_object);
+    Py_DECREF(latency_object);
+    Py_DECREF(margin_object);
+    Py_DECREF(corrections_object);
+    if (PyErr_Occurred()) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "geometry-feedback config values must be two numbers and an integer"
+        );
+        return false;
+    }
+    if (!std::isfinite(feedback_latency_ms) || feedback_latency_ms < 0.0 ||
+        !std::isfinite(safe_margin_steps) || safe_margin_steps < 0.0 ||
+        max_corrections < 0 || max_corrections > 64) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "invalid geometry-feedback config values"
+        );
+        return false;
+    }
+
+    config = {
+        feedback_latency_ms,
+        safe_margin_steps,
+        static_cast<int>(max_corrections),
+    };
+    return true;
+}
+
 static bool parse_geometry_feedback_sigmadrift_aim_path_request(
     PyObject *args,
     minecraft_miner::aim::Orientation &start_orientation,
@@ -1148,21 +1203,24 @@ static bool parse_geometry_feedback_sigmadrift_aim_path_request(
     minecraft_miner::aim::VisibleDirectionComponents &visible_components,
     double &angular_step_deg,
     minecraft_miner::aim::SigmaDriftConfig &config,
+    minecraft_miner::aim::GeometryFeedbackSigmaDriftConfig &feedback_config,
     unsigned long long &seed
 ) {
     PyObject *start_orientation_object = nullptr;
     PyObject *target_metrics_object = nullptr;
     PyObject *visible_components_object = nullptr;
     PyObject *config_object = nullptr;
+    PyObject *feedback_config_object = nullptr;
 
     if (!PyArg_ParseTuple(
             args,
-            "OOOdOK:generate_geometry_feedback_sigmadrift_aim_path",
+            "OOOdOOK:generate_geometry_feedback_sigmadrift_aim_path",
             &start_orientation_object,
             &target_metrics_object,
             &visible_components_object,
             &angular_step_deg,
             &config_object,
+            &feedback_config_object,
             &seed
         )) {
         return false;
@@ -1176,7 +1234,11 @@ static bool parse_geometry_feedback_sigmadrift_aim_path_request(
             visible_components_object,
             visible_components
         ) ||
-        !parse_sigmadrift_config(config_object, config)) {
+        !parse_sigmadrift_config(config_object, config) ||
+        !parse_geometry_feedback_sigmadrift_config(
+            feedback_config_object,
+            feedback_config
+        )) {
         return false;
     }
     if (!(angular_step_deg > 0.0) || !std::isfinite(angular_step_deg)) {
@@ -1296,6 +1358,7 @@ static PyObject *generate_geometry_feedback_sigmadrift_aim_path(
     minecraft_miner::aim::TargetMetrics target_metrics{};
     minecraft_miner::aim::VisibleDirectionComponents visible_components{};
     minecraft_miner::aim::SigmaDriftConfig config{};
+    minecraft_miner::aim::GeometryFeedbackSigmaDriftConfig feedback_config{};
     double angular_step_deg = 0.0;
     unsigned long long seed = 0;
     if (!parse_geometry_feedback_sigmadrift_aim_path_request(
@@ -1305,6 +1368,7 @@ static PyObject *generate_geometry_feedback_sigmadrift_aim_path(
             visible_components,
             angular_step_deg,
             config,
+            feedback_config,
             seed
         )) {
         return nullptr;
@@ -1317,6 +1381,7 @@ static PyObject *generate_geometry_feedback_sigmadrift_aim_path(
             visible_components,
             angular_step_deg,
             config,
+            feedback_config,
             static_cast<std::uint64_t>(seed)
         );
     return build_aim_path_tuple(path);

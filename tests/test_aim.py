@@ -66,6 +66,11 @@ class AimConfigTest(unittest.TestCase):
                         "overshoot_prob: 0.2",
                         "sample_dt_mean: 6.5",
                         "]",
+                        "geometry_feedback_sigmadrift[",
+                        "feedback_latency_ms: 75",
+                        "safe_margin_steps: 1.5",
+                        "max_corrections: 4",
+                        "]",
                     ]
                 ),
                 encoding="utf-8",
@@ -85,6 +90,18 @@ class AimConfigTest(unittest.TestCase):
         self.assertEqual(12.0, config.sigmadrift.target_width)
         self.assertEqual(0.2, config.sigmadrift.overshoot_prob)
         self.assertEqual(6.5, config.sigmadrift.sample_dt_mean)
+        self.assertEqual(
+            75.0,
+            config.geometry_feedback_sigmadrift.feedback_latency_ms,
+        )
+        self.assertEqual(
+            1.5,
+            config.geometry_feedback_sigmadrift.safe_margin_steps,
+        )
+        self.assertEqual(
+            4,
+            config.geometry_feedback_sigmadrift.max_corrections,
+        )
 
     def test_load_aim_config_accepts_legacy_top_level_minimum_jerk_values(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -244,16 +261,25 @@ class AimConfigTest(unittest.TestCase):
             seed=12345,
         )
 
-        self.assertEqual(2, len(path))
+        repeated = aim.generate_aim_path(
+            (10.0, -2.0),
+            target,
+            aim.AimConfig(aim_model="geometry_feedback_sigmadrift"),
+            angular_step_deg=0.15,
+            seed=12345,
+        )
+
+        self.assertGreater(len(path), 2)
+        self.assertEqual(path, repeated)
         self.assertEqual((10.0, -2.0, 0.0), (
             path[0].yaw,
             path[0].pitch,
             path[0].t_ms,
         ))
-        self.assertEqual((0.0, 0.0, 100.0), (
-            path[-1].yaw,
-            path[-1].pitch,
-            path[-1].t_ms,
+        self.assertGreater(path[-1].t_ms, 0.0)
+        self.assertTrue(all(
+            current.t_ms > previous.t_ms
+            for previous, current in zip(path, path[1:])
         ))
 
         with self.assertRaisesRegex(ValueError, "visible_components"):

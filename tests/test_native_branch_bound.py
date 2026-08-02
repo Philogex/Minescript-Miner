@@ -35,6 +35,7 @@ class NativeBranchBoundTest(unittest.TestCase):
                         / "native/tests/branch_bound_test.cpp"
                     ),
                     str(project_root / "native/src/aim/angle.cpp"),
+                    str(project_root / "native/src/aim/target_region.cpp"),
                     str(project_root / "native/src/geometry/clipping.cpp"),
                     str(project_root / "native/src/geometry/constraint_region.cpp"),
                     str(project_root / "native/src/scanner/branch_bound.cpp"),

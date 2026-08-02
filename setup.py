@@ -9,6 +9,7 @@ native_sources = [
     native_source_dir / "module.cpp",
     native_source_dir / "aim" / "angle.cpp",
     native_source_dir / "aim" / "path.cpp",
+    native_source_dir / "aim" / "target_region.cpp",
     native_source_dir / "catalog" / "geometry_catalog.cpp",
     native_source_dir / "geometry" / "clipping.cpp",
     native_source_dir / "geometry" / "constraint_region.cpp",

@@ -1,3 +1,4 @@
+#include "minecraft_miner/aim/target_region.hpp"
 #include "minecraft_miner/scanner/branch_bound.hpp"
 
 #include <algorithm>
@@ -166,6 +167,26 @@ int main() {
             assert(std::abs(length_squared(direction) - 1.0) < 1e-12);
         }
     }
+    aim::VisibleDirectionComponents feedback_components;
+    feedback_components.reserve(full_partial_result.components.size());
+    for (const VisibleRegionComponent &component :
+         full_partial_result.components) {
+        feedback_components.push_back(component.boundary_directions);
+    }
+    aim::ProjectedTargetRegion feedback_region{};
+    assert(aim::project_visible_target_region(
+        full_partial_result.target.direction,
+        feedback_components,
+        feedback_region
+    ));
+    assert(aim::point_in_visible_region(
+        feedback_region,
+        full_partial_result.target.direction
+    ));
+    assert(!aim::point_in_visible_region(
+        feedback_region,
+        {0.0, 0.0, 1.0}
+    ));
 
     ScanRegionGeometry multi_face_target{};
     const BlockPos origin_block{};

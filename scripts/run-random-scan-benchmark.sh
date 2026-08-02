@@ -10,6 +10,7 @@ CASES="${3:-50}"
 DENSITY="${4:-0.25}"
 TARGETS="${5:-5}"
 SIDE="${6:-39}"
+MODE="${7:-best}"
 
 BOOST_INCLUDE="$(pwd)/third_party/boost"
 mkdir -p "$(dirname "${OUTPUT}")"
@@ -37,4 +38,4 @@ mkdir -p "$(dirname "${OUTPUT}")"
     native/src/scanner/view_projection.cpp \
     -o "${OUTPUT}"
 
-"${OUTPUT}" "${SEED}" "${CASES}" "${DENSITY}" "${TARGETS}" "${SIDE}"
+"${OUTPUT}" "${SEED}" "${CASES}" "${DENSITY}" "${TARGETS}" "${SIDE}" "${MODE}"

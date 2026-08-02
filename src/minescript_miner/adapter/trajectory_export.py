@@ -7,7 +7,7 @@ import hashlib
 import json
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping, Sequence, TextIO
 
@@ -23,7 +23,7 @@ def _session_id() -> str:
 
 
 def _session_directory(output_root: Path, session_id: str) -> Path:
-    timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     directory = output_root / f"synthetic-{timestamp}-{session_id[:12]}"
     directory.mkdir(parents=True, exist_ok=False)
     return directory

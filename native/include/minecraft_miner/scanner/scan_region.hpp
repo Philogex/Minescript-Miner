@@ -125,6 +125,27 @@ constexpr std::int32_t world_grid_coordinate(
            static_cast<std::int32_t>(local_coord);
 }
 
+constexpr std::int32_t floor_divide(
+    std::int64_t numerator,
+    std::int32_t denominator
+) {
+    const std::int64_t quotient = numerator / denominator;
+    const std::int64_t remainder = numerator % denominator;
+    return static_cast<std::int32_t>(
+        quotient - (remainder < 0 ? 1 : 0)
+    );
+}
+
+constexpr std::int32_t grid_interval_midpoint(
+    std::int32_t minimum,
+    std::int32_t maximum
+) {
+    return floor_divide(
+        static_cast<std::int64_t>(minimum) + maximum,
+        2
+    );
+}
+
 // Does not consider non AABB shapes
 constexpr WorldRectFace face_to_world(const LocalRectFace &face, BlockPos block_pos) {
     switch (face.axis) {
@@ -170,6 +191,35 @@ constexpr WorldPoint face_point(
             return {u, v, face.coord};
     }
     return {};
+}
+
+// Move one exact grid unit behind the outward-facing plane, then map that
+// interior point to its Minecraft block. This avoids an epsilon-sensitive
+// floating-point reconstruction at negative coordinates and block borders.
+constexpr BlockPos owning_block(const WorldRectFace &face) {
+    const std::int32_t inward_coord =
+        face.coord - static_cast<std::int32_t>(face.normal_sign);
+    const std::int32_t u =
+        grid_interval_midpoint(face.u_min, face.u_max);
+    const std::int32_t v =
+        grid_interval_midpoint(face.v_min, face.v_max);
+    WorldPoint interior{};
+    switch (face.axis) {
+        case PlaneAxis::X:
+            interior = {inward_coord, u, v};
+            break;
+        case PlaneAxis::Y:
+            interior = {u, inward_coord, v};
+            break;
+        case PlaneAxis::Z:
+            interior = {u, v, inward_coord};
+            break;
+    }
+    return {
+        floor_divide(interior.x, GEOMETRY_UNITS_PER_BLOCK),
+        floor_divide(interior.y, GEOMETRY_UNITS_PER_BLOCK),
+        floor_divide(interior.z, GEOMETRY_UNITS_PER_BLOCK),
+    };
 }
 
 constexpr WorldPoint face_p0(const WorldRectFace &face) {

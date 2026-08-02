@@ -370,8 +370,8 @@ static void log_scan_input(
         };
         const minecraft_miner::Vec3 normal =
             minecraft_miner::face_normal(target_face);
-        const minecraft_miner::Vec3 owning_block_point =
-            target_face_center - normal * 1.0e-6;
+        const minecraft_miner::BlockPos target_block =
+            minecraft_miner::owning_block(target_face);
         log << std::setprecision(17);
         log << "  solver_target_face_center: "
             << target_face_center.x << ", "
@@ -398,9 +398,9 @@ static void log_scan_input(
             << normal.y << ", "
             << normal.z << "\n";
         log << "  solver_target_block_pos: "
-            << static_cast<int>(std::floor(owning_block_point.x)) << ", "
-            << static_cast<int>(std::floor(owning_block_point.y)) << ", "
-            << static_cast<int>(std::floor(owning_block_point.z)) << "\n";
+            << target_block.x << ", "
+            << target_block.y << ", "
+            << target_block.z << "\n";
         log << "  solver_target_point: "
             << target_point.x << ", "
             << target_point.y << ", "
@@ -672,14 +672,11 @@ static bool solve_acquire_target(
 
         const minecraft_miner::WorldRectFace &target_face =
             scan_geometry.world_faces[solve_result.target_world_face_index];
-        const minecraft_miner::Vec3 owning_block_point =
-            minecraft_miner::world_face_center(
-                scan_geometry,
-                solve_result.target_world_face_index
-            ) - minecraft_miner::face_normal(target_face) * 1.0e-6;
-        output.target_x = static_cast<std::int32_t>(std::floor(owning_block_point.x));
-        output.target_y = static_cast<std::int32_t>(std::floor(owning_block_point.y));
-        output.target_z = static_cast<std::int32_t>(std::floor(owning_block_point.z));
+        const minecraft_miner::BlockPos target_block =
+            minecraft_miner::owning_block(target_face);
+        output.target_x = target_block.x;
+        output.target_y = target_block.y;
+        output.target_z = target_block.z;
         output.face_id = minecraft_face_id(target_face);
         output.hit_x = position[0] + solve_result.direction.x * solve_result.distance;
         output.hit_y = position[1] + solve_result.direction.y * solve_result.distance;

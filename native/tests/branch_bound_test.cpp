@@ -56,6 +56,24 @@ minecraft_miner::ScanRegionGeometry target_with_occluder(
 int main() {
     using namespace minecraft_miner;
 
+    const BlockPos negative_block{-2, -3, -4};
+    const LocalRectFace local_faces[]{
+        {PlaneAxis::X, 0, 0, 32, 0, 32, -1},
+        {PlaneAxis::X, 32, 0, 32, 0, 32, 1},
+        {PlaneAxis::Y, 0, 0, 32, 0, 32, -1},
+        {PlaneAxis::Y, 32, 0, 32, 0, 32, 1},
+        {PlaneAxis::Z, 0, 0, 32, 0, 32, -1},
+        {PlaneAxis::Z, 32, 0, 32, 0, 32, 1},
+    };
+    for (const LocalRectFace &local_face : local_faces) {
+        const BlockPos owner = owning_block(
+            face_to_world(local_face, negative_block)
+        );
+        assert(owner.x == negative_block.x);
+        assert(owner.y == negative_block.y);
+        assert(owner.z == negative_block.z);
+    }
+
     ScanRegionGeometry free_geometry{};
     free_geometry.world_faces.push_back(
         z_face(-16, -16, 16, 16, 64)
@@ -105,6 +123,54 @@ int main() {
     );
     assert(partial_result.stats.occluders_prepared == 1);
     assert(partial_result.stats.clips_performed == 1);
+
+    ScanRegionGeometry full_partial = target_with_occluder(false);
+    full_partial.target_faces.push_back({0, 0.0});
+    const VisibleTargetRegionResult full_partial_result =
+        solve_full_visible_target(
+            full_partial,
+            {},
+            {0.0, 0.0, 1.0}
+        );
+    assert(full_partial_result.target.found);
+    assert(full_partial_result.components.size() == 4);
+    for (const VisibleRegionComponent &component :
+         full_partial_result.components) {
+        assert(component.target_world_face_index == 0);
+        assert(component.boundary_directions.size() >= 3);
+        for (const Vec3 direction : component.boundary_directions) {
+            assert(std::abs(length_squared(direction) - 1.0) < 1e-12);
+        }
+    }
+
+    ScanRegionGeometry multi_face_target{};
+    const BlockPos origin_block{};
+    multi_face_target.world_faces = {
+        face_to_world(local_faces[0], origin_block),
+        face_to_world(local_faces[3], origin_block),
+        face_to_world(local_faces[4], origin_block),
+    };
+    multi_face_target.target_faces = {
+        {0, 0.0},
+        {1, 0.0},
+        {2, 0.0},
+    };
+    const Vec3 corner_eye{-2.0, 2.0, -2.0};
+    Vec3 corner_look = Vec3{0.5, 0.5, 0.5} - corner_eye;
+    corner_look = corner_look * (
+        1.0 / std::sqrt(length_squared(corner_look))
+    );
+    const VisibleTargetRegionResult multi_face_result =
+        solve_full_visible_target(
+            multi_face_target,
+            corner_eye,
+            corner_look
+        );
+    assert(multi_face_result.target.found);
+    assert(multi_face_result.target_block.x == 0);
+    assert(multi_face_result.target_block.y == 0);
+    assert(multi_face_result.target_block.z == 0);
+    assert(multi_face_result.components.size() == 3);
 
     const BranchBoundResult stable_partial =
         solve_visible_target_face(

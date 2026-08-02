@@ -31,6 +31,7 @@ struct RandomConfig {
     double density = 0.25;
     std::uint16_t target_count = 5;
     std::int32_t side = minecraft_miner::MAX_CUBE_SIDE;
+    bool full_region = false;
 };
 
 struct CaseData {
@@ -48,6 +49,9 @@ struct SolveStats {
     std::uint64_t branches = 0;
     std::uint64_t clips = 0;
     std::uint64_t solve_us = 0;
+    std::uint64_t visible_components = 0;
+    std::uint64_t region_branches = 0;
+    std::uint64_t region_clips = 0;
     std::uint64_t checksum = 1469598103934665603ULL;
 };
 
@@ -108,8 +112,16 @@ RandomConfig parse_config(int argc, char **argv) {
         config.side = static_cast<std::int32_t>(parse_u64(argv[5]));
     }
     if (argc > 6) {
+        const std::string mode = argv[6];
+        if (mode == "full") {
+            config.full_region = true;
+        } else if (mode != "best") {
+            throw std::invalid_argument("mode must be 'best' or 'full'");
+        }
+    }
+    if (argc > 7) {
         throw std::invalid_argument(
-            "usage: random_scan_pipeline_test [seed] [cases] [density] [targets] [side]"
+            "usage: random_scan_pipeline_test [seed] [cases] [density] [targets] [side] [best|full]"
         );
     }
     if (config.cases == 0) {
@@ -281,12 +293,63 @@ int main(int argc, char **argv) {
         );
 
         std::uint64_t solve_us = 0;
-        const BranchBoundResult result = time_solve(
-            [&]() {
-                return solve_once(geometry, data.eye, data.look_direction);
-            },
-            solve_us
-        );
+        BranchBoundResult result{};
+        if (config.full_region) {
+            const auto start = std::chrono::steady_clock::now();
+            const VisibleTargetRegionResult full_result =
+                solve_full_visible_target(
+                    geometry,
+                    data.eye,
+                    data.look_direction,
+                    std::numeric_limits<double>::infinity()
+                );
+            const auto end = std::chrono::steady_clock::now();
+            solve_us += static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    end - start
+                ).count()
+            );
+            result = full_result.target;
+            for (const VisibleRegionComponent &component :
+                 full_result.components) {
+                assert(component.boundary_directions.size() >= 3);
+                assert(
+                    component.target_world_face_index <
+                    geometry.world_faces.size()
+                );
+                const BlockPos component_block = owning_block(
+                    geometry.world_faces[
+                        component.target_world_face_index
+                    ]
+                );
+                assert(component_block.x == full_result.target_block.x);
+                assert(component_block.y == full_result.target_block.y);
+                assert(component_block.z == full_result.target_block.z);
+                for (const Vec3 direction :
+                     component.boundary_directions) {
+                    assert(
+                        std::abs(length_squared(direction) - 1.0) <
+                        1e-12
+                    );
+                }
+            }
+            stats.visible_components += full_result.components.size();
+            stats.region_branches +=
+                full_result.region_stats.branches_visited;
+            stats.region_clips +=
+                full_result.region_stats.clips_performed;
+        } else {
+            result = time_solve(
+                [&]() {
+                    return solve_once(
+                        geometry,
+                        data.eye,
+                        data.look_direction
+                    );
+                },
+                solve_us
+            );
+        }
 
         assert_result_invariants(geometry, result);
 
@@ -310,12 +373,16 @@ int main(int argc, char **argv) {
         << " side=" << config.side
         << " density=" << std::setprecision(4) << config.density
         << " targets=" << config.target_count
+        << " mode=" << (config.full_region ? "full" : "best")
         << " found=" << stats.found
         << " missing=" << stats.missing
         << " world_faces=" << stats.world_faces
         << " target_faces=" << stats.target_faces
         << " branches=" << stats.branches
         << " clips=" << stats.clips
+        << " visible_components=" << stats.visible_components
+        << " region_branches=" << stats.region_branches
+        << " region_clips=" << stats.region_clips
         << " solve_us=" << stats.solve_us
         << " checksum=" << stats.checksum
         << '\n';

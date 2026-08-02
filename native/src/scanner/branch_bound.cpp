@@ -10,9 +10,11 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
+#include <set>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -598,6 +600,38 @@ double required_world_edge_clearance(double distance) {
            std::max(1.0, distance);
 }
 
+std::vector<std::uint32_t> canonical_hull_key(
+    VertexIdSpan vertices
+) {
+    std::vector<std::uint32_t> values;
+    values.reserve(vertices.size());
+    for (const VertexId vertex : vertices) {
+        values.push_back(vertex.value);
+    }
+
+    std::vector<std::uint32_t> best = values;
+    const auto consider_direction =
+        [&best, &values](bool reverse) {
+            const std::size_t count = values.size();
+            for (std::size_t start = 0; start < count; ++start) {
+                std::vector<std::uint32_t> candidate;
+                candidate.reserve(count);
+                for (std::size_t offset = 0; offset < count; ++offset) {
+                    const std::size_t index = reverse
+                        ? (start + count - offset) % count
+                        : (start + offset) % count;
+                    candidate.push_back(values[index]);
+                }
+                if (candidate < best) {
+                    best = std::move(candidate);
+                }
+            }
+        };
+    consider_direction(false);
+    consider_direction(true);
+    return best;
+}
+
 class SingleTargetSolver {
 public:
     SingleTargetSolver(
@@ -624,6 +658,10 @@ public:
     }
 
     BranchBoundResult solve() {
+        if (solved_) {
+            return result_;
+        }
+        solved_ = true;
         result_.stats.target_faces_considered = 1;
         if (
             target_world_face_index_ >=
@@ -703,16 +741,38 @@ public:
                 )) {
                 continue;
             }
+            initial_branches_.push_back(initial_branch);
             if (!can_prune(initial_branch)) {
                 searched_branch = true;
             }
-            solve_branch(initial_branch);
+            solve_branch(initial_branch, result_.stats);
         }
         if (!searched_branch &&
             std::isfinite(angle_limit_)) {
             result_.stats.target_faces_pruned = 1;
         }
         return result_;
+    }
+
+    std::vector<VisibleRegionComponent> collect_visible_regions(
+        BranchBoundStats &stats
+    ) {
+        solve();
+        stats = {};
+        visible_components_.clear();
+        visible_hulls_.clear();
+        visited_branches_.clear();
+        for (const Branch &initial_branch : initial_branches_) {
+            collect_branch(
+                {
+                    initial_branch.region,
+                    initial_branch.occluder_state,
+                    0.0,
+                },
+                stats
+            );
+        }
+        return visible_components_;
     }
 
 private:
@@ -805,7 +865,10 @@ private:
         }
     }
 
-    bool prepare_occluder(std::uint32_t world_face_index) {
+    bool prepare_occluder(
+        std::uint32_t world_face_index,
+        BranchBoundStats &stats
+    ) {
         OccluderCacheEntry &entry =
             occluder_cache_[world_face_index];
         if (entry.state != OccluderState::Unprepared) {
@@ -816,7 +879,7 @@ private:
             return false;
         }
 
-        ++result_.stats.occluders_prepared;
+        ++stats.occluders_prepared;
         const WorldRectFace &world_face =
             scan_geometry_.world_faces[world_face_index];
         if (!face_points_to_eye(world_face, eye_)) {
@@ -858,7 +921,7 @@ private:
         }
         entry.bounds = point_bounds(points);
         entry.state = OccluderState::Ready;
-        ++result_.stats.effective_occluders;
+        ++stats.effective_occluders;
         return true;
     }
 
@@ -879,7 +942,8 @@ private:
 
     OccluderChoice choose_next_occluder(
         RegionId region,
-        std::size_t next_occluder
+        std::size_t next_occluder,
+        BranchBoundStats &stats
     ) {
         const std::vector<Point2> region_points =
             regions_.approximate_vertices(region);
@@ -892,7 +956,7 @@ private:
              ++i) {
             const std::uint32_t world_face_index =
                 occluder_order_[i];
-            if (!prepare_occluder(world_face_index)) {
+            if (!prepare_occluder(world_face_index, stats)) {
                 continue;
             }
 
@@ -1259,17 +1323,20 @@ private:
         result_.width_pitch = angular_size.width_pitch;
     }
 
-    void solve_branch(const Branch &branch) {
-        ++result_.stats.branches_visited;
+    void solve_branch(
+        const Branch &branch,
+        BranchBoundStats &stats
+    ) {
+        ++stats.branches_visited;
         const std::uint64_t memo_key =
             static_cast<std::uint64_t>(branch.region.value) << 32 |
             branch.occluder_state;
         if (!visited_branches_.insert(memo_key).second) {
-            ++result_.stats.branches_memoized;
+            ++stats.branches_memoized;
             return;
         }
         if (can_prune(branch)) {
-            ++result_.stats.branches_pruned;
+            ++stats.branches_pruned;
             return;
         }
 
@@ -1279,7 +1346,8 @@ private:
         const OccluderChoice choice =
             choose_next_occluder(
                 branch.region,
-                next_occluder
+                next_occluder,
+                stats
             );
         if (!choice.found) {
             const RegionCandidate bound =
@@ -1302,7 +1370,7 @@ private:
                 branch.occluder_state,
                 world_face_index
             );
-        ++result_.stats.clips_performed;
+        ++stats.clips_performed;
         std::vector<RegionId> pieces =
             regions_.subtract_convex_region(
                 branch.region,
@@ -1327,7 +1395,89 @@ private:
             }
         );
         for (const Branch &child : children) {
-            solve_branch(child);
+            solve_branch(child, stats);
+        }
+
+        std::swap(
+            occluder_order_[next_occluder],
+            occluder_order_[choice.order_index]
+        );
+    }
+
+    void append_visible_component(RegionId region) {
+        const VertexIdSpan vertices = regions_.vertices(region);
+        if (vertices.size() < 3) {
+            return;
+        }
+
+        std::vector<std::uint32_t> hull_key =
+            canonical_hull_key(vertices);
+        if (!visible_hulls_.insert(std::move(hull_key)).second) {
+            return;
+        }
+
+        VisibleRegionComponent component{};
+        component.target_world_face_index = target_world_face_index_;
+        component.boundary_directions.reserve(vertices.size());
+        for (const VertexId vertex : vertices) {
+            const Point2 point = approximate_point(
+                geometry_.vertex(vertex)
+            );
+            component.boundary_directions.push_back(
+                normalized_world_direction(basis_, point)
+            );
+        }
+        visible_components_.push_back(std::move(component));
+    }
+
+    void collect_branch(
+        const Branch &branch,
+        BranchBoundStats &stats
+    ) {
+        ++stats.branches_visited;
+        const std::uint64_t memo_key =
+            static_cast<std::uint64_t>(branch.region.value) << 32 |
+            branch.occluder_state;
+        if (!visited_branches_.insert(memo_key).second) {
+            ++stats.branches_memoized;
+            return;
+        }
+
+        ensure_occluder_order();
+        const std::size_t next_occluder =
+            occluder_state(branch.occluder_state).depth;
+        const OccluderChoice choice = choose_next_occluder(
+            branch.region,
+            next_occluder,
+            stats
+        );
+        if (!choice.found) {
+            append_visible_component(branch.region);
+            return;
+        }
+
+        std::swap(
+            occluder_order_[next_occluder],
+            occluder_order_[choice.order_index]
+        );
+        const std::uint32_t world_face_index =
+            occluder_order_[next_occluder];
+        const OccluderTraversalStateId child_occluder_state =
+            advance_occluder_state(
+                branch.occluder_state,
+                world_face_index
+            );
+        ++stats.clips_performed;
+        const std::vector<RegionId> pieces =
+            regions_.subtract_convex_region(
+                branch.region,
+                occluder_cache_[world_face_index].constraints
+            );
+        for (const RegionId piece : pieces) {
+            collect_branch(
+                {piece, child_occluder_state, 0.0},
+                stats
+            );
         }
 
         std::swap(
@@ -1344,6 +1494,7 @@ private:
     double angle_limit_ = std::numeric_limits<double>::infinity();
     BranchBoundOptions options_{};
     BranchBoundResult result_{};
+    bool solved_ = false;
     ExactGeometryStore geometry_{};
     ConstraintRegionStore regions_;
     std::unique_ptr<ExactProjector> projector_{};
@@ -1356,6 +1507,9 @@ private:
         OccluderTraversalStateId
     > occluder_state_transitions_;
     std::unordered_set<std::uint64_t> visited_branches_;
+    std::vector<Branch> initial_branches_;
+    std::set<std::vector<std::uint32_t>> visible_hulls_;
+    std::vector<VisibleRegionComponent> visible_components_;
     ViewBasis basis_{};
     Vec3 look_in_view_{};
     ExactProjectedFace target_projection_{};
@@ -1409,14 +1563,23 @@ void add_stats(
 
 }  // namespace
 
-BranchBoundResult solve_visible_target(
+namespace {
+
+struct TargetSelection {
+    BranchBoundResult result{};
+    std::unique_ptr<SingleTargetSolver> retained_solver{};
+};
+
+TargetSelection select_visible_target(
     const ScanRegionGeometry &geometry,
     const Vec3 &eye,
     const Vec3 &look_direction,
     double reach,
-    BranchBoundOptions options
+    BranchBoundOptions options,
+    bool retain_winner
 ) {
-    BranchBoundResult result{};
+    TargetSelection selection{};
+    BranchBoundResult &result = selection.result;
     std::vector<BoundedTarget> ordered_targets;
     ordered_targets.reserve(geometry.target_faces.size());
     for (const TargetFaceCandidate &target : geometry.target_faces) {
@@ -1474,8 +1637,10 @@ BranchBoundResult solve_visible_target(
             }
             const TargetFaceCandidate &target =
                 *bounded_target.target;
-            const BranchBoundResult candidate =
-                solve_visible_target_face(
+            std::unique_ptr<SingleTargetSolver> candidate_solver{};
+            BranchBoundResult candidate{};
+            if (retain_winner) {
+                candidate_solver = std::make_unique<SingleTargetSolver>(
                     geometry,
                     target.world_face_index,
                     eye,
@@ -1484,12 +1649,28 @@ BranchBoundResult solve_visible_target(
                     result.angle,
                     options
                 );
+                candidate = candidate_solver->solve();
+            } else {
+                candidate = solve_visible_target_face(
+                    geometry,
+                    target.world_face_index,
+                    eye,
+                    look_direction,
+                    reach,
+                    result.angle,
+                    options
+                );
+            }
             add_stats(result.stats, candidate.stats);
             if (candidate.found &&
                 (!result.found || candidate.angle < result.angle)) {
                 const BranchBoundStats aggregate_stats = result.stats;
                 result = candidate;
                 result.stats = aggregate_stats;
+                if (retain_winner) {
+                    selection.retained_solver =
+                        std::move(candidate_solver);
+                }
             }
         };
 
@@ -1523,6 +1704,103 @@ BranchBoundResult solve_visible_target(
                 break;
             }
         }
+    }
+    return selection;
+}
+
+bool same_block(BlockPos lhs, BlockPos rhs) {
+    return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
+}
+
+}  // namespace
+
+BranchBoundResult solve_visible_target(
+    const ScanRegionGeometry &geometry,
+    const Vec3 &eye,
+    const Vec3 &look_direction,
+    double reach,
+    BranchBoundOptions options
+) {
+    return select_visible_target(
+        geometry,
+        eye,
+        look_direction,
+        reach,
+        options,
+        false
+    ).result;
+}
+
+VisibleTargetRegionResult solve_full_visible_target(
+    const ScanRegionGeometry &geometry,
+    const Vec3 &eye,
+    const Vec3 &look_direction,
+    double reach,
+    BranchBoundOptions options
+) {
+    TargetSelection selection = select_visible_target(
+        geometry,
+        eye,
+        look_direction,
+        reach,
+        options,
+        true
+    );
+
+    VisibleTargetRegionResult result{};
+    result.target = selection.result;
+    if (!result.target.found ||
+        result.target.target_world_face_index >= geometry.world_faces.size()) {
+        return result;
+    }
+
+    result.target_block = owning_block(
+        geometry.world_faces[result.target.target_world_face_index]
+    );
+    std::unordered_set<std::uint32_t> collected_target_faces;
+    for (const TargetFaceCandidate &candidate : geometry.target_faces) {
+        if (candidate.world_face_index >= geometry.world_faces.size() ||
+            !same_block(
+                owning_block(geometry.world_faces[candidate.world_face_index]),
+                result.target_block
+            )) {
+            continue;
+        }
+        if (!collected_target_faces.insert(
+                candidate.world_face_index
+            ).second) {
+            continue;
+        }
+
+        BranchBoundStats face_stats{};
+        std::vector<VisibleRegionComponent> components{};
+        if (candidate.world_face_index ==
+                result.target.target_world_face_index &&
+            selection.retained_solver) {
+            components =
+                selection.retained_solver->collect_visible_regions(
+                    face_stats
+                );
+        } else {
+            SingleTargetSolver face_solver(
+                geometry,
+                candidate.world_face_index,
+                eye,
+                look_direction,
+                reach,
+                std::numeric_limits<double>::infinity(),
+                options
+            );
+            const BranchBoundResult face_result = face_solver.solve();
+            add_stats(result.region_stats, face_result.stats);
+            components = face_solver.collect_visible_regions(face_stats);
+        }
+        add_stats(result.region_stats, face_stats);
+        result.components.insert(
+            result.components.end(),
+            std::make_move_iterator(components.begin()),
+            std::make_move_iterator(components.end())
+        );
     }
     return result;
 }

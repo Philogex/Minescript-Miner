@@ -1,3 +1,4 @@
+#include "minecraft_miner/aim/geometry_feedback_sigmadrift.hpp"
 #include "minecraft_miner/aim/target_region.hpp"
 
 #include <algorithm>
@@ -148,4 +149,37 @@ int main() {
         }},
         invalid
     ));
+
+    const TargetMetrics target{
+        0.0,
+        0.0,
+        2.0,
+        2.0,
+        4.0,
+        2.0,
+    };
+    const AimPath dummy_path =
+        generate_geometry_feedback_sigmadrift_path(
+            {10.0, -2.0},
+            target,
+            {rectangle(-0.25, -0.25, 0.25, 0.25)},
+            0.15,
+            {},
+            1234
+        );
+    assert(dummy_path.size() == 2);
+    assert(dummy_path.front().yaw == 10.0);
+    assert(dummy_path.front().pitch == -2.0);
+    assert(dummy_path.front().t_ms == 0.0);
+    assert(dummy_path.back().yaw == target.yaw);
+    assert(dummy_path.back().pitch == target.pitch);
+    assert(dummy_path.back().t_ms == 100.0);
+    assert(generate_geometry_feedback_sigmadrift_path(
+        {10.0, -2.0},
+        target,
+        {},
+        0.15,
+        {},
+        1234
+    ).empty());
 }

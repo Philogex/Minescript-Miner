@@ -220,6 +220,57 @@ class AimConfigTest(unittest.TestCase):
         self.assertEqual(-4.0, path[-1].pitch)
         self.assertGreater(path[-1].t_ms, 0.0)
 
+    def test_generate_aim_path_dispatches_to_geometry_feedback_sigmadrift(self):
+        target = TargetMetrics(
+            yaw=0.0,
+            pitch=0.0,
+            width_yaw=2.0,
+            width_pitch=2.0,
+            distance=4.0,
+            effective_width=2.0,
+            visible_components=((
+                (-0.25, -0.25, 1.0),
+                (0.25, -0.25, 1.0),
+                (0.25, 0.25, 1.0),
+                (-0.25, 0.25, 1.0),
+            ),),
+        )
+
+        path = aim.generate_aim_path(
+            (10.0, -2.0),
+            target,
+            aim.AimConfig(aim_model="geometry_feedback_sigmadrift"),
+            angular_step_deg=0.15,
+            seed=12345,
+        )
+
+        self.assertEqual(2, len(path))
+        self.assertEqual((10.0, -2.0, 0.0), (
+            path[0].yaw,
+            path[0].pitch,
+            path[0].t_ms,
+        ))
+        self.assertEqual((0.0, 0.0, 100.0), (
+            path[-1].yaw,
+            path[-1].pitch,
+            path[-1].t_ms,
+        ))
+
+        with self.assertRaisesRegex(ValueError, "visible_components"):
+            aim.generate_aim_path(
+                (10.0, -2.0),
+                TargetMetrics(
+                    yaw=0.0,
+                    pitch=0.0,
+                    width_yaw=2.0,
+                    width_pitch=2.0,
+                    distance=4.0,
+                ),
+                aim.AimConfig(aim_model="geometry_feedback_sigmadrift"),
+                angular_step_deg=0.15,
+                seed=12345,
+            )
+
     def test_generate_aim_path_exports_synthetic_daq_session_on_request(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = aim.generate_aim_path(

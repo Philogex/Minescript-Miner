@@ -58,3 +58,6 @@ sigmadrift[
     sample_dt_mean: 7.8
     gamma_shape: 3.5
 ]
+
+# geometry_feedback_sigmadrift currently reuses the sigmadrift parameters.
+# Dedicated feedback parameters will be added with the stateful generator.

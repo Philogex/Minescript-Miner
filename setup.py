@@ -8,7 +8,9 @@ native_source_dir = Path("native/src")
 native_sources = [
     native_source_dir / "module.cpp",
     native_source_dir / "aim" / "angle.cpp",
-    native_source_dir / "aim" / "path.cpp",
+    native_source_dir / "aim" / "geometry_feedback_sigmadrift.cpp",
+    native_source_dir / "aim" / "minimum_jerk.cpp",
+    native_source_dir / "aim" / "sigmadrift.cpp",
     native_source_dir / "aim" / "target_region.cpp",
     native_source_dir / "catalog" / "geometry_catalog.cpp",
     native_source_dir / "geometry" / "clipping.cpp",

@@ -143,6 +143,13 @@ def _target_metrics_payload(metrics: TargetMetrics):
     )
 
 
+def _resolved_seed(seed: int | None) -> int:
+    resolved = secrets.randbits(64) if seed is None else int(seed)
+    if not 0 <= resolved <= (1 << 64) - 1:
+        raise ValueError("seed must fit in an unsigned 64-bit integer")
+    return resolved
+
+
 def generate_minimum_jerk_aim_path(
     start_orientation: Orientation,
     target_metrics: TargetMetrics,
@@ -185,15 +192,35 @@ def generate_sigmadrift_aim_path(
 ) -> Tuple[AimPoint, ...]:
     """Return a native-generated SigmaDrift aim path."""
 
-    resolved_seed = secrets.randbits(64) if seed is None else int(seed)
-    if not 0 <= resolved_seed <= (1 << 64) - 1:
-        raise ValueError("seed must fit in an unsigned 64-bit integer")
     result = native.generate_sigmadrift_aim_path(
         start_orientation,
         _target_metrics_payload(target_metrics),
         float(angular_step_deg),
         tuple(float(value) for value in config_values),
-        resolved_seed,
+        _resolved_seed(seed),
+    )
+    return tuple(
+        AimPoint(float(yaw), float(pitch), float(t_ms))
+        for yaw, pitch, t_ms in result
+    )
+
+
+def generate_geometry_feedback_sigmadrift_aim_path(
+    start_orientation: Orientation,
+    target_metrics: TargetMetrics,
+    angular_step_deg: float,
+    config_values: Sequence[float],
+    seed: int | None = None,
+) -> Tuple[AimPoint, ...]:
+    """Return a native-generated geometry-feedback SigmaDrift path."""
+
+    result = native.generate_geometry_feedback_sigmadrift_aim_path(
+        start_orientation,
+        _target_metrics_payload(target_metrics),
+        target_metrics.visible_components,
+        float(angular_step_deg),
+        tuple(float(value) for value in config_values),
+        _resolved_seed(seed),
     )
     return tuple(
         AimPoint(float(yaw), float(pitch), float(t_ms))

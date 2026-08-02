@@ -27,6 +27,11 @@ class NativeAimTargetRegionTest(unittest.TestCase):
                     "-I",
                     str(project_root / "native/include"),
                     str(project_root / "native/tests/aim_target_region_test.cpp"),
+                    str(project_root / "native/src/aim/angle.cpp"),
+                    str(
+                        project_root
+                        / "native/src/aim/geometry_feedback_sigmadrift.cpp"
+                    ),
                     str(project_root / "native/src/aim/target_region.cpp"),
                     "-o",
                     str(executable),

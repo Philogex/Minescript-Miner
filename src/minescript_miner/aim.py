@@ -11,6 +11,7 @@ from minescript_miner.adapter.native_bridge import (
     AimPoint,
     Orientation,
     TargetMetrics,
+    generate_geometry_feedback_sigmadrift_aim_path as _generate_geometry_feedback_sigmadrift_aim_path,
     generate_minimum_jerk_aim_path as _generate_minimum_jerk_aim_path,
     generate_sigmadrift_aim_path as _generate_sigmadrift_aim_path,
 )
@@ -18,8 +19,12 @@ from minescript_miner.adapter.native_bridge import (
 
 DEFAULT_AIM_CONFIG = Path("aim_config.txt")
 DEFAULT_FALLBACK_ANGULAR_STEP_DEG = 0.15
-SUPPORTED_AIM_MODELS = frozenset({"minimum_jerk", "sigmadrift"})
-IMPLEMENTED_AIM_MODELS = frozenset({"minimum_jerk", "sigmadrift"})
+SUPPORTED_AIM_MODELS = frozenset({
+    "minimum_jerk",
+    "sigmadrift",
+    "geometry_feedback_sigmadrift",
+})
+IMPLEMENTED_AIM_MODELS = SUPPORTED_AIM_MODELS
 
 
 @dataclass(frozen=True)
@@ -332,6 +337,14 @@ def generate_aim_path(
         )
     elif resolved_config.aim_model == "sigmadrift":
         path = _generate_sigmadrift_aim_path(
+            start_orientation,
+            target,
+            angular_step_deg,
+            _sigmadrift_payload(resolved_config.sigmadrift),
+            seed,
+        )
+    elif resolved_config.aim_model == "geometry_feedback_sigmadrift":
+        path = _generate_geometry_feedback_sigmadrift_aim_path(
             start_orientation,
             target,
             angular_step_deg,

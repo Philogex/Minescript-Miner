@@ -2,7 +2,10 @@
 #include <Python.h>
 
 #include "minecraft_miner/aim/angle.hpp"
+#include "minecraft_miner/aim/geometry_feedback_sigmadrift.hpp"
+#include "minecraft_miner/aim/minimum_jerk.hpp"
 #include "minecraft_miner/aim/path.hpp"
+#include "minecraft_miner/aim/sigmadrift.hpp"
 #include "minecraft_miner/scanner/branch_bound.hpp"
 #include "minecraft_miner/catalog/geometry_catalog.hpp"
 #include "minecraft_miner/scanner/scan_region.hpp"
@@ -198,6 +201,116 @@ static bool parse_target_metrics(PyObject *metrics, double (&out)[6]) {
         }
     }
 
+    return true;
+}
+
+static bool parse_visible_direction_components(
+    PyObject *components_object,
+    minecraft_miner::aim::VisibleDirectionComponents &out
+) {
+    if (!PySequence_Check(components_object)) {
+        PyErr_SetString(
+            PyExc_TypeError,
+            "visible_components must be a sequence"
+        );
+        return false;
+    }
+    const Py_ssize_t component_count = PySequence_Size(components_object);
+    if (component_count <= 0) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "visible_components must contain at least one component"
+        );
+        return false;
+    }
+
+    minecraft_miner::aim::VisibleDirectionComponents components;
+    components.reserve(static_cast<std::size_t>(component_count));
+    for (Py_ssize_t component_index = 0;
+         component_index < component_count;
+         ++component_index) {
+        PyObject *component_object = PySequence_GetItem(
+            components_object,
+            component_index
+        );
+        if (component_object == nullptr) {
+            return false;
+        }
+        if (!PySequence_Check(component_object)) {
+            Py_DECREF(component_object);
+            PyErr_SetString(
+                PyExc_TypeError,
+                "each visible component must be a sequence"
+            );
+            return false;
+        }
+        const Py_ssize_t direction_count =
+            PySequence_Size(component_object);
+        if (direction_count < 3) {
+            Py_DECREF(component_object);
+            PyErr_SetString(
+                PyExc_ValueError,
+                "each visible component must contain at least 3 directions"
+            );
+            return false;
+        }
+
+        minecraft_miner::aim::VisibleDirectionComponent component;
+        component.reserve(static_cast<std::size_t>(direction_count));
+        for (Py_ssize_t direction_index = 0;
+             direction_index < direction_count;
+             ++direction_index) {
+            PyObject *direction_object = PySequence_GetItem(
+                component_object,
+                direction_index
+            );
+            if (direction_object == nullptr) {
+                Py_DECREF(component_object);
+                return false;
+            }
+            if (!PySequence_Check(direction_object) ||
+                PySequence_Size(direction_object) != 3) {
+                Py_DECREF(direction_object);
+                Py_DECREF(component_object);
+                PyErr_SetString(
+                    PyExc_ValueError,
+                    "visible component directions must contain exactly 3 values"
+                );
+                return false;
+            }
+
+            double values[3] = {};
+            for (Py_ssize_t coordinate = 0; coordinate < 3; ++coordinate) {
+                PyObject *value = PySequence_GetItem(
+                    direction_object,
+                    coordinate
+                );
+                if (value == nullptr) {
+                    Py_DECREF(direction_object);
+                    Py_DECREF(component_object);
+                    return false;
+                }
+                values[coordinate] = PyFloat_AsDouble(value);
+                Py_DECREF(value);
+                if (PyErr_Occurred() ||
+                    !std::isfinite(values[coordinate])) {
+                    Py_DECREF(direction_object);
+                    Py_DECREF(component_object);
+                    PyErr_SetString(
+                        PyExc_TypeError,
+                        "visible component direction values must be finite numbers"
+                    );
+                    return false;
+                }
+            }
+            Py_DECREF(direction_object);
+            component.push_back({values[0], values[1], values[2]});
+        }
+        Py_DECREF(component_object);
+        components.push_back(std::move(component));
+    }
+
+    out = std::move(components);
     return true;
 }
 
@@ -1028,6 +1141,67 @@ static bool parse_sigmadrift_aim_path_request(
     return true;
 }
 
+static bool parse_geometry_feedback_sigmadrift_aim_path_request(
+    PyObject *args,
+    minecraft_miner::aim::Orientation &start_orientation,
+    minecraft_miner::aim::TargetMetrics &target_metrics,
+    minecraft_miner::aim::VisibleDirectionComponents &visible_components,
+    double &angular_step_deg,
+    minecraft_miner::aim::SigmaDriftConfig &config,
+    unsigned long long &seed
+) {
+    PyObject *start_orientation_object = nullptr;
+    PyObject *target_metrics_object = nullptr;
+    PyObject *visible_components_object = nullptr;
+    PyObject *config_object = nullptr;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "OOOdOK:generate_geometry_feedback_sigmadrift_aim_path",
+            &start_orientation_object,
+            &target_metrics_object,
+            &visible_components_object,
+            &angular_step_deg,
+            &config_object,
+            &seed
+        )) {
+        return false;
+    }
+
+    double raw_start_orientation[2] = {0.0, 0.0};
+    double raw_target_metrics[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    if (!parse_orientation(start_orientation_object, raw_start_orientation) ||
+        !parse_target_metrics(target_metrics_object, raw_target_metrics) ||
+        !parse_visible_direction_components(
+            visible_components_object,
+            visible_components
+        ) ||
+        !parse_sigmadrift_config(config_object, config)) {
+        return false;
+    }
+    if (!(angular_step_deg > 0.0) || !std::isfinite(angular_step_deg)) {
+        PyErr_SetString(
+            PyExc_ValueError,
+            "angular_step_deg must be a positive finite number"
+        );
+        return false;
+    }
+
+    start_orientation = {
+        raw_start_orientation[0],
+        raw_start_orientation[1],
+    };
+    target_metrics = {
+        raw_target_metrics[0],
+        raw_target_metrics[1],
+        raw_target_metrics[2],
+        raw_target_metrics[3],
+        raw_target_metrics[4],
+        raw_target_metrics[5],
+    };
+    return true;
+}
+
 static PyObject *build_aim_path_tuple(const minecraft_miner::aim::AimPath &samples) {
     PyObject *path = PyTuple_New(static_cast<Py_ssize_t>(samples.size()));
     if (path == nullptr) {
@@ -1114,6 +1288,40 @@ static PyObject *generate_sigmadrift_aim_path(PyObject *, PyObject *args) {
     return build_aim_path_tuple(path);
 }
 
+static PyObject *generate_geometry_feedback_sigmadrift_aim_path(
+    PyObject *,
+    PyObject *args
+) {
+    minecraft_miner::aim::Orientation start_orientation{};
+    minecraft_miner::aim::TargetMetrics target_metrics{};
+    minecraft_miner::aim::VisibleDirectionComponents visible_components{};
+    minecraft_miner::aim::SigmaDriftConfig config{};
+    double angular_step_deg = 0.0;
+    unsigned long long seed = 0;
+    if (!parse_geometry_feedback_sigmadrift_aim_path_request(
+            args,
+            start_orientation,
+            target_metrics,
+            visible_components,
+            angular_step_deg,
+            config,
+            seed
+        )) {
+        return nullptr;
+    }
+
+    const minecraft_miner::aim::AimPath path =
+        minecraft_miner::aim::generate_geometry_feedback_sigmadrift_path(
+            start_orientation,
+            target_metrics,
+            visible_components,
+            angular_step_deg,
+            config,
+            static_cast<std::uint64_t>(seed)
+        );
+    return build_aim_path_tuple(path);
+}
+
 
 static PyMethodDef module_methods[] = {
     {"hello", reinterpret_cast<PyCFunction>(hello), METH_NOARGS,
@@ -1123,11 +1331,13 @@ static PyMethodDef module_methods[] = {
     {"acquire_target", reinterpret_cast<PyCFunction>(acquire_target), METH_VARARGS,
      "Return the nearest visible target orientation as Minecraft yaw and pitch."},
     {"acquire_target_metrics", reinterpret_cast<PyCFunction>(acquire_target_metrics), METH_VARARGS,
-     "Return target orientation plus local visible aim width and distance."},
+     "Return target orientation, effective width, and complete visible components."},
     {"generate_minimum_jerk_aim_path", reinterpret_cast<PyCFunction>(generate_minimum_jerk_aim_path), METH_VARARGS,
      "Return a minimum-jerk aim path as yaw, pitch, and milliseconds samples."},
     {"generate_sigmadrift_aim_path", reinterpret_cast<PyCFunction>(generate_sigmadrift_aim_path), METH_VARARGS,
      "Return a SigmaDrift aim path as yaw, pitch, and milliseconds samples."},
+    {"generate_geometry_feedback_sigmadrift_aim_path", reinterpret_cast<PyCFunction>(generate_geometry_feedback_sigmadrift_aim_path), METH_VARARGS,
+     "Return a geometry-feedback SigmaDrift aim path as yaw, pitch, and milliseconds samples."},
     {nullptr, nullptr, 0, nullptr},
 };
 

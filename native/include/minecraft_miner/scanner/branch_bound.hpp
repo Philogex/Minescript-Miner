@@ -50,4 +50,11 @@ VisibleTargetRegionResult solve_full_visible_target(
     BranchBoundOptions options = {}
 );
 
+// Angular width, in degrees, of the connected visible interval containing the
+// selected aim point along the movement axis from start_direction.
+double effective_target_width_degrees(
+    const VisibleTargetRegionResult &target_region,
+    const Vec3 &start_direction
+);
+
 }  // namespace minecraft_miner

@@ -93,6 +93,24 @@ int main() {
     assert(free_result.stats.occluders_prepared == 0);
     assert(free_result.stats.clips_performed == 0);
 
+    free_geometry.target_faces.push_back({0, 0.0});
+    const VisibleTargetRegionResult full_free_result =
+        solve_full_visible_target(
+            free_geometry,
+            {},
+            {0.0, 0.0, 1.0}
+        );
+    const double full_free_width = effective_target_width_degrees(
+        full_free_result,
+        {0.0, 0.0, 1.0}
+    );
+    const double expected_full_free_width =
+        2.0 * std::atan(0.25) * 180.0 /
+        3.141592653589793238462643383279502884;
+    assert(
+        std::abs(full_free_width - expected_full_free_width) < 1.0e-12
+    );
+
     const BranchBoundResult hidden_result =
         solve_visible_target_face(
             target_with_occluder(true),
@@ -134,6 +152,12 @@ int main() {
         );
     assert(full_partial_result.target.found);
     assert(full_partial_result.components.size() == 4);
+    const double full_partial_width = effective_target_width_degrees(
+        full_partial_result,
+        {0.0, 0.0, 1.0}
+    );
+    assert(full_partial_width > 0.0);
+    assert(full_partial_width < full_free_width);
     for (const VisibleRegionComponent &component :
          full_partial_result.components) {
         assert(component.target_world_face_index == 0);

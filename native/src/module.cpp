@@ -18,6 +18,7 @@
 #include <fstream>
 #include <iomanip>
 #include <string>
+#include <utility>
 #include <vector>
 
 
@@ -172,19 +173,19 @@ static bool parse_orientation(PyObject *orientation, double (&out)[2]) {
     return true;
 }
 
-static bool parse_target_metrics(PyObject *metrics, double (&out)[5]) {
+static bool parse_target_metrics(PyObject *metrics, double (&out)[6]) {
     if (!PySequence_Check(metrics)) {
-        PyErr_SetString(PyExc_TypeError, "target_metrics must be a sequence of 5 floats");
+        PyErr_SetString(PyExc_TypeError, "target_metrics must be a sequence of 6 floats");
         return false;
     }
 
     const Py_ssize_t size = PySequence_Size(metrics);
-    if (size != 5) {
-        PyErr_SetString(PyExc_ValueError, "target_metrics must contain exactly 5 values");
+    if (size != 6) {
+        PyErr_SetString(PyExc_ValueError, "target_metrics must contain exactly 6 values");
         return false;
     }
 
-    for (Py_ssize_t i = 0; i < 5; ++i) {
+    for (Py_ssize_t i = 0; i < 6; ++i) {
         PyObject *item = PySequence_GetItem(metrics, i);
         if (item == nullptr) {
             return false;
@@ -498,7 +499,10 @@ struct NativeTargetSolveResult {
     double hit_x = 0.0;
     double hit_y = 0.0;
     double hit_z = 0.0;
+    double effective_width = 0.0;
     minecraft_miner::BranchBoundResult solve_result{};
+    std::vector<minecraft_miner::VisibleRegionComponent>
+        visible_components{};
 };
 
 static const char *minecraft_face_id(const minecraft_miner::WorldRectFace &face) {
@@ -515,7 +519,8 @@ static const char *minecraft_face_id(const minecraft_miner::WorldRectFace &face)
 
 static bool solve_acquire_target(
     PyObject *args,
-    NativeTargetSolveResult &output
+    NativeTargetSolveResult &output,
+    bool collect_metrics
 ) {
     PyObject *position_object = nullptr;
     PyObject *orientation_object = nullptr;
@@ -650,13 +655,30 @@ static bool solve_acquire_target(
         geometry_end = std::chrono::steady_clock::now();
     }
 
-    const minecraft_miner::BranchBoundResult solve_result =
-        minecraft_miner::solve_visible_target(
+    minecraft_miner::BranchBoundResult solve_result{};
+    if (collect_metrics) {
+        minecraft_miner::VisibleTargetRegionResult full_result =
+            minecraft_miner::solve_full_visible_target(
+                scan_geometry,
+                eye,
+                look_dir,
+                reach
+            );
+        solve_result = full_result.target;
+        output.effective_width =
+            minecraft_miner::effective_target_width_degrees(
+                full_result,
+                look_dir
+            );
+        output.visible_components = std::move(full_result.components);
+    } else {
+        solve_result = minecraft_miner::solve_visible_target(
             scan_geometry,
             eye,
             look_dir,
             reach
         );
+    }
     std::chrono::steady_clock::time_point solve_end;
     if (log_native_scan) {
         solve_end = std::chrono::steady_clock::now();
@@ -719,7 +741,7 @@ static bool solve_acquire_target(
 
 static PyObject *acquire_target(PyObject *, PyObject *args) {
     NativeTargetSolveResult result{};
-    if (!solve_acquire_target(args, result)) {
+    if (!solve_acquire_target(args, result, false)) {
         return nullptr;
     }
     if (!result.found) {
@@ -728,28 +750,98 @@ static PyObject *acquire_target(PyObject *, PyObject *args) {
     return Py_BuildValue("(dd)", result.yaw, result.pitch);
 }
 
+static PyObject *build_visible_components_tuple(
+    const std::vector<minecraft_miner::VisibleRegionComponent> &components
+) {
+    PyObject *python_components = PyTuple_New(
+        static_cast<Py_ssize_t>(components.size())
+    );
+    if (python_components == nullptr) {
+        return nullptr;
+    }
+
+    for (std::size_t component_index = 0;
+         component_index < components.size();
+         ++component_index) {
+        const auto &directions =
+            components[component_index].boundary_directions;
+        PyObject *python_directions = PyTuple_New(
+            static_cast<Py_ssize_t>(directions.size())
+        );
+        if (python_directions == nullptr) {
+            Py_DECREF(python_components);
+            return nullptr;
+        }
+        for (std::size_t direction_index = 0;
+             direction_index < directions.size();
+             ++direction_index) {
+            const minecraft_miner::Vec3 &direction =
+                directions[direction_index];
+            PyObject *python_direction = Py_BuildValue(
+                "(ddd)",
+                direction.x,
+                direction.y,
+                direction.z
+            );
+            if (python_direction == nullptr) {
+                Py_DECREF(python_directions);
+                Py_DECREF(python_components);
+                return nullptr;
+            }
+            if (PyTuple_SetItem(
+                    python_directions,
+                    static_cast<Py_ssize_t>(direction_index),
+                    python_direction
+                ) < 0) {
+                Py_DECREF(python_direction);
+                Py_DECREF(python_directions);
+                Py_DECREF(python_components);
+                return nullptr;
+            }
+        }
+        if (PyTuple_SetItem(
+                python_components,
+                static_cast<Py_ssize_t>(component_index),
+                python_directions
+            ) < 0) {
+            Py_DECREF(python_directions);
+            Py_DECREF(python_components);
+            return nullptr;
+        }
+    }
+    return python_components;
+}
+
 static PyObject *acquire_target_metrics(PyObject *, PyObject *args) {
     NativeTargetSolveResult result{};
-    if (!solve_acquire_target(args, result)) {
+    if (!solve_acquire_target(args, result, true)) {
         return nullptr;
     }
     if (!result.found) {
         Py_RETURN_NONE;
     }
+    PyObject *visible_components = build_visible_components_tuple(
+        result.visible_components
+    );
+    if (visible_components == nullptr) {
+        return nullptr;
+    }
     return Py_BuildValue(
-        "(ddddd(iii)s(ddd))",
+        "(dddddd(iii)s(ddd)N)",
         result.yaw,
         result.pitch,
         result.solve_result.width_yaw,
         result.solve_result.width_pitch,
         result.solve_result.distance,
+        result.effective_width,
         result.target_x,
         result.target_y,
         result.target_z,
         result.face_id,
         result.hit_x,
         result.hit_y,
-        result.hit_z
+        result.hit_z,
+        visible_components
     );
 }
 
@@ -787,7 +879,7 @@ static bool parse_aim_path_request(
     }
 
     double raw_start_orientation[2] = {0.0, 0.0};
-    double raw_target_metrics[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+    double raw_target_metrics[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     if (!parse_orientation(start_orientation_object, raw_start_orientation) ||
         !parse_target_metrics(target_metrics_object, raw_target_metrics)) {
         return false;
@@ -812,6 +904,7 @@ static bool parse_aim_path_request(
         raw_target_metrics[2],
         raw_target_metrics[3],
         raw_target_metrics[4],
+        raw_target_metrics[5],
     };
     return true;
 }
@@ -908,7 +1001,7 @@ static bool parse_sigmadrift_aim_path_request(
     }
 
     double raw_start_orientation[2] = {0.0, 0.0};
-    double raw_target_metrics[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+    double raw_target_metrics[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     if (!parse_orientation(start_orientation_object, raw_start_orientation) ||
         !parse_target_metrics(target_metrics_object, raw_target_metrics) ||
         !parse_sigmadrift_config(config_object, config)) {
@@ -930,6 +1023,7 @@ static bool parse_sigmadrift_aim_path_request(
         raw_target_metrics[2],
         raw_target_metrics[3],
         raw_target_metrics[4],
+        raw_target_metrics[5],
     };
     return true;
 }

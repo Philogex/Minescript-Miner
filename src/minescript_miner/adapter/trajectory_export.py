@@ -210,6 +210,8 @@ def write_synthetic_trajectory_session(
                 "width_yaw": target_metrics.width_yaw,
                 "width_pitch": target_metrics.width_pitch,
                 "distance": target_metrics.distance,
+                "effective_width": target_metrics.effective_width,
+                "visible_components": target_metrics.visible_components,
             },
             "angular_step_deg": angular_step_deg,
         },

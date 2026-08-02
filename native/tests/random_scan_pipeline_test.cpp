@@ -52,6 +52,7 @@ struct SolveStats {
     std::uint64_t visible_components = 0;
     std::uint64_t region_branches = 0;
     std::uint64_t region_clips = 0;
+    double effective_width_sum = 0.0;
     std::uint64_t checksum = 1469598103934665603ULL;
 };
 
@@ -303,6 +304,11 @@ int main(int argc, char **argv) {
                     data.look_direction,
                     std::numeric_limits<double>::infinity()
                 );
+            const double effective_width =
+                effective_target_width_degrees(
+                    full_result,
+                    data.look_direction
+                );
             const auto end = std::chrono::steady_clock::now();
             solve_us += static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::microseconds>(
@@ -338,6 +344,13 @@ int main(int argc, char **argv) {
                 full_result.region_stats.branches_visited;
             stats.region_clips +=
                 full_result.region_stats.clips_performed;
+            stats.effective_width_sum += effective_width;
+            stats.checksum = mix_checksum(
+                stats.checksum,
+                static_cast<std::uint64_t>(
+                    std::llround(effective_width * 1.0e9)
+                )
+            );
         } else {
             result = time_solve(
                 [&]() {
@@ -383,6 +396,7 @@ int main(int argc, char **argv) {
         << " visible_components=" << stats.visible_components
         << " region_branches=" << stats.region_branches
         << " region_clips=" << stats.region_clips
+        << " effective_width_sum=" << stats.effective_width_sum
         << " solve_us=" << stats.solve_us
         << " checksum=" << stats.checksum
         << '\n';

@@ -78,6 +78,9 @@ double quantized_target_width(
     double angular_step_deg,
     const SigmaDriftConfig &config
 ) {
+    if (target.effective_width > 0.0) {
+        return std::max(1.0, target.effective_width / angular_step_deg);
+    }
     const double width_yaw = std::max(0.0, target.width_yaw);
     const double width_pitch = std::max(0.0, target.width_pitch);
     if (width_yaw > 0.0 && width_pitch > 0.0) {
@@ -107,8 +110,13 @@ AimPath generate_minimum_jerk_path(
     const double yaw_delta = signed_angle_delta_degrees(target.yaw, start.yaw);
     const double pitch_delta = target.pitch - start.pitch;
     const double amplitude = std::hypot(yaw_delta, pitch_delta);
-    const double target_width =
-        std::max(config.angular_step_deg, std::min(width_yaw, width_pitch));
+    const double local_width = std::min(width_yaw, width_pitch);
+    const double target_width = std::max(
+        config.angular_step_deg,
+        target.effective_width > 0.0
+            ? target.effective_width
+            : local_width
+    );
     const double index_of_difficulty =
         std::log2(amplitude / target_width + 1.0);
     const double duration_ms = clamp_double(

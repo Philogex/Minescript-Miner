@@ -147,6 +147,48 @@ class AimConfigTest(unittest.TestCase):
         self.assertEqual(-5.0, path[-1].pitch)
         self.assertGreater(path[-1].t_ms, 0.0)
 
+    def test_minimum_jerk_prefers_effective_target_width(self):
+        config = aim.AimConfig(
+            fallback_angular_step_deg=0.15,
+            minimum_jerk=aim.MinimumJerkConfig(
+                fitts_a_ms=0.0,
+                fitts_b_ms=100.0,
+                min_duration_ms=0.0,
+                max_duration_ms=1000.0,
+                sample_hz=120,
+            ),
+        )
+        local_only = TargetMetrics(
+            yaw=10.0,
+            pitch=0.0,
+            width_yaw=1.0,
+            width_pitch=1.0,
+            distance=4.0,
+        )
+        full_region = TargetMetrics(
+            yaw=10.0,
+            pitch=0.0,
+            width_yaw=1.0,
+            width_pitch=1.0,
+            distance=4.0,
+            effective_width=4.0,
+        )
+
+        local_path = aim.generate_aim_path(
+            (0.0, 0.0),
+            local_only,
+            config,
+            angular_step_deg=0.15,
+        )
+        full_region_path = aim.generate_aim_path(
+            (0.0, 0.0),
+            full_region,
+            config,
+            angular_step_deg=0.15,
+        )
+
+        self.assertLess(full_region_path[-1].t_ms, local_path[-1].t_ms)
+
     def test_generate_aim_path_dispatches_to_sigmadrift_native_generator(self):
         request = (
             (0.0, 0.0),

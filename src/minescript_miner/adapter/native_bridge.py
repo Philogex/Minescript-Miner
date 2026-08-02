@@ -26,6 +26,8 @@ class TargetMetrics:
     hit_point: Tuple[float, float, float] | None = None
     block_state_before: str | None = None
     neighbors: Tuple[Tuple[int, int, int, str], ...] = ()
+    effective_width: float = 0.0
+    visible_components: Tuple[Tuple[ScanPosition, ...], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -84,7 +86,7 @@ def acquire_target_metrics(
     shape_ids: Sequence[int],
     target_indices: Sequence[int],
 ) -> Optional[TargetMetrics]:
-    """Return target orientation plus local visible aim width and distance."""
+    """Return the target plus its complete visible convex components."""
 
     result = native.acquire_target_metrics(
         position,
@@ -104,19 +106,29 @@ def acquire_target_metrics(
         width_yaw,
         width_pitch,
         distance,
+        effective_width,
         target_block,
         face_id,
         hit_point,
+        visible_components,
     ) = result
     return TargetMetrics(
-        float(yaw),
-        float(pitch),
-        float(width_yaw),
-        float(width_pitch),
-        float(distance),
-        tuple(int(coordinate) for coordinate in target_block),
-        str(face_id) or None,
-        tuple(float(coordinate) for coordinate in hit_point),
+        yaw=float(yaw),
+        pitch=float(pitch),
+        width_yaw=float(width_yaw),
+        width_pitch=float(width_pitch),
+        distance=float(distance),
+        effective_width=float(effective_width),
+        target_block=tuple(int(coordinate) for coordinate in target_block),
+        face_id=str(face_id) or None,
+        hit_point=tuple(float(coordinate) for coordinate in hit_point),
+        visible_components=tuple(
+            tuple(
+                tuple(float(coordinate) for coordinate in direction)
+                for direction in component
+            )
+            for component in visible_components
+        ),
     )
 
 
@@ -127,6 +139,7 @@ def _target_metrics_payload(metrics: TargetMetrics):
         metrics.width_yaw,
         metrics.width_pitch,
         metrics.distance,
+        metrics.effective_width,
     )
 
 

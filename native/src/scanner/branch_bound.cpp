@@ -14,6 +14,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <unordered_set>
 #include <utility>
@@ -1712,6 +1713,93 @@ bool same_block(BlockPos lhs, BlockPos rhs) {
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
 }
 
+struct LineInterval {
+    double minimum = -std::numeric_limits<double>::infinity();
+    double maximum = std::numeric_limits<double>::infinity();
+};
+
+double cross2(Point2 lhs, Point2 rhs) {
+    return lhs.x * rhs.y - lhs.y * rhs.x;
+}
+
+std::optional<LineInterval> component_line_interval(
+    const VisibleRegionComponent &component,
+    const Vec3 &right,
+    const Vec3 &up,
+    const Vec3 &forward,
+    Point2 movement_axis
+) {
+    constexpr double epsilon = 1.0e-12;
+    std::vector<Point2> vertices;
+    vertices.reserve(component.boundary_directions.size());
+    for (const Vec3 &direction : component.boundary_directions) {
+        const double depth = dot(direction, forward);
+        if (!(depth > epsilon)) {
+            return std::nullopt;
+        }
+        vertices.push_back({
+            dot(direction, right) / depth,
+            dot(direction, up) / depth,
+        });
+    }
+    if (vertices.size() < 3) {
+        return std::nullopt;
+    }
+
+    double signed_area_twice = 0.0;
+    for (std::size_t i = 0; i < vertices.size(); ++i) {
+        signed_area_twice += cross2(
+            vertices[i],
+            vertices[(i + 1) % vertices.size()]
+        );
+    }
+    if (std::abs(signed_area_twice) <= epsilon) {
+        return std::nullopt;
+    }
+    const double orientation = signed_area_twice > 0.0 ? 1.0 : -1.0;
+
+    LineInterval interval{};
+    for (std::size_t i = 0; i < vertices.size(); ++i) {
+        const Point2 a = vertices[i];
+        const Point2 b = vertices[(i + 1) % vertices.size()];
+        const Point2 edge{b.x - a.x, b.y - a.y};
+        const double constant = orientation * cross2(
+            edge,
+            {-a.x, -a.y}
+        );
+        const double slope = orientation * cross2(
+            edge,
+            movement_axis
+        );
+        const double guard = epsilon * std::max({
+            1.0,
+            std::abs(constant),
+            std::abs(slope),
+        });
+        if (std::abs(slope) <= guard) {
+            if (constant < -guard) {
+                return std::nullopt;
+            }
+            continue;
+        }
+
+        const double boundary = -constant / slope;
+        if (slope > 0.0) {
+            interval.minimum = std::max(interval.minimum, boundary);
+        } else {
+            interval.maximum = std::min(interval.maximum, boundary);
+        }
+        if (interval.minimum > interval.maximum + guard) {
+            return std::nullopt;
+        }
+    }
+    if (!std::isfinite(interval.minimum) ||
+        !std::isfinite(interval.maximum)) {
+        return std::nullopt;
+    }
+    return interval;
+}
+
 }  // namespace
 
 BranchBoundResult solve_visible_target(
@@ -1803,6 +1891,119 @@ VisibleTargetRegionResult solve_full_visible_target(
         );
     }
     return result;
+}
+
+double effective_target_width_degrees(
+    const VisibleTargetRegionResult &target_region,
+    const Vec3 &start_direction
+) {
+    constexpr double radians_to_degrees =
+        180.0 / 3.141592653589793238462643383279502884;
+    constexpr double epsilon = 1.0e-12;
+    if (!target_region.target.found ||
+        target_region.components.empty()) {
+        return 0.0;
+    }
+
+    const double target_length_squared =
+        length_squared(target_region.target.direction);
+    if (!(target_length_squared > 0.0)) {
+        return 0.0;
+    }
+    const Vec3 forward = target_region.target.direction * (
+        1.0 / std::sqrt(target_length_squared)
+    );
+
+    Vec3 right = cross({0.0, 1.0, 0.0}, forward);
+    double right_length_squared = length_squared(right);
+    if (!(right_length_squared > epsilon)) {
+        right = cross({1.0, 0.0, 0.0}, forward);
+        right_length_squared = length_squared(right);
+    }
+    if (!(right_length_squared > epsilon)) {
+        return 0.0;
+    }
+    right = right * (1.0 / std::sqrt(right_length_squared));
+    const Vec3 up = cross(forward, right);
+
+    Point2 movement_axis{1.0, 0.0};
+    const double start_length_squared = length_squared(start_direction);
+    if (start_length_squared > 0.0) {
+        const Vec3 normalized_start = start_direction * (
+            1.0 / std::sqrt(start_length_squared)
+        );
+        const Vec3 tangent = normalized_start -
+            forward * dot(normalized_start, forward);
+        const Point2 projected_tangent{
+            dot(tangent, right),
+            dot(tangent, up),
+        };
+        const double tangent_length = std::hypot(
+            projected_tangent.x,
+            projected_tangent.y
+        );
+        if (tangent_length > epsilon) {
+            movement_axis = {
+                projected_tangent.x / tangent_length,
+                projected_tangent.y / tangent_length,
+            };
+        }
+    }
+
+    std::vector<LineInterval> intervals;
+    intervals.reserve(target_region.components.size());
+    for (const VisibleRegionComponent &component :
+         target_region.components) {
+        const std::optional<LineInterval> interval =
+            component_line_interval(
+                component,
+                right,
+                up,
+                forward,
+                movement_axis
+            );
+        if (interval) {
+            intervals.push_back(*interval);
+        }
+    }
+    std::sort(
+        intervals.begin(),
+        intervals.end(),
+        [](const LineInterval &lhs, const LineInterval &rhs) {
+            return lhs.minimum < rhs.minimum;
+        }
+    );
+
+    std::vector<LineInterval> merged;
+    merged.reserve(intervals.size());
+    for (const LineInterval interval : intervals) {
+        if (merged.empty()) {
+            merged.push_back(interval);
+            continue;
+        }
+        LineInterval &last = merged.back();
+        const double guard = epsilon * std::max({
+            1.0,
+            std::abs(last.maximum),
+            std::abs(interval.minimum),
+        });
+        if (interval.minimum <= last.maximum + guard) {
+            last.maximum = std::max(last.maximum, interval.maximum);
+        } else {
+            merged.push_back(interval);
+        }
+    }
+
+    for (const LineInterval interval : merged) {
+        if (interval.minimum <= epsilon && interval.maximum >= -epsilon) {
+            return std::max(
+                0.0,
+                (std::atan(interval.maximum) -
+                 std::atan(interval.minimum)) * radians_to_degrees
+            );
+        }
+    }
+    return 0.0;
 }
 
 }  // namespace minecraft_miner

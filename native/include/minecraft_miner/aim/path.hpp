@@ -16,6 +16,7 @@ struct TargetMetrics {
     double width_yaw = 0.0;
     double width_pitch = 0.0;
     double distance = 0.0;
+    double effective_width = 0.0;
 };
 
 struct AimPathConfig {

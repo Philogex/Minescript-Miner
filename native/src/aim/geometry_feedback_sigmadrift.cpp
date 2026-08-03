@@ -220,14 +220,29 @@ AimPath generate_geometry_feedback_sigmadrift_path(
     }
 
     const double step = std::max(1.0e-9, angular_step_deg);
+    const double safe_margin_angle = std::min(
+        feedback_config.safe_margin_steps * step * PI / 180.0,
+        PI / 4.0
+    );
+    SafeTargetRegion safe_target{};
+    if (!make_safe_target_region(
+            projected_region,
+            std::tan(safe_margin_angle),
+            safe_target
+        )) {
+        return {};
+    }
+    const YawPitch motor_target = yaw_pitch_from_direction(
+        safe_target.anchor_direction
+    );
     const double target_x =
-        signed_angle_delta_degrees(target.yaw, start.yaw) / step;
-    const double target_y = (target.pitch - start.pitch) / step;
+        signed_angle_delta_degrees(motor_target.yaw, start.yaw) / step;
+    const double target_y = (motor_target.pitch - start.pitch) / step;
     const double distance = std::hypot(target_x, target_y);
     if (distance < 1.0) {
         return {
             AimSample{start.yaw, start.pitch, 0.0},
-            AimSample{target.yaw, target.pitch, 50.0},
+            AimSample{motor_target.yaw, motor_target.pitch, 50.0},
         };
     }
 
@@ -301,11 +316,6 @@ AimPath generate_geometry_feedback_sigmadrift_path(
     const double tremor_phase_y = uniform(0.0, 2.0 * PI);
     const double gamma_scale =
         motion_config.sample_dt_mean / motion_config.gamma_shape;
-    const double safe_margin_angle = std::min(
-        feedback_config.safe_margin_steps * step * PI / 180.0,
-        PI / 4.0
-    );
-    const double safe_margin = std::tan(safe_margin_angle);
 
     AimPath result;
     result.reserve(static_cast<std::size_t>(
@@ -387,14 +397,14 @@ AimPath generate_geometry_feedback_sigmadrift_path(
             // A safe current sample can still leave the region while the
             // remaining submovement tails decay, so both states must be safe.
             const bool current_safe = point_in_visible_region_with_margin(
-                projected_region,
+                safe_target.region,
                 current_direction,
-                safe_margin
+                0.0
             );
             const bool endpoint_safe = point_in_visible_region_with_margin(
-                projected_region,
+                safe_target.region,
                 endpoint_direction,
-                safe_margin
+                0.0
             );
 
             if ((current_safe && endpoint_safe) ||
@@ -403,9 +413,9 @@ AimPath generate_geometry_feedback_sigmadrift_path(
             } else {
                 Vec3 safe_direction{};
                 if (!closest_safe_direction_in_visible_region(
-                        projected_region,
+                        safe_target.region,
                         current_direction,
-                        safe_margin,
+                        0.0,
                         safe_direction
                     )) {
                     feedback_pending = false;

@@ -60,6 +60,44 @@ double polygon_orientation(const std::vector<Point2> &vertices) {
     return area_twice > 0.0 ? 1.0 : -1.0;
 }
 
+double polygon_area_twice(const std::vector<Point2> &vertices) {
+    double area_twice = 0.0;
+    for (std::size_t index = 0; index < vertices.size(); ++index) {
+        area_twice += cross2(
+            vertices[index],
+            vertices[(index + 1) % vertices.size()]
+        );
+    }
+    return area_twice;
+}
+
+bool polygon_centroid(
+    const std::vector<Point2> &vertices,
+    Point2 &out
+) {
+    const double area_twice = polygon_area_twice(vertices);
+    if (!std::isfinite(area_twice) ||
+        std::abs(area_twice) <= PROJECTION_EPSILON) {
+        out = {};
+        return false;
+    }
+
+    Point2 weighted{};
+    for (std::size_t index = 0; index < vertices.size(); ++index) {
+        const Point2 current = vertices[index];
+        const Point2 next = vertices[(index + 1) % vertices.size()];
+        const double weight = cross2(current, next);
+        weighted.x += (current.x + next.x) * weight;
+        weighted.y += (current.y + next.y) * weight;
+    }
+    const double denominator = 3.0 * area_twice;
+    out = {
+        weighted.x / denominator,
+        weighted.y / denominator,
+    };
+    return finite(out);
+}
+
 bool point_in_polygon(
     const std::vector<Point2> &vertices,
     double orientation,
@@ -212,6 +250,84 @@ bool direction_from_projected_point(
     }, out);
 }
 
+struct SafeComponentCandidate {
+    ProjectedTargetComponent component{};
+    Point2 centroid{};
+    double area = 0.0;
+    double center_distance = 0.0;
+};
+
+bool better_anchor_candidate(
+    const SafeComponentCandidate &candidate,
+    const SafeComponentCandidate &best
+) {
+    if (candidate.center_distance != best.center_distance) {
+        return candidate.center_distance < best.center_distance;
+    }
+    return candidate.area > best.area;
+}
+
+bool target_region_centroid(
+    const ProjectedTargetRegion &region,
+    Point2 &out
+) {
+    Point2 weighted{};
+    double total_area = 0.0;
+    for (const ProjectedTargetComponent &component : region.components) {
+        Point2 centroid{};
+        if (!polygon_centroid(component.vertices, centroid)) {
+            continue;
+        }
+        const double area = std::abs(
+            polygon_area_twice(component.vertices)
+        ) * 0.5;
+        weighted.x += centroid.x * area;
+        weighted.y += centroid.y * area;
+        total_area += area;
+    }
+    if (!(total_area > PROJECTION_EPSILON) || !std::isfinite(total_area)) {
+        out = {};
+        return false;
+    }
+    out = {weighted.x / total_area, weighted.y / total_area};
+    return finite(out);
+}
+
+bool build_safe_components(
+    const ProjectedTargetRegion &region,
+    Point2 target_center,
+    double margin,
+    std::vector<SafeComponentCandidate> &out
+) {
+    out.clear();
+    out.reserve(region.components.size());
+    for (std::size_t index = 0; index < region.components.size(); ++index) {
+        const ProjectedTargetComponent &source = region.components[index];
+        std::vector<Point2> vertices = inset_component(source, margin);
+        const double orientation = polygon_orientation(vertices);
+        Point2 centroid{};
+        if (vertices.size() < 3 || orientation == 0.0 ||
+            !polygon_centroid(vertices, centroid) ||
+            !point_in_polygon(vertices, orientation, centroid)) {
+            continue;
+        }
+
+        SafeComponentCandidate candidate{};
+        candidate.component.vertices = std::move(vertices);
+        candidate.component.orientation = orientation;
+        candidate.centroid = centroid;
+        candidate.area = std::abs(
+            polygon_area_twice(candidate.component.vertices)
+        ) * 0.5;
+        candidate.center_distance = distance_squared(
+            target_center,
+            centroid
+        );
+        out.push_back(std::move(candidate));
+    }
+    return !out.empty();
+}
+
 }  // namespace
 
 bool make_target_projection(
@@ -313,6 +429,76 @@ bool project_visible_target_region(
     }
 
     out = std::move(region);
+    return true;
+}
+
+bool make_safe_target_region(
+    const ProjectedTargetRegion &region,
+    double requested_margin,
+    SafeTargetRegion &out
+) {
+    out = {};
+    if (region.components.empty() || !std::isfinite(requested_margin) ||
+        requested_margin < 0.0) {
+        return false;
+    }
+
+    Point2 target_center{};
+    if (!target_region_centroid(region, target_center)) {
+        return false;
+    }
+
+    std::vector<SafeComponentCandidate> candidates;
+    double applied_margin = requested_margin;
+    bool built = false;
+    for (int attempt = 0; attempt < 12; ++attempt) {
+        if (build_safe_components(
+                region,
+                target_center,
+                applied_margin,
+                candidates
+            )) {
+            built = true;
+            break;
+        }
+        applied_margin *= 0.5;
+    }
+    if (!built && !build_safe_components(
+            region,
+            target_center,
+            0.0,
+            candidates
+        )) {
+        return false;
+    }
+    if (!built) {
+        applied_margin = 0.0;
+    }
+
+    std::size_t best_index = 0;
+    for (std::size_t index = 1; index < candidates.size(); ++index) {
+        if (better_anchor_candidate(candidates[index], candidates[best_index])) {
+            best_index = index;
+        }
+    }
+
+    SafeTargetRegion result{};
+    result.region.projection = region.projection;
+    result.region.components.reserve(candidates.size());
+    for (SafeComponentCandidate &candidate : candidates) {
+        result.region.components.push_back(std::move(candidate.component));
+    }
+    result.anchor_component_index = best_index;
+    result.applied_margin = applied_margin;
+    if (!direction_from_projected_point(
+            result.region.projection,
+            candidates[best_index].centroid,
+            result.anchor_direction
+        )) {
+        return false;
+    }
+
+    out = std::move(result);
     return true;
 }
 

@@ -100,6 +100,30 @@ int main() {
     assert(projected.x > 0.19);
     assert(std::abs(projected.y) < 1.0e-12);
 
+    SafeTargetRegion centered_square{};
+    assert(make_safe_target_region(
+        square,
+        0.05,
+        centered_square
+    ));
+    assert(std::abs(centered_square.applied_margin - 0.05) < 1.0e-12);
+    assert(centered_square.region.components.size() == 1);
+    assert(point_in_visible_region(
+        centered_square.region,
+        centered_square.anchor_direction
+    ));
+    assert(project_target_direction(
+        identity,
+        centered_square.anchor_direction,
+        projected
+    ));
+    assert(std::abs(projected.x) < 1.0e-12);
+    assert(std::abs(projected.y) < 1.0e-12);
+    assert(!point_in_visible_region(
+        centered_square.region,
+        z_direction(0.21, 0.0)
+    ));
+
     VisibleDirectionComponent clockwise =
         rectangle(-0.25, -0.25, 0.25, 0.25);
     std::reverse(clockwise.begin(), clockwise.end());
@@ -117,13 +141,72 @@ int main() {
         {0.0, 0.0, 1.0},
         {
             rectangle(-0.5, -0.2, -0.2, 0.2),
+            rectangle(-0.1, -0.15, 0.1, 0.15),
             rectangle(0.2, -0.2, 0.5, 0.2),
         },
         disconnected
     ));
     assert(point_in_visible_region(disconnected, z_direction(-0.3, 0.0)));
+    assert(point_in_visible_region(disconnected, z_direction(0.0, 0.0)));
     assert(point_in_visible_region(disconnected, z_direction(0.3, 0.0)));
-    assert(!point_in_visible_region(disconnected, z_direction(0.0, 0.0)));
+    assert(!point_in_visible_region(disconnected, z_direction(0.15, 0.0)));
+
+    SafeTargetRegion central_component{};
+    assert(make_safe_target_region(
+        disconnected,
+        0.05,
+        central_component
+    ));
+    assert(project_target_direction(
+        identity,
+        central_component.anchor_direction,
+        projected
+    ));
+    assert(std::abs(projected.x) < 1.0e-12);
+    assert(std::abs(projected.y) < 1.0e-12);
+
+    ProjectedTargetRegion mixed_width{};
+    assert(project_visible_target_region(
+        {0.0, 0.0, 1.0},
+        {
+            rectangle(-0.02, -0.02, 0.02, 0.02),
+            rectangle(0.2, -0.2, 0.5, 0.2),
+        },
+        mixed_width
+    ));
+    SafeTargetRegion robust_alternative{};
+    assert(make_safe_target_region(
+        mixed_width,
+        0.05,
+        robust_alternative
+    ));
+    assert(std::abs(robust_alternative.applied_margin - 0.05) < 1.0e-12);
+    assert(robust_alternative.region.components.size() == 1);
+    assert(project_target_direction(
+        identity,
+        robust_alternative.anchor_direction,
+        projected
+    ));
+    assert(std::abs(projected.x - 0.35) < 1.0e-12);
+
+    ProjectedTargetRegion narrow_square{};
+    assert(project_visible_target_region(
+        {0.0, 0.0, 1.0},
+        {rectangle(-0.02, -0.02, 0.02, 0.02)},
+        narrow_square
+    ));
+    SafeTargetRegion reduced_margin{};
+    assert(make_safe_target_region(
+        narrow_square,
+        0.05,
+        reduced_margin
+    ));
+    assert(reduced_margin.applied_margin > 0.0);
+    assert(reduced_margin.applied_margin < 0.05);
+    assert(point_in_visible_region(
+        reduced_margin.region,
+        reduced_margin.anchor_direction
+    ));
 
     TargetProjection vertical_basis{};
     assert(make_target_projection({0.0, 1.0, 1.0e-14}, vertical_basis));
@@ -241,6 +324,44 @@ int main() {
             uncorrected_path.back().pitch
         )
     ));
+
+    const minecraft_miner::YawPitch edge_orientation =
+        minecraft_miner::yaw_pitch_from_direction(z_direction(0.2, 0.0));
+    const minecraft_miner::YawPitch left_orientation =
+        minecraft_miner::yaw_pitch_from_direction(z_direction(-0.4, 0.0));
+    const TargetMetrics edge_target{
+        edge_orientation.yaw,
+        edge_orientation.pitch,
+        20.0,
+        20.0,
+        4.0,
+        20.0,
+    };
+    SigmaDriftConfig centered_motion = deterministic;
+    centered_motion.undershoot_min = 1.0;
+    centered_motion.undershoot_max = 1.0;
+    const AimPath centered_path =
+        generate_geometry_feedback_sigmadrift_path(
+            {left_orientation.yaw, left_orientation.pitch},
+            edge_target,
+            {rectangle(-0.25, -0.25, 0.25, 0.25)},
+            0.15,
+            centered_motion,
+            {0.0, 0.0, 0},
+            9876
+        );
+    assert(centered_path.size() > 2);
+    Point2 centered_endpoint{};
+    assert(project_target_direction(
+        identity,
+        minecraft_miner::look_direction_from_yaw_pitch(
+            centered_path.back().yaw,
+            centered_path.back().pitch
+        ),
+        centered_endpoint
+    ));
+    assert(std::abs(centered_endpoint.x) < 0.05);
+    assert(std::abs(centered_endpoint.y) < 1.0e-12);
     const AimPath repeated_path = generate_geometry_feedback_sigmadrift_path(
         {10.0, -2.0},
         target,

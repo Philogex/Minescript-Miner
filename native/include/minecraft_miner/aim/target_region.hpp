@@ -3,6 +3,7 @@
 #include "minecraft_miner/geometry/tri2.hpp"
 #include "minecraft_miner/geometry/vec.hpp"
 
+#include <cstddef>
 #include <vector>
 
 namespace minecraft_miner::aim {
@@ -26,6 +27,13 @@ struct ProjectedTargetRegion {
     std::vector<ProjectedTargetComponent> components{};
 };
 
+struct SafeTargetRegion {
+    ProjectedTargetRegion region{};
+    Vec3 anchor_direction{};
+    double applied_margin = 0.0;
+    std::size_t anchor_component_index = 0;
+};
+
 bool make_target_projection(
     const Vec3 &center_direction,
     TargetProjection &out
@@ -41,6 +49,16 @@ bool project_visible_target_region(
     const Vec3 &center_direction,
     const VisibleDirectionComponents &components,
     ProjectedTargetRegion &out
+);
+
+// Builds one stable inset for the complete path and selects the component
+// centroid nearest the area centroid of the complete visible target. If no
+// component supports the requested margin, the common margin is reduced until
+// a valid inset exists.
+bool make_safe_target_region(
+    const ProjectedTargetRegion &region,
+    double requested_margin,
+    SafeTargetRegion &out
 );
 
 // The visible region is closed: points on a component boundary count as hits.

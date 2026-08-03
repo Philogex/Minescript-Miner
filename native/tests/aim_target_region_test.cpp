@@ -307,6 +307,17 @@ int main() {
             corrected_end.pitch
         )
     ));
+    Point2 corrected_endpoint{};
+    assert(project_target_direction(
+        narrow_region.projection,
+        minecraft_miner::look_direction_from_yaw_pitch(
+            corrected_end.yaw,
+            corrected_end.pitch
+        ),
+        corrected_endpoint
+    ));
+    assert(std::abs(corrected_endpoint.x) < 0.01);
+    assert(std::abs(corrected_endpoint.y) < 0.01);
     const AimPath uncorrected_path =
         generate_geometry_feedback_sigmadrift_path(
             {10.0, -2.0},
@@ -324,6 +335,50 @@ int main() {
             uncorrected_path.back().pitch
         )
     ));
+
+    SigmaDriftConfig endpoint_safe_motion = deterministic;
+    endpoint_safe_motion.undershoot_min = 1.0;
+    endpoint_safe_motion.undershoot_max = 1.0;
+    const AimPath endpoint_safe_feedback_path =
+        generate_geometry_feedback_sigmadrift_path(
+            {10.0, -2.0},
+            target,
+            narrow_target,
+            0.15,
+            endpoint_safe_motion,
+            feedback,
+            4321
+        );
+    const AimPath endpoint_safe_no_corrections_path =
+        generate_geometry_feedback_sigmadrift_path(
+            {10.0, -2.0},
+            target,
+            narrow_target,
+            0.15,
+            endpoint_safe_motion,
+            {0.0, 0.5, 0},
+            4321
+        );
+    assert(
+        endpoint_safe_feedback_path.size() ==
+        endpoint_safe_no_corrections_path.size()
+    );
+    for (std::size_t index = 0;
+         index < endpoint_safe_feedback_path.size();
+         ++index) {
+        assert(
+            endpoint_safe_feedback_path[index].yaw ==
+            endpoint_safe_no_corrections_path[index].yaw
+        );
+        assert(
+            endpoint_safe_feedback_path[index].pitch ==
+            endpoint_safe_no_corrections_path[index].pitch
+        );
+        assert(
+            endpoint_safe_feedback_path[index].t_ms ==
+            endpoint_safe_no_corrections_path[index].t_ms
+        );
+    }
 
     const minecraft_miner::YawPitch edge_orientation =
         minecraft_miner::yaw_pitch_from_direction(z_direction(0.2, 0.0));

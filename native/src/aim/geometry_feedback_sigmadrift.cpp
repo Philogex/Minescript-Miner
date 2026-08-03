@@ -381,10 +381,6 @@ AimPath generate_geometry_feedback_sigmadrift_path(
         });
 
         if (feedback_pending && t >= next_feedback_time) {
-            const Vec3 current_direction = look_direction_from_yaw_pitch(
-                sample_orientation.yaw,
-                sample_orientation.pitch
-            );
             double endpoint_x = 0.0;
             double endpoint_y = 0.0;
             asymptotic_position(submovements, endpoint_x, endpoint_y);
@@ -394,82 +390,57 @@ AimPath generate_geometry_feedback_sigmadrift_path(
                 endpoint_y,
                 step
             );
-            // A safe current sample can still leave the region while the
-            // remaining submovement tails decay, so both states must be safe.
-            const bool current_safe = point_in_visible_region_with_margin(
-                safe_target.region,
-                current_direction,
-                0.0
-            );
             const bool endpoint_safe = point_in_visible_region_with_margin(
                 safe_target.region,
                 endpoint_direction,
                 0.0
             );
 
-            if ((current_safe && endpoint_safe) ||
+            if (endpoint_safe ||
                 correction_count >= feedback_config.max_corrections) {
                 feedback_pending = false;
             } else {
-                Vec3 safe_direction{};
-                if (!closest_safe_direction_in_visible_region(
-                        safe_target.region,
-                        current_direction,
-                        0.0,
-                        safe_direction
-                    )) {
+                const double correction_x = target_x - endpoint_x;
+                const double correction_y = target_y - endpoint_y;
+                const double correction_distance = std::hypot(
+                    correction_x,
+                    correction_y
+                );
+                if (correction_distance < 1.0e-9) {
                     feedback_pending = false;
                 } else {
-                    const YawPitch safe_orientation =
-                        yaw_pitch_from_direction(safe_direction);
-                    const double safe_x = signed_angle_delta_degrees(
-                        safe_orientation.yaw,
-                        start.yaw
-                    ) / step;
-                    const double safe_y =
-                        (safe_orientation.pitch - start.pitch) / step;
-                    const double correction_x = safe_x - endpoint_x;
-                    const double correction_y = safe_y - endpoint_y;
-                    const double correction_distance = std::hypot(
-                        correction_x,
-                        correction_y
+                    const double correction_id = std::log2(
+                        correction_distance / target_width + 1.0
                     );
-                    if (correction_distance < 1.0e-9) {
-                        feedback_pending = false;
-                    } else {
-                        const double correction_id = std::log2(
-                            correction_distance / target_width + 1.0
-                        );
-                        const double correction_duration = std::max(
-                            60.0,
-                            motion_config.fitts_a +
-                                motion_config.fitts_b * correction_id
-                        );
-                        const double correction_sigma = uniform(
-                            motion_config.correction_sigma_min,
-                            motion_config.correction_sigma_max
-                        );
-                        const double correction_peak_delay =
-                            correction_duration * uniform(0.30, 0.40);
-                        const Submovement correction{
-                            correction_x,
-                            correction_y,
-                            t,
-                            std::log(correction_peak_delay) +
-                                correction_sigma * correction_sigma,
-                            correction_sigma,
-                            t + correction_peak_delay,
-                            t + correction_duration * 1.15,
-                        };
-                        submovements.push_back(correction);
-                        ++correction_count;
-                        next_feedback_time = correction.peak_time +
-                            feedback_config.feedback_latency_ms;
-                        latest_tail_time = std::max(
-                            latest_tail_time,
-                            correction.tail_time
-                        );
-                    }
+                    const double correction_duration = std::max(
+                        60.0,
+                        motion_config.fitts_a +
+                            motion_config.fitts_b * correction_id
+                    );
+                    const double correction_sigma = uniform(
+                        motion_config.correction_sigma_min,
+                        motion_config.correction_sigma_max
+                    );
+                    const double correction_peak_delay =
+                        correction_duration * uniform(0.30, 0.40);
+                    const Submovement correction{
+                        correction_x,
+                        correction_y,
+                        t,
+                        std::log(correction_peak_delay) +
+                            correction_sigma * correction_sigma,
+                        correction_sigma,
+                        t + correction_peak_delay,
+                        t + correction_duration * 1.15,
+                    };
+                    submovements.push_back(correction);
+                    ++correction_count;
+                    next_feedback_time = correction.peak_time +
+                        feedback_config.feedback_latency_ms;
+                    latest_tail_time = std::max(
+                        latest_tail_time,
+                        correction.tail_time
+                    );
                 }
             }
         }

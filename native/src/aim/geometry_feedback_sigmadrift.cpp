@@ -167,6 +167,53 @@ void asymptotic_position(
     }
 }
 
+void summarize_region_trace(
+    const AimPath &path,
+    const ProjectedTargetRegion &visible_region,
+    const ProjectedTargetRegion &safe_region,
+    GeometryFeedbackSigmaDriftDiagnostics &diagnostics
+) {
+    bool previous_visible = false;
+    bool previous_safe = false;
+    bool have_previous = false;
+    for (const AimSample &sample : path) {
+        const Vec3 direction = look_direction_from_yaw_pitch(
+            sample.yaw,
+            sample.pitch
+        );
+        const bool visible = point_in_visible_region(
+            visible_region,
+            direction
+        );
+        const bool safe = point_in_visible_region_with_margin(
+            safe_region,
+            direction,
+            0.0
+        );
+        if (visible && (!have_previous || !previous_visible)) {
+            ++diagnostics.visible_entry_count;
+            if (diagnostics.first_visible_entry_ms < 0.0) {
+                diagnostics.first_visible_entry_ms = sample.t_ms;
+            }
+        } else if (!visible && have_previous && previous_visible) {
+            ++diagnostics.visible_exit_count;
+        }
+        if (safe && (!have_previous || !previous_safe)) {
+            ++diagnostics.safe_entry_count;
+            if (diagnostics.first_safe_entry_ms < 0.0) {
+                diagnostics.first_safe_entry_ms = sample.t_ms;
+            }
+        } else if (!safe && have_previous && previous_safe) {
+            ++diagnostics.safe_exit_count;
+        }
+        previous_visible = visible;
+        previous_safe = safe;
+        have_previous = true;
+    }
+    diagnostics.final_visible = have_previous && previous_visible;
+    diagnostics.final_safe = have_previous && previous_safe;
+}
+
 }  // namespace
 
 AimPath generate_geometry_feedback_sigmadrift_path(
@@ -176,8 +223,12 @@ AimPath generate_geometry_feedback_sigmadrift_path(
     double angular_step_deg,
     const SigmaDriftConfig &motion_config,
     const GeometryFeedbackSigmaDriftConfig &feedback_config,
-    std::uint64_t seed
+    std::uint64_t seed,
+    GeometryFeedbackSigmaDriftDiagnostics *diagnostics
 ) {
+    if (diagnostics != nullptr) {
+        *diagnostics = {};
+    }
     if (!(angular_step_deg > 0.0) || !std::isfinite(angular_step_deg) ||
         feedback_config.feedback_latency_ms < 0.0 ||
         !std::isfinite(feedback_config.feedback_latency_ms) ||
@@ -217,15 +268,32 @@ AimPath generate_geometry_feedback_sigmadrift_path(
     const YawPitch motor_target = yaw_pitch_from_direction(
         safe_target.anchor_direction
     );
+    if (diagnostics != nullptr) {
+        diagnostics->motor_target_yaw = motor_target.yaw;
+        diagnostics->motor_target_pitch = motor_target.pitch;
+        diagnostics->applied_margin_steps =
+            std::atan(safe_target.applied_margin) * 180.0 / PI / step;
+        diagnostics->anchor_component_index =
+            safe_target.anchor_component_index;
+    }
     const double target_x =
         signed_angle_delta_degrees(motor_target.yaw, start.yaw) / step;
     const double target_y = (motor_target.pitch - start.pitch) / step;
     const double distance = std::hypot(target_x, target_y);
     if (distance < 1.0) {
-        return {
+        AimPath short_path{
             AimSample{start.yaw, start.pitch, 0.0},
             AimSample{motor_target.yaw, motor_target.pitch, 50.0},
         };
+        if (diagnostics != nullptr) {
+            summarize_region_trace(
+                short_path,
+                projected_region,
+                safe_target.region,
+                *diagnostics
+            );
+        }
+        return short_path;
     }
 
     std::mt19937_64 rng(seed);
@@ -363,6 +431,9 @@ AimPath generate_geometry_feedback_sigmadrift_path(
         });
 
         if (feedback_pending && t >= next_feedback_time) {
+            if (diagnostics != nullptr) {
+                ++diagnostics->feedback_check_count;
+            }
             const Vec3 current_direction = look_direction_from_yaw_pitch(
                 sample_orientation.yaw,
                 sample_orientation.pitch
@@ -418,6 +489,9 @@ AimPath generate_geometry_feedback_sigmadrift_path(
                     };
                     submovements.push_back(correction);
                     ++correction_count;
+                    if (diagnostics != nullptr) {
+                        diagnostics->correction_count = correction_count;
+                    }
                     next_feedback_time = correction.peak_time +
                         feedback_config.feedback_latency_ms;
                     latest_tail_time = std::max(
@@ -449,6 +523,14 @@ AimPath generate_geometry_feedback_sigmadrift_path(
         return {};
     }
     result.front() = AimSample{start.yaw, start.pitch, 0.0};
+    if (diagnostics != nullptr) {
+        summarize_region_trace(
+            result,
+            projected_region,
+            safe_target.region,
+            *diagnostics
+        );
+    }
     return result;
 }
 

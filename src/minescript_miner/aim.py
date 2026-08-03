@@ -9,9 +9,11 @@ from typing import Callable, Mapping, Union
 
 from minescript_miner.adapter.native_bridge import (
     AimPoint,
+    GeometryFeedbackDiagnostics,
     Orientation,
     TargetMetrics,
     generate_geometry_feedback_sigmadrift_aim_path as _generate_geometry_feedback_sigmadrift_aim_path,
+    generate_geometry_feedback_sigmadrift_aim_path_with_diagnostics as _generate_geometry_feedback_sigmadrift_aim_path_with_diagnostics,
     generate_minimum_jerk_aim_path as _generate_minimum_jerk_aim_path,
     generate_sigmadrift_aim_path as _generate_sigmadrift_aim_path,
 )
@@ -83,6 +85,12 @@ class AimConfig:
     geometry_feedback_sigmadrift: GeometryFeedbackSigmaDriftConfig = field(
         default_factory=GeometryFeedbackSigmaDriftConfig
     )
+
+
+@dataclass(frozen=True)
+class AimPathGeneration:
+    points: tuple[AimPoint, ...]
+    diagnostics: GeometryFeedbackDiagnostics | None = None
 
 
 def _parse_float(value: str, name: str) -> float:
@@ -421,6 +429,40 @@ def generate_aim_path(
             generator_config=asdict(resolved_config),
         )
     return path
+
+
+def generate_aim_path_with_diagnostics(
+    start_orientation: Orientation,
+    target: TargetMetrics,
+    config: AimConfig | None = None,
+    *,
+    angular_step_deg: float,
+    seed: int | None = None,
+) -> AimPathGeneration:
+    """Generate a path and optional model-specific analysis diagnostics."""
+
+    resolved_config = config if config is not None else load_aim_config()
+    if resolved_config.aim_model != "geometry_feedback_sigmadrift":
+        return AimPathGeneration(
+            generate_aim_path(
+                start_orientation,
+                target,
+                resolved_config,
+                angular_step_deg=angular_step_deg,
+                seed=seed,
+            )
+        )
+    path, diagnostics = _generate_geometry_feedback_sigmadrift_aim_path_with_diagnostics(
+        start_orientation,
+        target,
+        angular_step_deg,
+        _sigmadrift_payload(resolved_config.sigmadrift),
+        _geometry_feedback_sigmadrift_payload(
+            resolved_config.geometry_feedback_sigmadrift
+        ),
+        seed,
+    )
+    return AimPathGeneration(path, diagnostics)
 
 
 def execute_aim_path(

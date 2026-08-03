@@ -37,6 +37,24 @@ class AimPoint:
     t_ms: float
 
 
+@dataclass(frozen=True)
+class GeometryFeedbackDiagnostics:
+    motor_target_yaw: float
+    motor_target_pitch: float
+    applied_margin_steps: float
+    anchor_component_index: int
+    feedback_check_count: int
+    correction_count: int
+    first_visible_entry_ms: float
+    first_safe_entry_ms: float
+    visible_entry_count: int
+    visible_exit_count: int
+    safe_entry_count: int
+    safe_exit_count: int
+    final_visible: bool
+    final_safe: bool
+
+
 def _uint16_payload(values: Sequence[int]):
     if isinstance(values, array):
         if values.typecode != "H":
@@ -228,3 +246,47 @@ def generate_geometry_feedback_sigmadrift_aim_path(
         AimPoint(float(yaw), float(pitch), float(t_ms))
         for yaw, pitch, t_ms in result
     )
+
+
+def generate_geometry_feedback_sigmadrift_aim_path_with_diagnostics(
+    start_orientation: Orientation,
+    target_metrics: TargetMetrics,
+    angular_step_deg: float,
+    config_values: Sequence[float],
+    feedback_config_values: Sequence[float],
+    seed: int | None = None,
+) -> tuple[Tuple[AimPoint, ...], GeometryFeedbackDiagnostics]:
+    """Return a geometry-feedback path plus exact controller diagnostics."""
+
+    result, raw_diagnostics = (
+        native.generate_geometry_feedback_sigmadrift_aim_path_with_diagnostics(
+            start_orientation,
+            _target_metrics_payload(target_metrics),
+            target_metrics.visible_components,
+            float(angular_step_deg),
+            tuple(float(value) for value in config_values),
+            tuple(feedback_config_values),
+            _resolved_seed(seed),
+        )
+    )
+    path = tuple(
+        AimPoint(float(yaw), float(pitch), float(t_ms))
+        for yaw, pitch, t_ms in result
+    )
+    diagnostics = GeometryFeedbackDiagnostics(
+        motor_target_yaw=float(raw_diagnostics["motor_target_yaw"]),
+        motor_target_pitch=float(raw_diagnostics["motor_target_pitch"]),
+        applied_margin_steps=float(raw_diagnostics["applied_margin_steps"]),
+        anchor_component_index=int(raw_diagnostics["anchor_component_index"]),
+        feedback_check_count=int(raw_diagnostics["feedback_check_count"]),
+        correction_count=int(raw_diagnostics["correction_count"]),
+        first_visible_entry_ms=float(raw_diagnostics["first_visible_entry_ms"]),
+        first_safe_entry_ms=float(raw_diagnostics["first_safe_entry_ms"]),
+        visible_entry_count=int(raw_diagnostics["visible_entry_count"]),
+        visible_exit_count=int(raw_diagnostics["visible_exit_count"]),
+        safe_entry_count=int(raw_diagnostics["safe_entry_count"]),
+        safe_exit_count=int(raw_diagnostics["safe_exit_count"]),
+        final_visible=bool(raw_diagnostics["final_visible"]),
+        final_safe=bool(raw_diagnostics["final_safe"]),
+    )
+    return path, diagnostics

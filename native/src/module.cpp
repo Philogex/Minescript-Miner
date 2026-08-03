@@ -1387,6 +1387,92 @@ static PyObject *generate_geometry_feedback_sigmadrift_aim_path(
     return build_aim_path_tuple(path);
 }
 
+static PyObject *build_geometry_feedback_diagnostics(
+    const minecraft_miner::aim::GeometryFeedbackSigmaDriftDiagnostics &diagnostics
+) {
+    return Py_BuildValue(
+        "{s:d,s:d,s:d,s:K,s:i,s:i,s:d,s:d,s:i,s:i,s:i,s:i,s:O,s:O}",
+        "motor_target_yaw",
+        diagnostics.motor_target_yaw,
+        "motor_target_pitch",
+        diagnostics.motor_target_pitch,
+        "applied_margin_steps",
+        diagnostics.applied_margin_steps,
+        "anchor_component_index",
+        static_cast<unsigned long long>(diagnostics.anchor_component_index),
+        "feedback_check_count",
+        diagnostics.feedback_check_count,
+        "correction_count",
+        diagnostics.correction_count,
+        "first_visible_entry_ms",
+        diagnostics.first_visible_entry_ms,
+        "first_safe_entry_ms",
+        diagnostics.first_safe_entry_ms,
+        "visible_entry_count",
+        diagnostics.visible_entry_count,
+        "visible_exit_count",
+        diagnostics.visible_exit_count,
+        "safe_entry_count",
+        diagnostics.safe_entry_count,
+        "safe_exit_count",
+        diagnostics.safe_exit_count,
+        "final_visible",
+        diagnostics.final_visible ? Py_True : Py_False,
+        "final_safe",
+        diagnostics.final_safe ? Py_True : Py_False
+    );
+}
+
+static PyObject *generate_geometry_feedback_sigmadrift_aim_path_with_diagnostics(
+    PyObject *,
+    PyObject *args
+) {
+    minecraft_miner::aim::Orientation start_orientation{};
+    minecraft_miner::aim::TargetMetrics target_metrics{};
+    minecraft_miner::aim::VisibleDirectionComponents visible_components{};
+    minecraft_miner::aim::SigmaDriftConfig config{};
+    minecraft_miner::aim::GeometryFeedbackSigmaDriftConfig feedback_config{};
+    double angular_step_deg = 0.0;
+    unsigned long long seed = 0;
+    if (!parse_geometry_feedback_sigmadrift_aim_path_request(
+            args,
+            start_orientation,
+            target_metrics,
+            visible_components,
+            angular_step_deg,
+            config,
+            feedback_config,
+            seed
+        )) {
+        return nullptr;
+    }
+
+    minecraft_miner::aim::GeometryFeedbackSigmaDriftDiagnostics diagnostics{};
+    const minecraft_miner::aim::AimPath path =
+        minecraft_miner::aim::generate_geometry_feedback_sigmadrift_path(
+            start_orientation,
+            target_metrics,
+            visible_components,
+            angular_step_deg,
+            config,
+            feedback_config,
+            static_cast<std::uint64_t>(seed),
+            &diagnostics
+        );
+    PyObject *path_object = build_aim_path_tuple(path);
+    if (path_object == nullptr) {
+        return nullptr;
+    }
+    PyObject *diagnostics_object = build_geometry_feedback_diagnostics(
+        diagnostics
+    );
+    if (diagnostics_object == nullptr) {
+        Py_DECREF(path_object);
+        return nullptr;
+    }
+    return Py_BuildValue("(NN)", path_object, diagnostics_object);
+}
+
 
 static PyMethodDef module_methods[] = {
     {"hello", reinterpret_cast<PyCFunction>(hello), METH_NOARGS,
@@ -1403,6 +1489,8 @@ static PyMethodDef module_methods[] = {
      "Return a SigmaDrift aim path as yaw, pitch, and milliseconds samples."},
     {"generate_geometry_feedback_sigmadrift_aim_path", reinterpret_cast<PyCFunction>(generate_geometry_feedback_sigmadrift_aim_path), METH_VARARGS,
      "Return a geometry-feedback SigmaDrift aim path as yaw, pitch, and milliseconds samples."},
+    {"generate_geometry_feedback_sigmadrift_aim_path_with_diagnostics", reinterpret_cast<PyCFunction>(generate_geometry_feedback_sigmadrift_aim_path_with_diagnostics), METH_VARARGS,
+     "Return a geometry-feedback SigmaDrift path and controller diagnostics."},
     {nullptr, nullptr, 0, nullptr},
 };
 

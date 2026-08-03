@@ -297,6 +297,52 @@ class AimConfigTest(unittest.TestCase):
                 seed=12345,
             )
 
+    def test_geometry_feedback_diagnostics_preserve_generated_path(self):
+        target = TargetMetrics(
+            yaw=0.0,
+            pitch=0.0,
+            width_yaw=2.0,
+            width_pitch=2.0,
+            distance=4.0,
+            effective_width=2.0,
+            visible_components=((
+                (-0.25, -0.25, 1.0),
+                (0.25, -0.25, 1.0),
+                (0.25, 0.25, 1.0),
+                (-0.25, 0.25, 1.0),
+            ),),
+        )
+        config = aim.AimConfig(aim_model="geometry_feedback_sigmadrift")
+
+        plain_path = aim.generate_aim_path(
+            (10.0, -2.0),
+            target,
+            config,
+            angular_step_deg=0.15,
+            seed=12345,
+        )
+        generated = aim.generate_aim_path_with_diagnostics(
+            (10.0, -2.0),
+            target,
+            config,
+            angular_step_deg=0.15,
+            seed=12345,
+        )
+
+        self.assertEqual(plain_path, generated.points)
+        self.assertIsNotNone(generated.diagnostics)
+        diagnostics = generated.diagnostics
+        assert diagnostics is not None
+        self.assertGreaterEqual(diagnostics.feedback_check_count, 1)
+        self.assertGreaterEqual(diagnostics.correction_count, 0)
+        self.assertLessEqual(
+            diagnostics.correction_count,
+            diagnostics.feedback_check_count,
+        )
+        self.assertGreaterEqual(diagnostics.applied_margin_steps, 0.0)
+        self.assertGreaterEqual(diagnostics.visible_entry_count, 1)
+        self.assertTrue(diagnostics.final_visible)
+
     def test_generate_aim_path_exports_synthetic_daq_session_on_request(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = aim.generate_aim_path(

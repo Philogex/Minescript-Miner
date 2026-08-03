@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <random>
 #include <vector>
 
@@ -114,6 +115,16 @@ struct EvaluatedMotion {
     double speed = 0.0;
 };
 
+struct DirectionalTargetInterval {
+    double enter = 0.0;
+    double anchor = 0.0;
+    double exit = 0.0;
+
+    double width() const {
+        return exit - enter;
+    }
+};
+
 EvaluatedMotion evaluate_submovements(
     const std::vector<Submovement> &submovements,
     double t
@@ -152,6 +163,152 @@ Orientation orientation_from_position(
             90.0
         ),
     };
+}
+
+bool directional_target_interval(
+    const Orientation &start,
+    const ProjectedTargetRegion &visible_region,
+    const SafeTargetRegion &safe_target,
+    double target_x,
+    double target_y,
+    double angular_step_deg,
+    DirectionalTargetInterval &out
+) {
+    out = {};
+    const double anchor_distance = std::hypot(target_x, target_y);
+    if (!(anchor_distance > 0.0) || !std::isfinite(anchor_distance)) {
+        return false;
+    }
+    const double tangent_x = target_x / anchor_distance;
+    const double tangent_y = target_y / anchor_distance;
+
+    Point2 projected_anchor{};
+    if (!project_target_direction(
+            safe_target.region.projection,
+            safe_target.anchor_direction,
+            projected_anchor
+        )) {
+        return false;
+    }
+
+    // A one-input-step backward probe gives the local projected approach axis
+    // without requiring the potentially distant start direction to remain in
+    // the target-centered gnomonic hemisphere.
+    const Orientation probe_orientation = orientation_from_position(
+        start,
+        target_x - tangent_x,
+        target_y - tangent_y,
+        angular_step_deg
+    );
+    const Vec3 probe_direction = look_direction_from_yaw_pitch(
+        probe_orientation.yaw,
+        probe_orientation.pitch
+    );
+    Point2 projected_probe{};
+    if (!project_target_direction(
+            safe_target.region.projection,
+            probe_direction,
+            projected_probe
+        )) {
+        return false;
+    }
+
+    Point2 projected_axis{
+        projected_anchor.x - projected_probe.x,
+        projected_anchor.y - projected_probe.y,
+    };
+    const double projected_axis_length = std::hypot(
+        projected_axis.x,
+        projected_axis.y
+    );
+    if (!(projected_axis_length > 1.0e-12) ||
+        !std::isfinite(projected_axis_length)) {
+        return false;
+    }
+    projected_axis.x /= projected_axis_length;
+    projected_axis.y /= projected_axis_length;
+
+    auto scalar_at_projected_distance = [&](double projected_distance) {
+        const Point2 point{
+            projected_anchor.x + projected_axis.x * projected_distance,
+            projected_anchor.y + projected_axis.y * projected_distance,
+        };
+        Vec3 direction{};
+        if (!direction_from_projected_target_point(
+                safe_target.region.projection,
+                point,
+                direction
+            )) {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        const YawPitch orientation = yaw_pitch_from_direction(direction);
+        const double x = signed_angle_delta_degrees(
+            orientation.yaw,
+            start.yaw
+        ) / angular_step_deg;
+        const double y = (orientation.pitch - start.pitch) /
+            angular_step_deg;
+        return x * tangent_x + y * tangent_y;
+    };
+
+    std::vector<DirectionalTargetInterval> intervals;
+    intervals.reserve(visible_region.components.size());
+    for (std::size_t component_index = 0;
+         component_index < visible_region.components.size();
+         ++component_index) {
+        ProjectedLineInterval projected_interval{};
+        if (!projected_component_line_interval(
+                visible_region,
+                component_index,
+                projected_anchor,
+                projected_axis,
+                projected_interval
+            )) {
+            continue;
+        }
+        double enter = scalar_at_projected_distance(projected_interval.enter);
+        double exit = scalar_at_projected_distance(projected_interval.exit);
+        if (!std::isfinite(enter) || !std::isfinite(exit)) {
+            continue;
+        }
+        if (enter > exit) {
+            std::swap(enter, exit);
+        }
+        if (exit - enter > 1.0e-9) {
+            intervals.push_back({enter, anchor_distance, exit});
+        }
+    }
+    if (intervals.empty()) {
+        return false;
+    }
+    std::sort(
+        intervals.begin(),
+        intervals.end(),
+        [](const DirectionalTargetInterval &lhs,
+           const DirectionalTargetInterval &rhs) {
+            return lhs.enter < rhs.enter;
+        }
+    );
+
+    double merged_enter = intervals.front().enter;
+    double merged_exit = intervals.front().exit;
+    for (std::size_t index = 1; index <= intervals.size(); ++index) {
+        if (index < intervals.size() &&
+            intervals[index].enter <= merged_exit + 1.0e-9) {
+            merged_exit = std::max(merged_exit, intervals[index].exit);
+            continue;
+        }
+        if (merged_enter <= anchor_distance + 1.0e-6 &&
+            merged_exit >= anchor_distance - 1.0e-6) {
+            out = {merged_enter, anchor_distance, merged_exit};
+            return out.width() > 1.0e-9;
+        }
+        if (index < intervals.size()) {
+            merged_enter = intervals[index].enter;
+            merged_exit = intervals[index].exit;
+        }
+    }
+    return false;
 }
 
 void asymptotic_position(
@@ -230,8 +387,21 @@ AimPath generate_geometry_feedback_sigmadrift_path(
         *diagnostics = {};
     }
     if (!(angular_step_deg > 0.0) || !std::isfinite(angular_step_deg) ||
-        feedback_config.feedback_latency_ms < 0.0 ||
-        !std::isfinite(feedback_config.feedback_latency_ms) ||
+        feedback_config.feedback_latency_mean_ms < 0.0 ||
+        !std::isfinite(feedback_config.feedback_latency_mean_ms) ||
+        feedback_config.feedback_latency_stddev_ms < 0.0 ||
+        !std::isfinite(feedback_config.feedback_latency_stddev_ms) ||
+        feedback_config.feedback_latency_min_ms < 0.0 ||
+        !std::isfinite(feedback_config.feedback_latency_min_ms) ||
+        feedback_config.feedback_latency_max_ms <
+            feedback_config.feedback_latency_min_ms ||
+        !std::isfinite(feedback_config.feedback_latency_max_ms) ||
+        feedback_config.undershoot_width_min < 0.0 ||
+        feedback_config.undershoot_width_max <
+            feedback_config.undershoot_width_min ||
+        feedback_config.overshoot_width_min < 0.0 ||
+        feedback_config.overshoot_width_max <
+            feedback_config.overshoot_width_min ||
         feedback_config.safe_margin_steps < 0.0 ||
         !std::isfinite(feedback_config.safe_margin_steps) ||
         feedback_config.max_corrections < 0) {
@@ -312,11 +482,32 @@ AimPath generate_geometry_feedback_sigmadrift_path(
     const double tangent_y = target_y / distance;
     const double normal_x = -tangent_y;
     const double normal_y = tangent_x;
-    const double target_width = quantized_target_width(
-        target,
+    DirectionalTargetInterval target_interval{};
+    const bool have_directional_interval = directional_target_interval(
+        start,
+        projected_region,
+        safe_target,
+        target_x,
+        target_y,
         step,
-        motion_config
+        target_interval
     );
+    const double target_width = have_directional_interval
+        ? target_interval.width()
+        : quantized_target_width(target, step, motion_config);
+    if (!have_directional_interval) {
+        target_interval = {
+            distance - target_width * 0.5,
+            distance,
+            distance + target_width * 0.5,
+        };
+    }
+    if (diagnostics != nullptr) {
+        diagnostics->directional_width_steps = target_interval.width();
+        diagnostics->s_enter_steps = target_interval.enter;
+        diagnostics->s_anchor_steps = target_interval.anchor;
+        diagnostics->s_exit_steps = target_interval.exit;
+    }
     const double index_of_difficulty =
         std::log2(distance / target_width + 1.0);
     double movement_time =
@@ -326,10 +517,22 @@ AimPath generate_geometry_feedback_sigmadrift_path(
 
     const bool overshoot =
         uniform(0.0, 1.0) < motion_config.overshoot_prob;
-    const double reach = overshoot
-        ? uniform(motion_config.overshoot_min, motion_config.overshoot_max)
-        : uniform(motion_config.undershoot_min, motion_config.undershoot_max);
-    const double primary_distance = distance * reach;
+    const double endpoint_error_widths = overshoot
+        ? uniform(
+            feedback_config.overshoot_width_min,
+            feedback_config.overshoot_width_max
+        )
+        : -uniform(
+            feedback_config.undershoot_width_min,
+            feedback_config.undershoot_width_max
+        );
+    const double primary_distance = std::max(
+        0.0,
+        distance + endpoint_error_widths * target_width
+    );
+    if (diagnostics != nullptr) {
+        diagnostics->primary_endpoint_steps = primary_distance;
+    }
     const double primary_sigma = uniform(
         motion_config.primary_sigma_min,
         motion_config.primary_sigma_max
@@ -377,8 +580,33 @@ AimPath generate_geometry_feedback_sigmadrift_path(
     double t = 0.0;
     double previous_t = 0.0;
     double latest_tail_time = submovements.front().tail_time;
-    double next_feedback_time = submovements.front().peak_time +
-        feedback_config.feedback_latency_ms;
+    auto sample_feedback_latency = [&]() {
+        if (feedback_config.feedback_latency_stddev_ms == 0.0) {
+            return clamp_double(
+                feedback_config.feedback_latency_mean_ms,
+                feedback_config.feedback_latency_min_ms,
+                feedback_config.feedback_latency_max_ms
+            );
+        }
+        return clamp_double(
+            normal(
+                feedback_config.feedback_latency_mean_ms,
+                feedback_config.feedback_latency_stddev_ms
+            ),
+            feedback_config.feedback_latency_min_ms,
+            feedback_config.feedback_latency_max_ms
+        );
+    };
+    const double first_feedback_observation =
+        submovements.front().peak_time;
+    const double first_feedback_latency = sample_feedback_latency();
+    double next_feedback_time = first_feedback_observation +
+        first_feedback_latency;
+    if (diagnostics != nullptr) {
+        diagnostics->first_feedback_observation_ms =
+            first_feedback_observation;
+        diagnostics->first_feedback_latency_ms = first_feedback_latency;
+    }
     bool feedback_pending = true;
     int correction_count = 0;
 
@@ -492,8 +720,9 @@ AimPath generate_geometry_feedback_sigmadrift_path(
                     if (diagnostics != nullptr) {
                         diagnostics->correction_count = correction_count;
                     }
-                    next_feedback_time = correction.peak_time +
-                        feedback_config.feedback_latency_ms;
+                    const double feedback_observation = correction.peak_time;
+                    next_feedback_time = feedback_observation +
+                        sample_feedback_latency();
                     latest_tail_time = std::max(
                         latest_tail_time,
                         correction.tail_time

@@ -1146,40 +1146,50 @@ static bool parse_geometry_feedback_sigmadrift_config(
     minecraft_miner::aim::GeometryFeedbackSigmaDriftConfig &config
 ) {
     if (!PySequence_Check(config_object) ||
-        PySequence_Size(config_object) != 3) {
+        PySequence_Size(config_object) != 10) {
         PyErr_SetString(
             PyExc_ValueError,
-            "geometry-feedback config must contain exactly 3 values"
+            "geometry-feedback config must contain exactly 10 values"
         );
         return false;
     }
 
-    PyObject *latency_object = PySequence_GetItem(config_object, 0);
-    PyObject *margin_object = PySequence_GetItem(config_object, 1);
-    PyObject *corrections_object = PySequence_GetItem(config_object, 2);
-    if (latency_object == nullptr || margin_object == nullptr ||
-        corrections_object == nullptr) {
-        Py_XDECREF(latency_object);
-        Py_XDECREF(margin_object);
-        Py_XDECREF(corrections_object);
+    double values[9]{};
+    for (Py_ssize_t index = 0; index < 9; ++index) {
+        PyObject *item = PySequence_GetItem(config_object, index);
+        if (item == nullptr) {
+            return false;
+        }
+        values[index] = PyFloat_AsDouble(item);
+        Py_DECREF(item);
+        if (PyErr_Occurred()) {
+            PyErr_SetString(
+                PyExc_TypeError,
+                "the first 9 geometry-feedback config values must be numbers"
+            );
+            return false;
+        }
+    }
+    PyObject *corrections_object = PySequence_GetItem(config_object, 9);
+    if (corrections_object == nullptr) {
         return false;
     }
-
-    const double feedback_latency_ms = PyFloat_AsDouble(latency_object);
-    const double safe_margin_steps = PyFloat_AsDouble(margin_object);
     const long max_corrections = PyLong_AsLong(corrections_object);
-    Py_DECREF(latency_object);
-    Py_DECREF(margin_object);
     Py_DECREF(corrections_object);
     if (PyErr_Occurred()) {
         PyErr_SetString(
             PyExc_TypeError,
-            "geometry-feedback config values must be two numbers and an integer"
+            "the final geometry-feedback config value must be an integer"
         );
         return false;
     }
-    if (!std::isfinite(feedback_latency_ms) || feedback_latency_ms < 0.0 ||
-        !std::isfinite(safe_margin_steps) || safe_margin_steps < 0.0 ||
+    if (!std::all_of(values, values + 9, [](double value) {
+            return std::isfinite(value);
+        }) ||
+        values[0] < 0.0 || values[1] < 0.0 || values[2] < 0.0 ||
+        values[3] < values[2] ||
+        values[4] < 0.0 || values[5] < values[4] ||
+        values[6] < 0.0 || values[7] < values[6] || values[8] < 0.0 ||
         max_corrections < 0 || max_corrections > 64) {
         PyErr_SetString(
             PyExc_ValueError,
@@ -1189,8 +1199,15 @@ static bool parse_geometry_feedback_sigmadrift_config(
     }
 
     config = {
-        feedback_latency_ms,
-        safe_margin_steps,
+        values[0],
+        values[1],
+        values[2],
+        values[3],
+        values[4],
+        values[5],
+        values[6],
+        values[7],
+        values[8],
         static_cast<int>(max_corrections),
     };
     return true;
@@ -1391,7 +1408,7 @@ static PyObject *build_geometry_feedback_diagnostics(
     const minecraft_miner::aim::GeometryFeedbackSigmaDriftDiagnostics &diagnostics
 ) {
     return Py_BuildValue(
-        "{s:d,s:d,s:d,s:K,s:i,s:i,s:d,s:d,s:i,s:i,s:i,s:i,s:O,s:O}",
+        "{s:d,s:d,s:d,s:K,s:d,s:d,s:d,s:d,s:d,s:d,s:d,s:i,s:i,s:d,s:d,s:i,s:i,s:i,s:i,s:O,s:O}",
         "motor_target_yaw",
         diagnostics.motor_target_yaw,
         "motor_target_pitch",
@@ -1400,6 +1417,20 @@ static PyObject *build_geometry_feedback_diagnostics(
         diagnostics.applied_margin_steps,
         "anchor_component_index",
         static_cast<unsigned long long>(diagnostics.anchor_component_index),
+        "directional_width_steps",
+        diagnostics.directional_width_steps,
+        "s_enter_steps",
+        diagnostics.s_enter_steps,
+        "s_anchor_steps",
+        diagnostics.s_anchor_steps,
+        "s_exit_steps",
+        diagnostics.s_exit_steps,
+        "primary_endpoint_steps",
+        diagnostics.primary_endpoint_steps,
+        "first_feedback_observation_ms",
+        diagnostics.first_feedback_observation_ms,
+        "first_feedback_latency_ms",
+        diagnostics.first_feedback_latency_ms,
         "feedback_check_count",
         diagnostics.feedback_check_count,
         "correction_count",

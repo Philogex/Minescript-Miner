@@ -71,7 +71,14 @@ class SigmaDriftConfig:
 
 @dataclass(frozen=True)
 class GeometryFeedbackSigmaDriftConfig:
-    feedback_latency_ms: float = 100.0
+    feedback_latency_mean_ms: float = 100.0
+    feedback_latency_stddev_ms: float = 15.0
+    feedback_latency_min_ms: float = 60.0
+    feedback_latency_max_ms: float = 160.0
+    undershoot_width_min: float = 0.05
+    undershoot_width_max: float = 0.25
+    overshoot_width_min: float = 0.05
+    overshoot_width_max: float = 0.25
     safe_margin_steps: float = 1.0
     max_corrections: int = 3
 
@@ -158,7 +165,14 @@ SIGMADRIFT_PARSERS: Mapping[str, Parser] = {
 }
 
 GEOMETRY_FEEDBACK_SIGMADRIFT_PARSERS: Mapping[str, Parser] = {
-    "feedback_latency_ms": _parse_float,
+    "feedback_latency_mean_ms": _parse_float,
+    "feedback_latency_stddev_ms": _parse_float,
+    "feedback_latency_min_ms": _parse_float,
+    "feedback_latency_max_ms": _parse_float,
+    "undershoot_width_min": _parse_float,
+    "undershoot_width_max": _parse_float,
+    "overshoot_width_min": _parse_float,
+    "overshoot_width_max": _parse_float,
     "safe_margin_steps": _parse_float,
     "max_corrections": _parse_int,
 }
@@ -295,9 +309,37 @@ def _validate_config(config: AimConfig) -> None:
         )
 
     feedback = config.geometry_feedback_sigmadrift
-    if feedback.feedback_latency_ms < 0.0:
+    if feedback.feedback_latency_mean_ms < 0.0:
         raise ValueError(
-            "geometry_feedback_sigmadrift.feedback_latency_ms must be >= 0"
+            "geometry_feedback_sigmadrift.feedback_latency_mean_ms must be >= 0"
+        )
+    if feedback.feedback_latency_stddev_ms < 0.0:
+        raise ValueError(
+            "geometry_feedback_sigmadrift.feedback_latency_stddev_ms must be >= 0"
+        )
+    if feedback.feedback_latency_min_ms < 0.0:
+        raise ValueError(
+            "geometry_feedback_sigmadrift.feedback_latency_min_ms must be >= 0"
+        )
+    _validate_range_order(
+        feedback.feedback_latency_min_ms,
+        feedback.feedback_latency_max_ms,
+        "geometry_feedback_sigmadrift.feedback_latency_min_ms",
+        "geometry_feedback_sigmadrift.feedback_latency_max_ms",
+    )
+    for lower, upper in (
+        ("undershoot_width_min", "undershoot_width_max"),
+        ("overshoot_width_min", "overshoot_width_max"),
+    ):
+        if getattr(feedback, lower) < 0.0:
+            raise ValueError(
+                f"geometry_feedback_sigmadrift.{lower} must be >= 0"
+            )
+        _validate_range_order(
+            getattr(feedback, lower),
+            getattr(feedback, upper),
+            f"geometry_feedback_sigmadrift.{lower}",
+            f"geometry_feedback_sigmadrift.{upper}",
         )
     if feedback.safe_margin_steps < 0.0:
         raise ValueError(
@@ -358,9 +400,16 @@ def _sigmadrift_payload(config: SigmaDriftConfig) -> tuple[float, ...]:
 
 def _geometry_feedback_sigmadrift_payload(
     config: GeometryFeedbackSigmaDriftConfig,
-) -> tuple[float, float, int]:
+) -> tuple[float, ...]:
     return (
-        config.feedback_latency_ms,
+        config.feedback_latency_mean_ms,
+        config.feedback_latency_stddev_ms,
+        config.feedback_latency_min_ms,
+        config.feedback_latency_max_ms,
+        config.undershoot_width_min,
+        config.undershoot_width_max,
+        config.overshoot_width_min,
+        config.overshoot_width_max,
         config.safe_margin_steps,
         config.max_corrections,
     )

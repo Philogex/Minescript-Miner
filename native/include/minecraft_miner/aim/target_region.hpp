@@ -34,6 +34,11 @@ struct SafeTargetRegion {
     std::size_t anchor_component_index = 0;
 };
 
+struct ProjectedLineInterval {
+    double enter = 0.0;
+    double exit = 0.0;
+};
+
 bool make_target_projection(
     const Vec3 &center_direction,
     TargetProjection &out
@@ -43,6 +48,12 @@ bool project_target_direction(
     const TargetProjection &projection,
     const Vec3 &direction,
     Point2 &out
+);
+
+bool direction_from_projected_target_point(
+    const TargetProjection &projection,
+    Point2 point,
+    Vec3 &out
 );
 
 bool project_visible_target_region(
@@ -59,6 +70,16 @@ bool make_safe_target_region(
     const ProjectedTargetRegion &region,
     double requested_margin,
     SafeTargetRegion &out
+);
+
+// Intersects an infinite line with one convex projected component. Direction
+// must be normalized; enter and exit are signed distances from line_origin.
+bool projected_component_line_interval(
+    const ProjectedTargetRegion &region,
+    std::size_t component_index,
+    Point2 line_origin,
+    Point2 line_direction,
+    ProjectedLineInterval &out
 );
 
 // The visible region is closed: points on a component boundary count as hits.

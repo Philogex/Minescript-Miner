@@ -43,6 +43,13 @@ class GeometryFeedbackDiagnostics:
     motor_target_pitch: float
     applied_margin_steps: float
     anchor_component_index: int
+    directional_width_steps: float
+    s_enter_steps: float
+    s_anchor_steps: float
+    s_exit_steps: float
+    primary_endpoint_steps: float
+    first_feedback_observation_ms: float
+    first_feedback_latency_ms: float
     feedback_check_count: int
     correction_count: int
     first_visible_entry_ms: float
@@ -278,6 +285,21 @@ def generate_geometry_feedback_sigmadrift_aim_path_with_diagnostics(
         motor_target_pitch=float(raw_diagnostics["motor_target_pitch"]),
         applied_margin_steps=float(raw_diagnostics["applied_margin_steps"]),
         anchor_component_index=int(raw_diagnostics["anchor_component_index"]),
+        directional_width_steps=float(
+            raw_diagnostics["directional_width_steps"]
+        ),
+        s_enter_steps=float(raw_diagnostics["s_enter_steps"]),
+        s_anchor_steps=float(raw_diagnostics["s_anchor_steps"]),
+        s_exit_steps=float(raw_diagnostics["s_exit_steps"]),
+        primary_endpoint_steps=float(
+            raw_diagnostics["primary_endpoint_steps"]
+        ),
+        first_feedback_observation_ms=float(
+            raw_diagnostics["first_feedback_observation_ms"]
+        ),
+        first_feedback_latency_ms=float(
+            raw_diagnostics["first_feedback_latency_ms"]
+        ),
         feedback_check_count=int(raw_diagnostics["feedback_check_count"]),
         correction_count=int(raw_diagnostics["correction_count"]),
         first_visible_entry_ms=float(raw_diagnostics["first_visible_entry_ms"]),

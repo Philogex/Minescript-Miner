@@ -235,7 +235,7 @@ double distance_squared(Point2 lhs, Point2 rhs) {
     return dx * dx + dy * dy;
 }
 
-bool direction_from_projected_point(
+bool normalized_direction_from_projected_point(
     const TargetProjection &projection,
     Point2 point,
     Vec3 &out
@@ -387,6 +387,14 @@ bool project_target_direction(
     return true;
 }
 
+bool direction_from_projected_target_point(
+    const TargetProjection &projection,
+    Point2 point,
+    Vec3 &out
+) {
+    return normalized_direction_from_projected_point(projection, point, out);
+}
+
 bool project_visible_target_region(
     const Vec3 &center_direction,
     const VisibleDirectionComponents &components,
@@ -490,7 +498,7 @@ bool make_safe_target_region(
     }
     result.anchor_component_index = best_index;
     result.applied_margin = applied_margin;
-    if (!direction_from_projected_point(
+    if (!normalized_direction_from_projected_point(
             result.region.projection,
             candidates[best_index].centroid,
             result.anchor_direction
@@ -499,6 +507,92 @@ bool make_safe_target_region(
     }
 
     out = std::move(result);
+    return true;
+}
+
+bool projected_component_line_interval(
+    const ProjectedTargetRegion &region,
+    std::size_t component_index,
+    Point2 line_origin,
+    Point2 line_direction,
+    ProjectedLineInterval &out
+) {
+    out = {};
+    if (component_index >= region.components.size() ||
+        !finite(line_origin) || !finite(line_direction)) {
+        return false;
+    }
+    const double direction_length_squared =
+        line_direction.x * line_direction.x +
+        line_direction.y * line_direction.y;
+    if (std::abs(direction_length_squared - 1.0) > 1.0e-9) {
+        return false;
+    }
+
+    const ProjectedTargetComponent &component =
+        region.components[component_index];
+    if (!valid_polygon(component.vertices)) {
+        return false;
+    }
+
+    double enter = -std::numeric_limits<double>::infinity();
+    double exit = std::numeric_limits<double>::infinity();
+    double coordinate_scale = std::max({
+        1.0,
+        std::abs(line_origin.x),
+        std::abs(line_origin.y),
+    });
+    for (const Point2 vertex : component.vertices) {
+        coordinate_scale = std::max({
+            coordinate_scale,
+            std::abs(vertex.x),
+            std::abs(vertex.y),
+        });
+    }
+    const double guard = PROJECTION_EPSILON * coordinate_scale *
+        coordinate_scale;
+
+    for (std::size_t index = 0; index < component.vertices.size(); ++index) {
+        const Point2 edge_start = component.vertices[index];
+        const Point2 edge_end = component.vertices[
+            (index + 1) % component.vertices.size()
+        ];
+        const Point2 edge{
+            edge_end.x - edge_start.x,
+            edge_end.y - edge_start.y,
+        };
+        const Point2 relative_origin{
+            line_origin.x - edge_start.x,
+            line_origin.y - edge_start.y,
+        };
+        const double base = component.orientation *
+            cross2(edge, relative_origin);
+        const double rate = component.orientation *
+            cross2(edge, line_direction);
+
+        if (std::abs(rate) <= PROJECTION_EPSILON) {
+            if (base < -guard) {
+                return false;
+            }
+            continue;
+        }
+
+        const double boundary = (-guard - base) / rate;
+        if (rate > 0.0) {
+            enter = std::max(enter, boundary);
+        } else {
+            exit = std::min(exit, boundary);
+        }
+        if (enter > exit) {
+            return false;
+        }
+    }
+
+    if (!std::isfinite(enter) || !std::isfinite(exit) ||
+        !(exit > enter)) {
+        return false;
+    }
+    out = {enter, exit};
     return true;
 }
 
@@ -601,7 +695,11 @@ bool closest_safe_direction_in_visible_region(
         }
     }
     if (!std::isfinite(best_distance) ||
-        !direction_from_projected_point(region.projection, best, out)) {
+        !normalized_direction_from_projected_point(
+            region.projection,
+            best,
+            out
+        )) {
         out = {};
         return false;
     }

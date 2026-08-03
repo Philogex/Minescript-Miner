@@ -60,8 +60,19 @@ sigmadrift[
 ]
 
 geometry_feedback_sigmadrift[
-    # Delay between a submovement's speed peak and geometric feedback.
-    feedback_latency_ms: 100
+    # Sensorimotor latency sampled after each feedback observation.
+    feedback_latency_mean_ms: 100
+    feedback_latency_stddev_ms: 15
+    feedback_latency_min_ms: 60
+    feedback_latency_max_ms: 160
+
+    # Primary endpoint error relative to the safe target width measured along
+    # the local approach direction. The sign is selected by overshoot_prob
+    # from the shared SigmaDrift configuration.
+    undershoot_width_min: 0.05
+    undershoot_width_max: 0.25
+    overshoot_width_min: 0.05
+    overshoot_width_max: 0.25
 
     # Clearance from the visible-region boundary in angular input steps.
     safe_margin_steps: 1

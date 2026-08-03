@@ -67,7 +67,14 @@ class AimConfigTest(unittest.TestCase):
                         "sample_dt_mean: 6.5",
                         "]",
                         "geometry_feedback_sigmadrift[",
-                        "feedback_latency_ms: 75",
+                        "feedback_latency_mean_ms: 75",
+                        "feedback_latency_stddev_ms: 10",
+                        "feedback_latency_min_ms: 40",
+                        "feedback_latency_max_ms: 120",
+                        "undershoot_width_min: 0.1",
+                        "undershoot_width_max: 0.3",
+                        "overshoot_width_min: 0.2",
+                        "overshoot_width_max: 0.4",
                         "safe_margin_steps: 1.5",
                         "max_corrections: 4",
                         "]",
@@ -92,7 +99,27 @@ class AimConfigTest(unittest.TestCase):
         self.assertEqual(6.5, config.sigmadrift.sample_dt_mean)
         self.assertEqual(
             75.0,
-            config.geometry_feedback_sigmadrift.feedback_latency_ms,
+            config.geometry_feedback_sigmadrift.feedback_latency_mean_ms,
+        )
+        self.assertEqual(
+            10.0,
+            config.geometry_feedback_sigmadrift.feedback_latency_stddev_ms,
+        )
+        self.assertEqual(
+            (40.0, 120.0),
+            (
+                config.geometry_feedback_sigmadrift.feedback_latency_min_ms,
+                config.geometry_feedback_sigmadrift.feedback_latency_max_ms,
+            ),
+        )
+        self.assertEqual(
+            (0.1, 0.3, 0.2, 0.4),
+            (
+                config.geometry_feedback_sigmadrift.undershoot_width_min,
+                config.geometry_feedback_sigmadrift.undershoot_width_max,
+                config.geometry_feedback_sigmadrift.overshoot_width_min,
+                config.geometry_feedback_sigmadrift.overshoot_width_max,
+            ),
         )
         self.assertEqual(
             1.5,
@@ -340,8 +367,58 @@ class AimConfigTest(unittest.TestCase):
             diagnostics.feedback_check_count,
         )
         self.assertGreaterEqual(diagnostics.applied_margin_steps, 0.0)
+        self.assertGreater(diagnostics.directional_width_steps, 0.0)
+        self.assertLess(diagnostics.s_enter_steps, diagnostics.s_anchor_steps)
+        self.assertLess(diagnostics.s_anchor_steps, diagnostics.s_exit_steps)
+        self.assertGreaterEqual(diagnostics.first_feedback_observation_ms, 0.0)
+        self.assertGreaterEqual(diagnostics.first_feedback_latency_ms, 0.0)
         self.assertGreaterEqual(diagnostics.visible_entry_count, 1)
         self.assertTrue(diagnostics.final_visible)
+
+    def test_geometry_feedback_scales_endpoint_error_by_directional_width(self):
+        target = TargetMetrics(
+            yaw=0.0,
+            pitch=0.0,
+            width_yaw=2.0,
+            width_pitch=2.0,
+            distance=4.0,
+            effective_width=2.0,
+            visible_components=((
+                (-0.25, -0.25, 1.0),
+                (0.25, -0.25, 1.0),
+                (0.25, 0.25, 1.0),
+                (-0.25, 0.25, 1.0),
+            ),),
+        )
+        config = aim.AimConfig(
+            aim_model="geometry_feedback_sigmadrift",
+            sigmadrift=aim.SigmaDriftConfig(overshoot_prob=0.0),
+            geometry_feedback_sigmadrift=aim.GeometryFeedbackSigmaDriftConfig(
+                feedback_latency_mean_ms=75.0,
+                feedback_latency_stddev_ms=0.0,
+                feedback_latency_min_ms=75.0,
+                feedback_latency_max_ms=75.0,
+                undershoot_width_min=0.2,
+                undershoot_width_max=0.2,
+            ),
+        )
+
+        generated = aim.generate_aim_path_with_diagnostics(
+            (10.0, -2.0),
+            target,
+            config,
+            angular_step_deg=0.15,
+            seed=12345,
+        )
+        diagnostics = generated.diagnostics
+        assert diagnostics is not None
+
+        normalized_error = (
+            diagnostics.s_anchor_steps - diagnostics.primary_endpoint_steps
+        ) / diagnostics.directional_width_steps
+        self.assertAlmostEqual(0.2, normalized_error, places=12)
+        self.assertEqual(75.0, diagnostics.first_feedback_latency_ms)
+        self.assertGreater(diagnostics.first_feedback_observation_ms, 0.0)
 
     def test_generate_aim_path_exports_synthetic_daq_session_on_request(self):
         with tempfile.TemporaryDirectory() as temp_dir:

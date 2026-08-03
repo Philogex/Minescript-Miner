@@ -100,6 +100,25 @@ int main() {
     assert(projected.x > 0.19);
     assert(std::abs(projected.y) < 1.0e-12);
 
+    ProjectedLineInterval horizontal_interval{};
+    assert(projected_component_line_interval(
+        square,
+        0,
+        {0.0, 0.0},
+        {1.0, 0.0},
+        horizontal_interval
+    ));
+    assert(std::abs(horizontal_interval.enter + 0.25) < 1.0e-9);
+    assert(std::abs(horizontal_interval.exit - 0.25) < 1.0e-9);
+    Vec3 interval_endpoint{};
+    assert(direction_from_projected_target_point(
+        square.projection,
+        {horizontal_interval.exit, 0.0},
+        interval_endpoint
+    ));
+    assert(project_target_direction(square.projection, interval_endpoint, projected));
+    assert(std::abs(projected.x - 0.25) < 1.0e-9);
+
     SafeTargetRegion centered_square{};
     assert(make_safe_target_region(
         square,
@@ -275,7 +294,15 @@ int main() {
     const VisibleDirectionComponents narrow_target{
         rectangle(-0.02, -0.02, 0.02, 0.02),
     };
-    const GeometryFeedbackSigmaDriftConfig feedback{0.0, 0.5, 3};
+    GeometryFeedbackSigmaDriftConfig feedback{};
+    feedback.feedback_latency_mean_ms = 0.0;
+    feedback.feedback_latency_stddev_ms = 0.0;
+    feedback.feedback_latency_min_ms = 0.0;
+    feedback.feedback_latency_max_ms = 0.0;
+    feedback.undershoot_width_min = 1.5;
+    feedback.undershoot_width_max = 1.5;
+    feedback.safe_margin_steps = 0.5;
+    feedback.max_corrections = 3;
     const AimPath corrected_path =
         generate_geometry_feedback_sigmadrift_path(
             {10.0, -2.0},
@@ -325,7 +352,11 @@ int main() {
             narrow_target,
             0.15,
             deterministic,
-            {0.0, 0.5, 0},
+            [&feedback]() {
+                GeometryFeedbackSigmaDriftConfig value = feedback;
+                value.max_corrections = 0;
+                return value;
+            }(),
             1234
         );
     assert(!point_in_visible_region(
@@ -343,11 +374,15 @@ int main() {
     const VisibleDirectionComponents pass_through_target{
         rectangle(-0.07, -0.07, 0.07, 0.07),
     };
-    const GeometryFeedbackSigmaDriftConfig pass_through_feedback{
-        50.0,
-        0.5,
-        3,
-    };
+    GeometryFeedbackSigmaDriftConfig pass_through_feedback{};
+    pass_through_feedback.feedback_latency_mean_ms = 50.0;
+    pass_through_feedback.feedback_latency_stddev_ms = 0.0;
+    pass_through_feedback.feedback_latency_min_ms = 50.0;
+    pass_through_feedback.feedback_latency_max_ms = 50.0;
+    pass_through_feedback.overshoot_width_min = 0.35;
+    pass_through_feedback.overshoot_width_max = 0.35;
+    pass_through_feedback.safe_margin_steps = 0.5;
+    pass_through_feedback.max_corrections = 3;
     const AimPath current_safe_feedback_path =
         generate_geometry_feedback_sigmadrift_path(
             {10.0, 0.0},
@@ -365,7 +400,12 @@ int main() {
             pass_through_target,
             0.15,
             current_safe_motion,
-            {50.0, 0.5, 0},
+            [&pass_through_feedback]() {
+                GeometryFeedbackSigmaDriftConfig value =
+                    pass_through_feedback;
+                value.max_corrections = 0;
+                return value;
+            }(),
             4321
         );
     assert(
@@ -404,6 +444,17 @@ int main() {
     SigmaDriftConfig centered_motion = deterministic;
     centered_motion.undershoot_min = 1.0;
     centered_motion.undershoot_max = 1.0;
+    GeometryFeedbackSigmaDriftConfig centered_feedback{};
+    centered_feedback.feedback_latency_mean_ms = 0.0;
+    centered_feedback.feedback_latency_stddev_ms = 0.0;
+    centered_feedback.feedback_latency_min_ms = 0.0;
+    centered_feedback.feedback_latency_max_ms = 0.0;
+    centered_feedback.undershoot_width_min = 0.0;
+    centered_feedback.undershoot_width_max = 0.0;
+    centered_feedback.overshoot_width_min = 0.0;
+    centered_feedback.overshoot_width_max = 0.0;
+    centered_feedback.safe_margin_steps = 0.0;
+    centered_feedback.max_corrections = 0;
     const AimPath centered_path =
         generate_geometry_feedback_sigmadrift_path(
             {left_orientation.yaw, left_orientation.pitch},
@@ -411,7 +462,7 @@ int main() {
             {rectangle(-0.25, -0.25, 0.25, 0.25)},
             0.15,
             centered_motion,
-            {0.0, 0.0, 0},
+            centered_feedback,
             9876
         );
     assert(centered_path.size() > 2);

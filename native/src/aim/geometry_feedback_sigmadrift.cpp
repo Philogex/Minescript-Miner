@@ -154,24 +154,6 @@ Orientation orientation_from_position(
     };
 }
 
-Vec3 direction_from_position(
-    const Orientation &start,
-    double x,
-    double y,
-    double angular_step_deg
-) {
-    const Orientation orientation = orientation_from_position(
-        start,
-        x,
-        y,
-        angular_step_deg
-    );
-    return look_direction_from_yaw_pitch(
-        orientation.yaw,
-        orientation.pitch
-    );
-}
-
 void asymptotic_position(
     const std::vector<Submovement> &submovements,
     double &x,
@@ -381,27 +363,28 @@ AimPath generate_geometry_feedback_sigmadrift_path(
         });
 
         if (feedback_pending && t >= next_feedback_time) {
+            const Vec3 current_direction = look_direction_from_yaw_pitch(
+                sample_orientation.yaw,
+                sample_orientation.pitch
+            );
+            const bool current_safe = point_in_visible_region_with_margin(
+                safe_target.region,
+                current_direction,
+                0.0
+            );
             double endpoint_x = 0.0;
             double endpoint_y = 0.0;
             asymptotic_position(submovements, endpoint_x, endpoint_y);
-            const Vec3 endpoint_direction = direction_from_position(
-                start,
-                endpoint_x,
-                endpoint_y,
-                step
-            );
-            const bool endpoint_safe = point_in_visible_region_with_margin(
-                safe_target.region,
-                endpoint_direction,
-                0.0
-            );
 
-            if (endpoint_safe ||
+            if (current_safe ||
                 correction_count >= feedback_config.max_corrections) {
                 feedback_pending = false;
             } else {
-                const double correction_x = target_x - endpoint_x;
-                const double correction_y = target_y - endpoint_y;
+                const double correction_reach = uniform(0.88, 1.02);
+                const double correction_x =
+                    (target_x - endpoint_x) * correction_reach;
+                const double correction_y =
+                    (target_y - endpoint_y) * correction_reach;
                 const double correction_distance = std::hypot(
                     correction_x,
                     correction_y

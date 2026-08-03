@@ -336,47 +336,56 @@ int main() {
         )
     ));
 
-    SigmaDriftConfig endpoint_safe_motion = deterministic;
-    endpoint_safe_motion.undershoot_min = 1.0;
-    endpoint_safe_motion.undershoot_max = 1.0;
-    const AimPath endpoint_safe_feedback_path =
+    SigmaDriftConfig current_safe_motion = deterministic;
+    current_safe_motion.overshoot_prob = 1.0;
+    current_safe_motion.overshoot_min = 1.5;
+    current_safe_motion.overshoot_max = 1.5;
+    const VisibleDirectionComponents pass_through_target{
+        rectangle(-0.07, -0.07, 0.07, 0.07),
+    };
+    const GeometryFeedbackSigmaDriftConfig pass_through_feedback{
+        50.0,
+        0.5,
+        3,
+    };
+    const AimPath current_safe_feedback_path =
         generate_geometry_feedback_sigmadrift_path(
-            {10.0, -2.0},
+            {10.0, 0.0},
             target,
-            narrow_target,
+            pass_through_target,
             0.15,
-            endpoint_safe_motion,
-            feedback,
+            current_safe_motion,
+            pass_through_feedback,
             4321
         );
-    const AimPath endpoint_safe_no_corrections_path =
+    const AimPath current_safe_no_corrections_path =
         generate_geometry_feedback_sigmadrift_path(
-            {10.0, -2.0},
+            {10.0, 0.0},
             target,
-            narrow_target,
+            pass_through_target,
             0.15,
-            endpoint_safe_motion,
-            {0.0, 0.5, 0},
+            current_safe_motion,
+            {50.0, 0.5, 0},
             4321
         );
     assert(
-        endpoint_safe_feedback_path.size() ==
-        endpoint_safe_no_corrections_path.size()
+        current_safe_feedback_path.size() ==
+        current_safe_no_corrections_path.size()
     );
     for (std::size_t index = 0;
-         index < endpoint_safe_feedback_path.size();
+         index < current_safe_feedback_path.size();
          ++index) {
         assert(
-            endpoint_safe_feedback_path[index].yaw ==
-            endpoint_safe_no_corrections_path[index].yaw
+            current_safe_feedback_path[index].yaw ==
+            current_safe_no_corrections_path[index].yaw
         );
         assert(
-            endpoint_safe_feedback_path[index].pitch ==
-            endpoint_safe_no_corrections_path[index].pitch
+            current_safe_feedback_path[index].pitch ==
+            current_safe_no_corrections_path[index].pitch
         );
         assert(
-            endpoint_safe_feedback_path[index].t_ms ==
-            endpoint_safe_no_corrections_path[index].t_ms
+            current_safe_feedback_path[index].t_ms ==
+            current_safe_no_corrections_path[index].t_ms
         );
     }
 

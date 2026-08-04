@@ -1146,16 +1146,16 @@ static bool parse_geometry_feedback_sigmadrift_config(
     minecraft_miner::aim::GeometryFeedbackSigmaDriftConfig &config
 ) {
     if (!PySequence_Check(config_object) ||
-        PySequence_Size(config_object) != 10) {
+        PySequence_Size(config_object) != 11) {
         PyErr_SetString(
             PyExc_ValueError,
-            "geometry-feedback config must contain exactly 10 values"
+            "geometry-feedback config must contain exactly 11 values"
         );
         return false;
     }
 
-    double values[9]{};
-    for (Py_ssize_t index = 0; index < 9; ++index) {
+    double values[10]{};
+    for (Py_ssize_t index = 0; index < 10; ++index) {
         PyObject *item = PySequence_GetItem(config_object, index);
         if (item == nullptr) {
             return false;
@@ -1165,12 +1165,12 @@ static bool parse_geometry_feedback_sigmadrift_config(
         if (PyErr_Occurred()) {
             PyErr_SetString(
                 PyExc_TypeError,
-                "the first 9 geometry-feedback config values must be numbers"
+                "the first 10 geometry-feedback config values must be numbers"
             );
             return false;
         }
     }
-    PyObject *corrections_object = PySequence_GetItem(config_object, 9);
+    PyObject *corrections_object = PySequence_GetItem(config_object, 10);
     if (corrections_object == nullptr) {
         return false;
     }
@@ -1183,13 +1183,14 @@ static bool parse_geometry_feedback_sigmadrift_config(
         );
         return false;
     }
-    if (!std::all_of(values, values + 9, [](double value) {
+    if (!std::all_of(values, values + 10, [](double value) {
             return std::isfinite(value);
         }) ||
         values[0] < 0.0 || values[1] < 0.0 || values[2] < 0.0 ||
         values[3] < values[2] ||
         values[4] < 0.0 || values[5] < values[4] ||
-        values[6] < 0.0 || values[7] < values[6] || values[8] < 0.0 ||
+        values[6] < 0.0 || values[7] < values[6] ||
+        values[8] < 0.0 || values[9] < 0.0 ||
         max_corrections < 0 || max_corrections > 64) {
         PyErr_SetString(
             PyExc_ValueError,
@@ -1208,6 +1209,7 @@ static bool parse_geometry_feedback_sigmadrift_config(
         values[6],
         values[7],
         values[8],
+        values[9],
         static_cast<int>(max_corrections),
     };
     return true;
@@ -1408,7 +1410,7 @@ static PyObject *build_geometry_feedback_diagnostics(
     const minecraft_miner::aim::GeometryFeedbackSigmaDriftDiagnostics &diagnostics
 ) {
     return Py_BuildValue(
-        "{s:d,s:d,s:d,s:K,s:d,s:d,s:d,s:d,s:d,s:d,s:d,s:i,s:i,s:d,s:d,s:i,s:i,s:i,s:i,s:O,s:O}",
+        "{s:d,s:d,s:d,s:K,s:d,s:d,s:d,s:d,s:d,s:d,s:d,s:d,s:d,s:d,s:d,s:d,s:i,s:i,s:i,s:d,s:d,s:i,s:i,s:i,s:i,s:O,s:O}",
         "motor_target_yaw",
         diagnostics.motor_target_yaw,
         "motor_target_pitch",
@@ -1431,8 +1433,20 @@ static PyObject *build_geometry_feedback_diagnostics(
         diagnostics.first_feedback_observation_ms,
         "first_feedback_latency_ms",
         diagnostics.first_feedback_latency_ms,
+        "first_feedback_application_ms",
+        diagnostics.first_feedback_application_ms,
+        "first_predicted_terminal_x_steps",
+        diagnostics.first_predicted_terminal_x_steps,
+        "first_predicted_terminal_y_steps",
+        diagnostics.first_predicted_terminal_y_steps,
+        "first_prediction_sigma_major_steps",
+        diagnostics.first_prediction_sigma_major_steps,
+        "first_prediction_sigma_minor_steps",
+        diagnostics.first_prediction_sigma_minor_steps,
         "feedback_check_count",
         diagnostics.feedback_check_count,
+        "unsafe_prediction_count",
+        diagnostics.unsafe_prediction_count,
         "correction_count",
         diagnostics.correction_count,
         "first_visible_entry_ms",

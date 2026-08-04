@@ -50,7 +50,13 @@ class GeometryFeedbackDiagnostics:
     primary_endpoint_steps: float
     first_feedback_observation_ms: float
     first_feedback_latency_ms: float
+    first_feedback_application_ms: float
+    first_predicted_terminal_x_steps: float
+    first_predicted_terminal_y_steps: float
+    first_prediction_sigma_major_steps: float
+    first_prediction_sigma_minor_steps: float
     feedback_check_count: int
+    unsafe_prediction_count: int
     correction_count: int
     first_visible_entry_ms: float
     first_safe_entry_ms: float
@@ -300,7 +306,23 @@ def generate_geometry_feedback_sigmadrift_aim_path_with_diagnostics(
         first_feedback_latency_ms=float(
             raw_diagnostics["first_feedback_latency_ms"]
         ),
+        first_feedback_application_ms=float(
+            raw_diagnostics["first_feedback_application_ms"]
+        ),
+        first_predicted_terminal_x_steps=float(
+            raw_diagnostics["first_predicted_terminal_x_steps"]
+        ),
+        first_predicted_terminal_y_steps=float(
+            raw_diagnostics["first_predicted_terminal_y_steps"]
+        ),
+        first_prediction_sigma_major_steps=float(
+            raw_diagnostics["first_prediction_sigma_major_steps"]
+        ),
+        first_prediction_sigma_minor_steps=float(
+            raw_diagnostics["first_prediction_sigma_minor_steps"]
+        ),
         feedback_check_count=int(raw_diagnostics["feedback_check_count"]),
+        unsafe_prediction_count=int(raw_diagnostics["unsafe_prediction_count"]),
         correction_count=int(raw_diagnostics["correction_count"]),
         first_visible_entry_ms=float(raw_diagnostics["first_visible_entry_ms"]),
         first_safe_entry_ms=float(raw_diagnostics["first_safe_entry_ms"]),

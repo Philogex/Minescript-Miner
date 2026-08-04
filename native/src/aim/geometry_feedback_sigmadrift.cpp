@@ -3,6 +3,7 @@
 #include "minecraft_miner/aim/angle.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -113,6 +114,20 @@ struct EvaluatedMotion {
     double x = 0.0;
     double y = 0.0;
     double speed = 0.0;
+    double velocity_x = 0.0;
+    double velocity_y = 0.0;
+};
+
+struct FeedbackPrediction {
+    bool pending = false;
+    double observation_time = 0.0;
+    double application_time = 0.0;
+    double terminal_x = 0.0;
+    double terminal_y = 0.0;
+    double major_axis_x = 1.0;
+    double major_axis_y = 0.0;
+    double sigma_major = 0.0;
+    double sigma_minor = 0.0;
 };
 
 struct DirectionalTargetInterval {
@@ -139,12 +154,15 @@ EvaluatedMotion evaluate_submovements(
         );
         result.x += movement.x * progress;
         result.y += movement.y * progress;
-        result.speed += std::hypot(movement.x, movement.y) * lognormal_pdf(
+        const double density = lognormal_pdf(
             t,
             movement.t0,
             movement.mu,
             movement.sigma
         );
+        result.speed += std::hypot(movement.x, movement.y) * density;
+        result.velocity_x += movement.x * density;
+        result.velocity_y += movement.y * density;
     }
     return result;
 }
@@ -324,6 +342,152 @@ void asymptotic_position(
     }
 }
 
+double ou_prediction_sigma(
+    double theta,
+    double sigma,
+    double duration_ms
+) {
+    if (!(sigma > 0.0) || !(duration_ms > 0.0)) {
+        return 0.0;
+    }
+    const double duration_s = duration_ms / 1000.0;
+    if (!(theta > 1.0e-12)) {
+        return sigma * std::sqrt(duration_s);
+    }
+    return sigma * std::sqrt(
+        (1.0 - std::exp(-2.0 * theta * duration_s)) / (2.0 * theta)
+    );
+}
+
+FeedbackPrediction predict_terminal_state(
+    const std::vector<Submovement> &submovements,
+    const EvaluatedMotion &observed_motion,
+    double sample_x,
+    double sample_y,
+    double observation_time,
+    double latency_ms,
+    double fallback_axis_x,
+    double fallback_axis_y,
+    double tremor_amplitude,
+    const SigmaDriftConfig &motion_config,
+    const GeometryFeedbackSigmaDriftConfig &feedback_config
+) {
+    double endpoint_x = 0.0;
+    double endpoint_y = 0.0;
+    asymptotic_position(submovements, endpoint_x, endpoint_y);
+    double terminal_time = observation_time;
+    for (const Submovement &movement : submovements) {
+        terminal_time = std::max(terminal_time, movement.tail_time);
+    }
+    const double prediction_horizon_ms = std::max(
+        latency_ms,
+        terminal_time - observation_time
+    );
+    const double residual_decay = motion_config.ou_theta > 0.0
+        ? std::exp(
+            -motion_config.ou_theta * prediction_horizon_ms / 1000.0
+        )
+        : 1.0;
+
+    FeedbackPrediction prediction{};
+    prediction.pending = true;
+    prediction.observation_time = observation_time;
+    prediction.application_time = observation_time + latency_ms;
+    // The efference copy supplies the remaining deterministic movement. The
+    // observed residual is stale at application time, so only its expected
+    // mean-reverting component is carried to the terminal prediction.
+    prediction.terminal_x = endpoint_x +
+        (sample_x - observed_motion.x) * residual_decay;
+    prediction.terminal_y = endpoint_y +
+        (sample_y - observed_motion.y) * residual_decay;
+
+    const double velocity_length = std::hypot(
+        observed_motion.velocity_x,
+        observed_motion.velocity_y
+    );
+    if (velocity_length > 1.0e-12) {
+        prediction.major_axis_x = observed_motion.velocity_x / velocity_length;
+        prediction.major_axis_y = observed_motion.velocity_y / velocity_length;
+    } else {
+        prediction.major_axis_x = fallback_axis_x;
+        prediction.major_axis_y = fallback_axis_y;
+    }
+
+    const double base_sigma =
+        feedback_config.feedback_position_uncertainty_steps;
+    const double process_sigma = ou_prediction_sigma(
+        motion_config.ou_theta,
+        motion_config.ou_sigma,
+        prediction_horizon_ms
+    );
+    const double signal_sigma = motion_config.sdn_k * observed_motion.speed;
+    const double tremor_sigma = tremor_amplitude / SQRT_2;
+    const double common_variance =
+        base_sigma * base_sigma +
+        process_sigma * process_sigma +
+        tremor_sigma * tremor_sigma;
+    prediction.sigma_major = std::sqrt(
+        common_variance + signal_sigma * signal_sigma
+    );
+    prediction.sigma_minor = std::sqrt(
+        common_variance + 0.25 * signal_sigma * signal_sigma
+    );
+    return prediction;
+}
+
+bool predicted_terminal_is_safe(
+    const FeedbackPrediction &prediction,
+    const Orientation &start,
+    double angular_step_deg,
+    const ProjectedTargetRegion &safe_region
+) {
+    const double minor_axis_x = -prediction.major_axis_y;
+    const double minor_axis_y = prediction.major_axis_x;
+    const std::array<std::array<double, 2>, 5> points{{
+        {{prediction.terminal_x, prediction.terminal_y}},
+        {{
+            prediction.terminal_x +
+                prediction.major_axis_x * prediction.sigma_major,
+            prediction.terminal_y +
+                prediction.major_axis_y * prediction.sigma_major,
+        }},
+        {{
+            prediction.terminal_x -
+                prediction.major_axis_x * prediction.sigma_major,
+            prediction.terminal_y -
+                prediction.major_axis_y * prediction.sigma_major,
+        }},
+        {{
+            prediction.terminal_x + minor_axis_x * prediction.sigma_minor,
+            prediction.terminal_y + minor_axis_y * prediction.sigma_minor,
+        }},
+        {{
+            prediction.terminal_x - minor_axis_x * prediction.sigma_minor,
+            prediction.terminal_y - minor_axis_y * prediction.sigma_minor,
+        }},
+    }};
+    return std::all_of(
+        points.begin(),
+        points.end(),
+        [&](const std::array<double, 2> &point) {
+            const Orientation orientation = orientation_from_position(
+                start,
+                point[0],
+                point[1],
+                angular_step_deg
+            );
+            return point_in_visible_region_with_margin(
+                safe_region,
+                look_direction_from_yaw_pitch(
+                    orientation.yaw,
+                    orientation.pitch
+                ),
+                0.0
+            );
+        }
+    );
+}
+
 void summarize_region_trace(
     const AimPath &path,
     const ProjectedTargetRegion &visible_region,
@@ -402,6 +566,10 @@ AimPath generate_geometry_feedback_sigmadrift_path(
         feedback_config.overshoot_width_min < 0.0 ||
         feedback_config.overshoot_width_max <
             feedback_config.overshoot_width_min ||
+        feedback_config.feedback_position_uncertainty_steps < 0.0 ||
+        !std::isfinite(
+            feedback_config.feedback_position_uncertainty_steps
+        ) ||
         feedback_config.safe_margin_steps < 0.0 ||
         !std::isfinite(feedback_config.safe_margin_steps) ||
         feedback_config.max_corrections < 0) {
@@ -597,17 +765,9 @@ AimPath generate_geometry_feedback_sigmadrift_path(
             feedback_config.feedback_latency_max_ms
         );
     };
-    const double first_feedback_observation =
-        submovements.front().peak_time;
-    const double first_feedback_latency = sample_feedback_latency();
-    double next_feedback_time = first_feedback_observation +
-        first_feedback_latency;
-    if (diagnostics != nullptr) {
-        diagnostics->first_feedback_observation_ms =
-            first_feedback_observation;
-        diagnostics->first_feedback_latency_ms = first_feedback_latency;
-    }
-    bool feedback_pending = true;
+    double next_observation_time = submovements.front().peak_time;
+    bool observation_scheduled = true;
+    FeedbackPrediction pending_prediction{};
     int correction_count = 0;
 
     while (result.size() < MAX_PATH_SAMPLES) {
@@ -658,38 +818,70 @@ AimPath generate_geometry_feedback_sigmadrift_path(
             t,
         });
 
-        if (feedback_pending && t >= next_feedback_time) {
+        if (observation_scheduled && t >= next_observation_time) {
+            const double latency = sample_feedback_latency();
+            pending_prediction = predict_terminal_state(
+                submovements,
+                motion,
+                sample_x,
+                sample_y,
+                t,
+                latency,
+                tangent_x,
+                tangent_y,
+                tremor_amplitude,
+                motion_config,
+                feedback_config
+            );
+            observation_scheduled = false;
+            if (diagnostics != nullptr &&
+                diagnostics->first_feedback_observation_ms < 0.0) {
+                diagnostics->first_feedback_observation_ms = t;
+                diagnostics->first_feedback_latency_ms = latency;
+                diagnostics->first_feedback_application_ms =
+                    pending_prediction.application_time;
+                diagnostics->first_predicted_terminal_x_steps =
+                    pending_prediction.terminal_x;
+                diagnostics->first_predicted_terminal_y_steps =
+                    pending_prediction.terminal_y;
+                diagnostics->first_prediction_sigma_major_steps =
+                    pending_prediction.sigma_major;
+                diagnostics->first_prediction_sigma_minor_steps =
+                    pending_prediction.sigma_minor;
+            }
+        }
+
+        if (pending_prediction.pending &&
+            t >= pending_prediction.application_time) {
             if (diagnostics != nullptr) {
                 ++diagnostics->feedback_check_count;
             }
-            const Vec3 current_direction = look_direction_from_yaw_pitch(
-                sample_orientation.yaw,
-                sample_orientation.pitch
+            const bool predicted_safe = predicted_terminal_is_safe(
+                pending_prediction,
+                start,
+                step,
+                safe_target.region
             );
-            const bool current_safe = point_in_visible_region_with_margin(
-                safe_target.region,
-                current_direction,
-                0.0
-            );
-            double endpoint_x = 0.0;
-            double endpoint_y = 0.0;
-            asymptotic_position(submovements, endpoint_x, endpoint_y);
-
-            if (current_safe ||
+            if (!predicted_safe && diagnostics != nullptr) {
+                ++diagnostics->unsafe_prediction_count;
+            }
+            if (predicted_safe ||
                 correction_count >= feedback_config.max_corrections) {
-                feedback_pending = false;
+                pending_prediction.pending = false;
             } else {
                 const double correction_reach = uniform(0.88, 1.02);
                 const double correction_x =
-                    (target_x - endpoint_x) * correction_reach;
+                    (target_x - pending_prediction.terminal_x) *
+                    correction_reach;
                 const double correction_y =
-                    (target_y - endpoint_y) * correction_reach;
+                    (target_y - pending_prediction.terminal_y) *
+                    correction_reach;
                 const double correction_distance = std::hypot(
                     correction_x,
                     correction_y
                 );
                 if (correction_distance < 1.0e-9) {
-                    feedback_pending = false;
+                    pending_prediction.pending = false;
                 } else {
                     const double correction_id = std::log2(
                         correction_distance / target_width + 1.0
@@ -716,13 +908,13 @@ AimPath generate_geometry_feedback_sigmadrift_path(
                         t + correction_duration * 1.15,
                     };
                     submovements.push_back(correction);
+                    pending_prediction.pending = false;
                     ++correction_count;
                     if (diagnostics != nullptr) {
                         diagnostics->correction_count = correction_count;
                     }
-                    const double feedback_observation = correction.peak_time;
-                    next_feedback_time = feedback_observation +
-                        sample_feedback_latency();
+                    next_observation_time = correction.peak_time;
+                    observation_scheduled = true;
                     latest_tail_time = std::max(
                         latest_tail_time,
                         correction.tail_time
@@ -731,21 +923,39 @@ AimPath generate_geometry_feedback_sigmadrift_path(
             }
         }
 
-        const double required_end_time = feedback_pending
-            ? std::max(latest_tail_time, next_feedback_time)
-            : latest_tail_time;
+        double required_end_time = latest_tail_time;
+        if (observation_scheduled) {
+            required_end_time = std::max(
+                required_end_time,
+                next_observation_time
+            );
+        }
+        if (pending_prediction.pending) {
+            required_end_time = std::max(
+                required_end_time,
+                pending_prediction.application_time
+            );
+        }
         if (t >= required_end_time) {
             break;
         }
         previous_t = t;
-        t += clamp_double(
+        double next_t = t + clamp_double(
             gamma(motion_config.gamma_shape, gamma_scale),
             2.0,
             25.0
         );
-        if (t > required_end_time) {
-            t = required_end_time;
+        if (observation_scheduled && next_observation_time > t) {
+            next_t = std::min(next_t, next_observation_time);
         }
+        if (pending_prediction.pending &&
+            pending_prediction.application_time > t) {
+            next_t = std::min(
+                next_t,
+                pending_prediction.application_time
+            );
+        }
+        t = std::min(next_t, required_end_time);
     }
 
     if (result.empty()) {

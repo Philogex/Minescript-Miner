@@ -74,6 +74,11 @@ geometry_feedback_sigmadrift[
     overshoot_width_min: 0.05
     overshoot_width_max: 0.25
 
+    # Baseline uncertainty of an observed angular position. The controller
+    # adds latency-, OU-, and signal-dependent uncertainty before checking the
+    # predicted terminal state against the safe target region.
+    feedback_position_uncertainty_steps: 0.25
+
     # Clearance from the visible-region boundary in angular input steps.
     safe_margin_steps: 1
 

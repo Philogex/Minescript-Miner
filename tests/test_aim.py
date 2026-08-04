@@ -75,6 +75,7 @@ class AimConfigTest(unittest.TestCase):
                         "undershoot_width_max: 0.3",
                         "overshoot_width_min: 0.2",
                         "overshoot_width_max: 0.4",
+                        "feedback_position_uncertainty_steps: 0.4",
                         "safe_margin_steps: 1.5",
                         "max_corrections: 4",
                         "]",
@@ -124,6 +125,11 @@ class AimConfigTest(unittest.TestCase):
         self.assertEqual(
             1.5,
             config.geometry_feedback_sigmadrift.safe_margin_steps,
+        )
+        self.assertEqual(
+            0.4,
+            config.geometry_feedback_sigmadrift.
+            feedback_position_uncertainty_steps,
         )
         self.assertEqual(
             4,
@@ -372,6 +378,16 @@ class AimConfigTest(unittest.TestCase):
         self.assertLess(diagnostics.s_anchor_steps, diagnostics.s_exit_steps)
         self.assertGreaterEqual(diagnostics.first_feedback_observation_ms, 0.0)
         self.assertGreaterEqual(diagnostics.first_feedback_latency_ms, 0.0)
+        self.assertAlmostEqual(
+            diagnostics.first_feedback_observation_ms
+            + diagnostics.first_feedback_latency_ms,
+            diagnostics.first_feedback_application_ms,
+        )
+        self.assertGreaterEqual(
+            diagnostics.first_prediction_sigma_major_steps,
+            diagnostics.first_prediction_sigma_minor_steps,
+        )
+        self.assertGreaterEqual(diagnostics.unsafe_prediction_count, 0)
         self.assertGreaterEqual(diagnostics.visible_entry_count, 1)
         self.assertTrue(diagnostics.final_visible)
 

@@ -79,6 +79,7 @@ class GeometryFeedbackSigmaDriftConfig:
     undershoot_width_max: float = 0.25
     overshoot_width_min: float = 0.05
     overshoot_width_max: float = 0.25
+    feedback_position_uncertainty_steps: float = 0.25
     safe_margin_steps: float = 1.0
     max_corrections: int = 3
 
@@ -173,6 +174,7 @@ GEOMETRY_FEEDBACK_SIGMADRIFT_PARSERS: Mapping[str, Parser] = {
     "undershoot_width_max": _parse_float,
     "overshoot_width_min": _parse_float,
     "overshoot_width_max": _parse_float,
+    "feedback_position_uncertainty_steps": _parse_float,
     "safe_margin_steps": _parse_float,
     "max_corrections": _parse_int,
 }
@@ -345,6 +347,11 @@ def _validate_config(config: AimConfig) -> None:
         raise ValueError(
             "geometry_feedback_sigmadrift.safe_margin_steps must be >= 0"
         )
+    if feedback.feedback_position_uncertainty_steps < 0.0:
+        raise ValueError(
+            "geometry_feedback_sigmadrift."
+            "feedback_position_uncertainty_steps must be >= 0"
+        )
     if feedback.max_corrections < 0:
         raise ValueError(
             "geometry_feedback_sigmadrift.max_corrections must be >= 0"
@@ -410,6 +417,7 @@ def _geometry_feedback_sigmadrift_payload(
         config.undershoot_width_max,
         config.overshoot_width_min,
         config.overshoot_width_max,
+        config.feedback_position_uncertainty_steps,
         config.safe_margin_steps,
         config.max_corrections,
     )

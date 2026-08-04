@@ -17,6 +17,7 @@ struct GeometryFeedbackSigmaDriftConfig {
     double undershoot_width_max = 0.25;
     double overshoot_width_min = 0.05;
     double overshoot_width_max = 0.25;
+    double feedback_position_uncertainty_steps = 0.25;
     double safe_margin_steps = 1.0;
     int max_corrections = 3;
 };
@@ -33,7 +34,13 @@ struct GeometryFeedbackSigmaDriftDiagnostics {
     double primary_endpoint_steps = 0.0;
     double first_feedback_observation_ms = -1.0;
     double first_feedback_latency_ms = -1.0;
+    double first_feedback_application_ms = -1.0;
+    double first_predicted_terminal_x_steps = 0.0;
+    double first_predicted_terminal_y_steps = 0.0;
+    double first_prediction_sigma_major_steps = 0.0;
+    double first_prediction_sigma_minor_steps = 0.0;
     int feedback_check_count = 0;
+    int unsafe_prediction_count = 0;
     int correction_count = 0;
     double first_visible_entry_ms = -1.0;
     double first_safe_entry_ms = -1.0;

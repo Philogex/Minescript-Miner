@@ -303,6 +303,7 @@ int main() {
     feedback.undershoot_width_max = 1.5;
     feedback.safe_margin_steps = 0.5;
     feedback.max_corrections = 3;
+    GeometryFeedbackSigmaDriftDiagnostics corrected_diagnostics{};
     const AimPath corrected_path =
         generate_geometry_feedback_sigmadrift_path(
             {10.0, -2.0},
@@ -311,7 +312,8 @@ int main() {
             0.15,
             deterministic,
             feedback,
-            1234
+            1234,
+            &corrected_diagnostics
         );
     assert(corrected_path.size() > 2);
     assert(corrected_path.front().yaw == 10.0);
@@ -345,6 +347,14 @@ int main() {
     ));
     assert(std::abs(corrected_endpoint.x) < 0.01);
     assert(std::abs(corrected_endpoint.y) < 0.01);
+    assert(corrected_diagnostics.feedback_check_count >= 1);
+    assert(corrected_diagnostics.unsafe_prediction_count >= 1);
+    assert(corrected_diagnostics.correction_count >= 1);
+    assert(
+        corrected_diagnostics.first_feedback_application_ms ==
+        corrected_diagnostics.first_feedback_observation_ms +
+            corrected_diagnostics.first_feedback_latency_ms
+    );
     const AimPath uncorrected_path =
         generate_geometry_feedback_sigmadrift_path(
             {10.0, -2.0},
@@ -379,10 +389,11 @@ int main() {
     pass_through_feedback.feedback_latency_stddev_ms = 0.0;
     pass_through_feedback.feedback_latency_min_ms = 50.0;
     pass_through_feedback.feedback_latency_max_ms = 50.0;
-    pass_through_feedback.overshoot_width_min = 0.35;
-    pass_through_feedback.overshoot_width_max = 0.35;
+    pass_through_feedback.overshoot_width_min = 1.0;
+    pass_through_feedback.overshoot_width_max = 1.0;
     pass_through_feedback.safe_margin_steps = 0.5;
     pass_through_feedback.max_corrections = 3;
+    GeometryFeedbackSigmaDriftDiagnostics pass_through_diagnostics{};
     const AimPath current_safe_feedback_path =
         generate_geometry_feedback_sigmadrift_path(
             {10.0, 0.0},
@@ -391,7 +402,8 @@ int main() {
             0.15,
             current_safe_motion,
             pass_through_feedback,
-            4321
+            4321,
+            &pass_through_diagnostics
         );
     const AimPath current_safe_no_corrections_path =
         generate_geometry_feedback_sigmadrift_path(
@@ -408,26 +420,43 @@ int main() {
             }(),
             4321
         );
-    assert(
-        current_safe_feedback_path.size() ==
+    assert(pass_through_diagnostics.unsafe_prediction_count >= 1);
+    assert(pass_through_diagnostics.correction_count >= 1);
+    bool paths_diverged = false;
+    const std::size_t shared_size = std::min(
+        current_safe_feedback_path.size(),
         current_safe_no_corrections_path.size()
     );
-    for (std::size_t index = 0;
-         index < current_safe_feedback_path.size();
-         ++index) {
-        assert(
-            current_safe_feedback_path[index].yaw ==
-            current_safe_no_corrections_path[index].yaw
-        );
-        assert(
-            current_safe_feedback_path[index].pitch ==
-            current_safe_no_corrections_path[index].pitch
-        );
-        assert(
-            current_safe_feedback_path[index].t_ms ==
-            current_safe_no_corrections_path[index].t_ms
-        );
+    for (std::size_t index = 0; index < shared_size; ++index) {
+        if (current_safe_feedback_path[index].t_ms <=
+            pass_through_diagnostics.first_feedback_application_ms) {
+            assert(
+                current_safe_feedback_path[index].yaw ==
+                current_safe_no_corrections_path[index].yaw
+            );
+            assert(
+                current_safe_feedback_path[index].pitch ==
+                current_safe_no_corrections_path[index].pitch
+            );
+            assert(
+                current_safe_feedback_path[index].t_ms ==
+                current_safe_no_corrections_path[index].t_ms
+            );
+            continue;
+        }
+        if (current_safe_feedback_path[index].yaw !=
+                current_safe_no_corrections_path[index].yaw ||
+            current_safe_feedback_path[index].pitch !=
+                current_safe_no_corrections_path[index].pitch) {
+            paths_diverged = true;
+            break;
+        }
     }
+    if (current_safe_feedback_path.size() !=
+        current_safe_no_corrections_path.size()) {
+        paths_diverged = true;
+    }
+    assert(paths_diverged);
 
     const minecraft_miner::YawPitch edge_orientation =
         minecraft_miner::yaw_pitch_from_direction(z_direction(0.2, 0.0));

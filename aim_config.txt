@@ -25,8 +25,8 @@ minimum_jerk[
 ]
 
 sigmadrift[
-    fitts_a: 50
-    fitts_b: 150
+    fitts_a: 85
+    fitts_b: 45
 
     # Fallback in SigmaDrift units when solver target-width metrics are missing.
     # Normal mining uses the dynamically computed visible target width instead.
@@ -34,9 +34,9 @@ sigmadrift[
 
     undershoot_min: 0.92
     undershoot_max: 0.97
-    peak_time_ratio: 0.35
-    primary_sigma_min: 0.18
-    primary_sigma_max: 0.28
+    peak_time_ratio: 0.50
+    primary_sigma_min: 0.30
+    primary_sigma_max: 0.38
 
     overshoot_prob: 0.15
     overshoot_min: 1.02
@@ -45,16 +45,16 @@ sigmadrift[
     correction_sigma_max: 0.20
     second_correction_prob: 0.25
 
-    curvature_scale: 0.025
+    curvature_scale: 0.006
     ou_theta: 3.5
-    ou_sigma: 1.2
+    ou_sigma: 0.35
 
     tremor_freq_min: 8.0
     tremor_freq_max: 12.0
-    tremor_amp_min: 0.15
-    tremor_amp_max: 0.55
+    tremor_amp_min: 0.03
+    tremor_amp_max: 0.12
 
-    sdn_k: 0.04
+    sdn_k: 0.008
     sample_dt_mean: 7.8
     gamma_shape: 3.5
 ]

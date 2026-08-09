@@ -1,5 +1,6 @@
 #include "minecraft_miner/aim/angle.hpp"
 #include "minecraft_miner/aim/geometry_feedback_sigmadrift.hpp"
+#include "minecraft_miner/aim/minimum_jerk.hpp"
 #include "minecraft_miner/aim/target_region.hpp"
 
 #include <algorithm>
@@ -54,6 +55,47 @@ VisibleDirectionComponent rectangle(
 
 int main() {
     using namespace minecraft_miner::aim;
+
+    assert(shortest_yaw_delta_degrees(-179.0, 179.0) == 2.0);
+    assert(continuous_yaw_near(-179.0, 179.0) == 181.0);
+    assert(continuous_yaw_near(1.0, 721.0) == 721.0);
+
+    AimPathConfig minimum_jerk_config{};
+    minimum_jerk_config.angular_step_deg = 0.15;
+    minimum_jerk_config.fitts_a_ms = 50.0;
+    minimum_jerk_config.fitts_b_ms = 150.0;
+    minimum_jerk_config.min_duration_ms = 50.0;
+    minimum_jerk_config.max_duration_ms = 500.0;
+    const TargetMetrics wrapped_target{-179.0, 0.0, 2.0, 2.0, 4.0, 2.0};
+    const AimPath minimum_jerk_path = generate_minimum_jerk_path(
+        {179.0, 0.0},
+        wrapped_target,
+        minimum_jerk_config
+    );
+    assert(minimum_jerk_path.back().yaw == 181.0);
+
+    SigmaDriftConfig continuous_motion{};
+    continuous_motion.undershoot_min = 1.0;
+    continuous_motion.undershoot_max = 1.0;
+    continuous_motion.overshoot_prob = 0.0;
+    continuous_motion.curvature_scale = 0.0;
+    continuous_motion.ou_sigma = 0.0;
+    continuous_motion.tremor_amp_min = 0.0;
+    continuous_motion.tremor_amp_max = 0.0;
+    continuous_motion.sdn_k = 0.0;
+    const AimPath continuous_path = generate_sigmadrift_path(
+        {179.0, 0.0},
+        wrapped_target,
+        0.15,
+        continuous_motion,
+        1234
+    );
+    assert(continuous_path.back().yaw == 181.0);
+    for (std::size_t index = 1; index < continuous_path.size(); ++index) {
+        assert(std::abs(
+            continuous_path[index].yaw - continuous_path[index - 1].yaw
+        ) < 180.0);
+    }
 
     TargetProjection identity{};
     assert(make_target_projection({0.0, 0.0, 1.0}, identity));
@@ -530,4 +572,34 @@ int main() {
         {},
         1234
     ).empty());
+
+    const Vec3 wrapped_direction =
+        minecraft_miner::look_direction_from_yaw_pitch(-179.0, 0.0);
+    TargetProjection wrapped_projection{};
+    assert(make_target_projection(wrapped_direction, wrapped_projection));
+    const VisibleDirectionComponents wrapped_components{{
+        local_direction(wrapped_projection, -0.02, -0.02),
+        local_direction(wrapped_projection, 0.02, -0.02),
+        local_direction(wrapped_projection, 0.02, 0.02),
+        local_direction(wrapped_projection, -0.02, 0.02),
+    }};
+    GeometryFeedbackSigmaDriftConfig wrapped_feedback{};
+    wrapped_feedback.safe_margin_steps = 0.0;
+    wrapped_feedback.max_corrections = 0;
+    GeometryFeedbackSigmaDriftDiagnostics wrapped_diagnostics{};
+    const AimPath wrapped_feedback_path =
+        generate_geometry_feedback_sigmadrift_path(
+            {180.95, 0.0},
+            wrapped_target,
+            wrapped_components,
+            0.15,
+            continuous_motion,
+            wrapped_feedback,
+            5678,
+            &wrapped_diagnostics
+        );
+    assert(wrapped_feedback_path.size() == 2);
+    assert(wrapped_feedback_path.back().yaw > 180.0);
+    assert(std::abs(wrapped_feedback_path.back().yaw - 181.0) < 1.0e-9);
+    assert(std::abs(wrapped_diagnostics.motor_target_yaw - 181.0) < 1.0e-9);
 }

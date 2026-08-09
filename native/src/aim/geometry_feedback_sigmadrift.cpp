@@ -19,29 +19,8 @@ constexpr double PI = 3.141592653589793238462643383279502884;
 constexpr double SQRT_2 = 1.414213562373095048801688724209698079;
 constexpr std::size_t MAX_PATH_SAMPLES = 100000;
 
-double signed_angle_delta_degrees(double value, double origin) {
-    double delta = value - origin;
-    while (delta <= -180.0) {
-        delta += 360.0;
-    }
-    while (delta > 180.0) {
-        delta -= 360.0;
-    }
-    return delta;
-}
-
 double clamp_double(double value, double minimum, double maximum) {
     return std::max(minimum, std::min(maximum, value));
-}
-
-double wrap_yaw_degrees(double yaw) {
-    while (yaw <= -180.0) {
-        yaw += 360.0;
-    }
-    while (yaw > 180.0) {
-        yaw -= 360.0;
-    }
-    return yaw;
 }
 
 double normal_cdf(double x) {
@@ -174,7 +153,7 @@ Orientation orientation_from_position(
     double angular_step_deg
 ) {
     return {
-        wrap_yaw_degrees(start.yaw + x * angular_step_deg),
+        start.yaw + x * angular_step_deg,
         clamp_double(
             start.pitch + y * angular_step_deg,
             -90.0,
@@ -260,7 +239,7 @@ bool directional_target_interval(
             return std::numeric_limits<double>::quiet_NaN();
         }
         const YawPitch orientation = yaw_pitch_from_direction(direction);
-        const double x = signed_angle_delta_degrees(
+        const double x = shortest_yaw_delta_degrees(
             orientation.yaw,
             start.yaw
         ) / angular_step_deg;
@@ -603,9 +582,13 @@ AimPath generate_geometry_feedback_sigmadrift_path(
         )) {
         return {};
     }
-    const YawPitch motor_target = yaw_pitch_from_direction(
+    const YawPitch canonical_motor_target = yaw_pitch_from_direction(
         safe_target.anchor_direction
     );
+    const Orientation motor_target{
+        continuous_yaw_near(canonical_motor_target.yaw, start.yaw),
+        canonical_motor_target.pitch,
+    };
     if (diagnostics != nullptr) {
         diagnostics->motor_target_yaw = motor_target.yaw;
         diagnostics->motor_target_pitch = motor_target.pitch;
@@ -614,8 +597,7 @@ AimPath generate_geometry_feedback_sigmadrift_path(
         diagnostics->anchor_component_index =
             safe_target.anchor_component_index;
     }
-    const double target_x =
-        signed_angle_delta_degrees(motor_target.yaw, start.yaw) / step;
+    const double target_x = (motor_target.yaw - start.yaw) / step;
     const double target_y = (motor_target.pitch - start.pitch) / step;
     const double distance = std::hypot(target_x, target_y);
     if (distance < 1.0) {

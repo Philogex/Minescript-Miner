@@ -32,6 +32,8 @@ class NativeAimTargetRegionTest(unittest.TestCase):
                         project_root
                         / "native/src/aim/geometry_feedback_sigmadrift.cpp"
                     ),
+                    str(project_root / "native/src/aim/minimum_jerk.cpp"),
+                    str(project_root / "native/src/aim/sigmadrift.cpp"),
                     str(project_root / "native/src/aim/target_region.cpp"),
                     "-o",
                     str(executable),

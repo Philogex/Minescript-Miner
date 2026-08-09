@@ -13,17 +13,6 @@ namespace {
 constexpr double PI = 3.141592653589793238462643383279502884;
 constexpr double SQRT_2 = 1.414213562373095048801688724209698079;
 
-double signed_angle_delta_degrees(double value, double origin) {
-    double delta = value - origin;
-    while (delta <= -180.0) {
-        delta += 360.0;
-    }
-    while (delta > 180.0) {
-        delta -= 360.0;
-    }
-    return delta;
-}
-
 double clamp_double(double value, double minimum, double maximum) {
     return std::max(minimum, std::min(maximum, value));
 }
@@ -63,16 +52,6 @@ double direction_factor(double angle) {
     return 0.5 + 0.8 * sa - 0.15 * ca;
 }
 
-double wrap_yaw_degrees(double yaw) {
-    while (yaw <= -180.0) {
-        yaw += 360.0;
-    }
-    while (yaw > 180.0) {
-        yaw -= 360.0;
-    }
-    return yaw;
-}
-
 double quantized_target_width(
     const TargetMetrics &target,
     double angular_step_deg,
@@ -108,14 +87,15 @@ AimPath generate_sigmadrift_path(
     std::uint64_t seed
 ) {
     const double step = std::max(1.0e-9, angular_step_deg);
-    const double dx = signed_angle_delta_degrees(target.yaw, start.yaw) / step;
+    const double target_yaw = continuous_yaw_near(target.yaw, start.yaw);
+    const double dx = (target_yaw - start.yaw) / step;
     const double dy = (target.pitch - start.pitch) / step;
     const double distance = std::hypot(dx, dy);
 
     if (distance < 1.0) {
         return {
             AimSample{start.yaw, start.pitch, 0.0},
-            AimSample{target.yaw, target.pitch, 50.0},
+            AimSample{target_yaw, target.pitch, 50.0},
         };
     }
 
@@ -272,7 +252,7 @@ AimPath generate_sigmadrift_path(
         const double sdn_y = config.sdn_k * speed * normal(0.0, 1.0);
 
         result.push_back(AimSample{
-            wrap_yaw_degrees(start.yaw + (x + ou_x + tremor_x + sdn_x) * step),
+            start.yaw + (x + ou_x + tremor_x + sdn_x) * step,
             clamp_double(start.pitch + (y + ou_y + tremor_y + sdn_y) * step, -90.0, 90.0),
             t,
         });
@@ -284,11 +264,11 @@ AimPath generate_sigmadrift_path(
         result.front() = AimSample{start.yaw, start.pitch, 0.0};
     }
     if (result.back().t_ms <= 0.0 ||
-        std::abs(signed_angle_delta_degrees(result.back().yaw, target.yaw)) > 1.0e-9 ||
+        std::abs(result.back().yaw - target_yaw) > 1.0e-9 ||
         std::abs(result.back().pitch - target.pitch) > 1.0e-9) {
-        result.push_back(AimSample{target.yaw, target.pitch, total_t});
+        result.push_back(AimSample{target_yaw, target.pitch, total_t});
     } else {
-        result.back() = AimSample{target.yaw, target.pitch, result.back().t_ms};
+        result.back() = AimSample{target_yaw, target.pitch, result.back().t_ms};
     }
     return result;
 }

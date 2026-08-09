@@ -5,21 +5,6 @@
 
 namespace minecraft_miner::aim {
 
-namespace {
-
-double signed_angle_delta_degrees(double value, double origin) {
-    double delta = value - origin;
-    while (delta <= -180.0) {
-        delta += 360.0;
-    }
-    while (delta > 180.0) {
-        delta -= 360.0;
-    }
-    return delta;
-}
-
-}  // namespace
-
 AimPath generate_minimum_jerk_path(
     const Orientation &start,
     const TargetMetrics &target,
@@ -27,7 +12,8 @@ AimPath generate_minimum_jerk_path(
 ) {
     const double width_yaw = std::max(0.0, target.width_yaw);
     const double width_pitch = std::max(0.0, target.width_pitch);
-    const double yaw_delta = signed_angle_delta_degrees(target.yaw, start.yaw);
+    const double yaw_delta = shortest_yaw_delta_degrees(target.yaw, start.yaw);
+    const double target_yaw = start.yaw + yaw_delta;
     const double pitch_delta = target.pitch - start.pitch;
     const double amplitude = std::hypot(yaw_delta, pitch_delta);
     const double local_width = std::min(width_yaw, width_pitch);
@@ -47,7 +33,7 @@ AimPath generate_minimum_jerk_path(
 
     return {
         AimSample{start.yaw, start.pitch, 0.0},
-        AimSample{target.yaw, target.pitch, duration_ms},
+        AimSample{target_yaw, target.pitch, duration_ms},
     };
 }
 

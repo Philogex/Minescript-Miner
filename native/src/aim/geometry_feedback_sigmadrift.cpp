@@ -152,14 +152,14 @@ Orientation orientation_from_position(
     double y,
     double angular_step_deg
 ) {
-    return {
+    return minecraft_float_orientation({
         start.yaw + x * angular_step_deg,
         clamp_double(
             start.pitch + y * angular_step_deg,
             -90.0,
             90.0
         ),
-    };
+    });
 }
 
 bool directional_target_interval(
@@ -585,10 +585,10 @@ AimPath generate_geometry_feedback_sigmadrift_path(
     const YawPitch canonical_motor_target = yaw_pitch_from_direction(
         safe_target.anchor_direction
     );
-    const Orientation motor_target{
+    const Orientation motor_target = minecraft_float_orientation({
         continuous_yaw_near(canonical_motor_target.yaw, start.yaw),
         canonical_motor_target.pitch,
-    };
+    });
     if (diagnostics != nullptr) {
         diagnostics->motor_target_yaw = motor_target.yaw;
         diagnostics->motor_target_pitch = motor_target.pitch;

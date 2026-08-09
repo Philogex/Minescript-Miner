@@ -87,15 +87,18 @@ AimPath generate_sigmadrift_path(
     std::uint64_t seed
 ) {
     const double step = std::max(1.0e-9, angular_step_deg);
-    const double target_yaw = continuous_yaw_near(target.yaw, start.yaw);
-    const double dx = (target_yaw - start.yaw) / step;
-    const double dy = (target.pitch - start.pitch) / step;
+    const Orientation engine_target = minecraft_float_orientation({
+        continuous_yaw_near(target.yaw, start.yaw),
+        target.pitch,
+    });
+    const double dx = (engine_target.yaw - start.yaw) / step;
+    const double dy = (engine_target.pitch - start.pitch) / step;
     const double distance = std::hypot(dx, dy);
 
     if (distance < 1.0) {
         return {
             AimSample{start.yaw, start.pitch, 0.0},
-            AimSample{target_yaw, target.pitch, 50.0},
+            AimSample{engine_target.yaw, engine_target.pitch, 50.0},
         };
     }
 
@@ -251,9 +254,17 @@ AimPath generate_sigmadrift_path(
         const double sdn_x = config.sdn_k * speed * normal(0.0, 1.0);
         const double sdn_y = config.sdn_k * speed * normal(0.0, 1.0);
 
-        result.push_back(AimSample{
+        const Orientation sample = minecraft_float_orientation({
             start.yaw + (x + ou_x + tremor_x + sdn_x) * step,
-            clamp_double(start.pitch + (y + ou_y + tremor_y + sdn_y) * step, -90.0, 90.0),
+            clamp_double(
+                start.pitch + (y + ou_y + tremor_y + sdn_y) * step,
+                -90.0,
+                90.0
+            ),
+        });
+        result.push_back(AimSample{
+            sample.yaw,
+            sample.pitch,
             t,
         });
     }
@@ -264,11 +275,19 @@ AimPath generate_sigmadrift_path(
         result.front() = AimSample{start.yaw, start.pitch, 0.0};
     }
     if (result.back().t_ms <= 0.0 ||
-        std::abs(result.back().yaw - target_yaw) > 1.0e-9 ||
-        std::abs(result.back().pitch - target.pitch) > 1.0e-9) {
-        result.push_back(AimSample{target_yaw, target.pitch, total_t});
+        result.back().yaw != engine_target.yaw ||
+        result.back().pitch != engine_target.pitch) {
+        result.push_back(AimSample{
+            engine_target.yaw,
+            engine_target.pitch,
+            total_t,
+        });
     } else {
-        result.back() = AimSample{target_yaw, target.pitch, result.back().t_ms};
+        result.back() = AimSample{
+            engine_target.yaw,
+            engine_target.pitch,
+            result.back().t_ms,
+        };
     }
     return result;
 }

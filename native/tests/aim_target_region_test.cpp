@@ -59,6 +59,10 @@ int main() {
     assert(shortest_yaw_delta_degrees(-179.0, 179.0) == 2.0);
     assert(continuous_yaw_near(-179.0, 179.0) == 181.0);
     assert(continuous_yaw_near(1.0, 721.0) == 721.0);
+    assert(
+        minecraft_float_angle(360000.01) ==
+        static_cast<double>(static_cast<float>(360000.01))
+    );
 
     AimPathConfig minimum_jerk_config{};
     minimum_jerk_config.angular_step_deg = 0.15;
@@ -91,7 +95,16 @@ int main() {
         1234
     );
     assert(continuous_path.back().yaw == 181.0);
+    assert(continuous_path.back().pitch == 0.0);
     for (std::size_t index = 1; index < continuous_path.size(); ++index) {
+        assert(
+            continuous_path[index].yaw ==
+            minecraft_float_angle(continuous_path[index].yaw)
+        );
+        assert(
+            continuous_path[index].pitch ==
+            minecraft_float_angle(continuous_path[index].pitch)
+        );
         assert(std::abs(
             continuous_path[index].yaw - continuous_path[index - 1].yaw
         ) < 180.0);
@@ -600,6 +613,12 @@ int main() {
         );
     assert(wrapped_feedback_path.size() == 2);
     assert(wrapped_feedback_path.back().yaw > 180.0);
-    assert(std::abs(wrapped_feedback_path.back().yaw - 181.0) < 1.0e-9);
-    assert(std::abs(wrapped_diagnostics.motor_target_yaw - 181.0) < 1.0e-9);
+    assert(
+        wrapped_feedback_path.back().yaw ==
+        minecraft_float_angle(wrapped_feedback_path.back().yaw)
+    );
+    assert(
+        wrapped_diagnostics.motor_target_yaw ==
+        wrapped_feedback_path.back().yaw
+    );
 }

@@ -30,10 +30,14 @@ AimPath generate_minimum_jerk_path(
         config.min_duration_ms,
         config.max_duration_ms
     );
+    const Orientation endpoint = minecraft_float_orientation({
+        target_yaw,
+        target.pitch,
+    });
 
     return {
         AimSample{start.yaw, start.pitch, 0.0},
-        AimSample{target_yaw, target.pitch, duration_ms},
+        AimSample{endpoint.yaw, endpoint.pitch, duration_ms},
     };
 }
 

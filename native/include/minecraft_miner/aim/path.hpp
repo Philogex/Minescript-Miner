@@ -41,4 +41,15 @@ inline double continuous_yaw_near(double value, double reference) {
     return reference + shortest_yaw_delta_degrees(value, reference);
 }
 
+inline double minecraft_float_angle(double value) {
+    return static_cast<double>(static_cast<float>(value));
+}
+
+inline Orientation minecraft_float_orientation(const Orientation &value) {
+    return {
+        minecraft_float_angle(value.yaw),
+        minecraft_float_angle(value.pitch),
+    };
+}
+
 }  // namespace minecraft_miner::aim

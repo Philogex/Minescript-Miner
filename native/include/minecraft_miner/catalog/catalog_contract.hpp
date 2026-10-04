@@ -9,6 +9,7 @@
 namespace minecraft_miner {
 
 inline constexpr int SHAPE_CATALOG_VERSION = 3;
+inline constexpr char SHAPE_CATALOG_SHA256[] = "9c80a47e68aad848468eac22ce99cbffcba298634c267aea8c040f89aab7e2aa";
 inline constexpr int GEOMETRY_CATALOG_VERSION = 3;
 inline constexpr int GEOMETRY_SHAPE_CATALOG_VERSION = SHAPE_CATALOG_VERSION;
 inline constexpr int BLOCK_SHAPE_MAPPING_VERSION = 3;

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "minecraft_miner",
+  "version": "${version}",
+  "name": "Minecraft Miner",
+  "description": "Exact visibility and native aim generation with a Fabric executor.",
+  "authors": ["Philogex"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {"client": ["dev.philogex.miner.fabric.MinerClient"]},
+  "mixins": ["minecraft_miner.mixins.json"],
+  "depends": {"fabricloader": ">=0.19.5", "minecraft": "26.3", "java": ">=25", "fabric-api": "*"}
+}

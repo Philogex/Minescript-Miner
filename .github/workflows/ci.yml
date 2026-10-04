@@ -13,196 +13,70 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Test Python ${{ matrix.python-version }}
-    runs-on: ubuntu-24.04
+  mod:
+    name: Build and test ${{ matrix.platform }} mod
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        python-version:
-          - "3.9"
-          - "3.14"
-
+        include:
+          - os: ubuntu-24.04
+            platform: linux-x86_64
+          - os: windows-2022
+            platform: windows-x86_64
+    defaults:
+      run:
+        working-directory: fabric
+        shell: bash
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Set up Java
+        uses: actions/setup-java@v6
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
+          distribution: temurin
+          java-version: '25'
 
-      - name: Install native build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes g++
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
-      - name: Install Python build dependencies
-        run: python -m pip install --upgrade pip build
+      - name: Check generated catalog
+        run: python ../tools/generate_shape_catalog.py --check
 
-      - name: Build package and run tests
-        run: scripts/run-tests.sh
+      - name: Build mod and run Java and native tests
+        run: ./gradlew build check --no-daemon
 
-  windows-build-test:
-    name: Test Windows native build
-    runs-on: windows-2022
+      - name: Check native loading from packaged mod
+        run: ./gradlew benchmark -PbenchmarkSamples=1 -PbenchmarkWarmup=0 --no-daemon
 
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Upload mod
+        uses: actions/upload-artifact@v7
         with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install build dependencies
-        run: python -m pip install --upgrade pip build
-
-      - name: Build wheel
-        run: python -m build --wheel --outdir wheelhouse
-
-      - name: Verify native extension
-        shell: pwsh
-        run: |
-          $wheel = Get-ChildItem wheelhouse/*.whl | Select-Object -First 1
-          python -m pip install --no-deps --target build/wheel-check $wheel.FullName
-          python -I -c "import sys; sys.path.insert(0, 'build/wheel-check'); import _minescript_miner_native as native; from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION; debug = native.geometry_catalog_debug(); assert native.hello() == 'hello from native extension'; assert debug['shape_catalog_version'] == SHAPE_CATALOG_VERSION; assert debug['geometry_catalog_version'] >= SHAPE_CATALOG_VERSION"
-
-  linux-wheel:
-    name: Build manylinux wheel
-    if: startsWith(github.ref, 'refs/tags/')
-    needs:
-      - test
-      - windows-build-test
-      - performance
-    runs-on: ubuntu-24.04
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install cibuildwheel
-        run: python -m pip install --upgrade pip cibuildwheel
-
-      - name: Prepare release tag
-        id: release
-        run: echo "tag=$(python tools/release_tag.py "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
-
-      - name: Build wheel
-        run: python -m cibuildwheel --platform linux --output-dir wheelhouse
-
-      - name: Build Minescript bundle
-        run: python tools/build_minescript_bundle.py wheelhouse/*.whl "dist/minescript-miner-linux-${{ steps.release.outputs.tag }}.zip"
-
-      - name: Verify Minescript bundle
-        run: |
-          rm -rf build/bundle-check
-          python -m zipfile -e "dist/minescript-miner-linux-${{ steps.release.outputs.tag }}.zip" build/bundle-check
-          MINESCRIPT_MINER_NATIVE_LOG=build/bundle-check/native.log \
-            python -I -c "import sys; sys.path[:0] = ['build/bundle-check/Minescript-Miner', 'build/bundle-check/Minescript-Miner/src']; import _minescript_miner_native as native; import minescript_miner; from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION; debug = minescript_miner.geometry_catalog_debug(); assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert debug['shape_catalog_version'] == SHAPE_CATALOG_VERSION; assert debug['geometry_catalog_version'] >= SHAPE_CATALOG_VERSION; assert minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), SHAPE_CATALOG_VERSION, 3, 4.8, [0] * 27, []) is None"
-
-      - name: Upload release artifacts
-        uses: actions/upload-artifact@v6
-        with:
-          name: minescript-miner-linux-${{ steps.release.outputs.tag }}
-          path: |
-            wheelhouse/*.whl
-            dist/minescript-miner-linux-${{ steps.release.outputs.tag }}.zip
+          name: minecraft-miner-${{ matrix.platform }}
+          path: fabric/build/libs/*-${{ matrix.platform }}.jar
           if-no-files-found: error
 
-  windows-wheel:
-    name: Build Windows wheel
-    if: startsWith(github.ref, 'refs/tags/')
-    needs:
-      - test
-      - windows-build-test
-      - performance
-    runs-on: windows-2022
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install cibuildwheel
-        run: python -m pip install --upgrade pip cibuildwheel abi3audit
-
-      - name: Prepare release tag
-        id: release
-        shell: pwsh
-        run: |
-          $tag = python tools/release_tag.py $env:GITHUB_REF_NAME
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-
-      - name: Build wheel
-        run: python -m cibuildwheel --platform windows --output-dir wheelhouse
-
-      - name: Verify ABI3 wheel on Python 3.12
-        shell: pwsh
-        run: |
-          $wheel = Get-ChildItem wheelhouse/*.whl | Select-Object -First 1
-          if ($wheel.Name -notmatch "-cp39-abi3-win_amd64\.whl$") {
-            throw "Expected a cp39-abi3-win_amd64 wheel, got $($wheel.Name)"
-          }
-          abi3audit $wheel.FullName
-          Remove-Item -Recurse -Force build/wheel-check -ErrorAction SilentlyContinue
-          python -m pip install --no-deps --target build/wheel-check $wheel.FullName
-          $env:MINESCRIPT_MINER_NATIVE_LOG = "build/wheel-check/native.log"
-          python -I -c "import sys; sys.path.insert(0, 'build/wheel-check'); import _minescript_miner_native as native; import minescript_miner; from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION; debug = minescript_miner.geometry_catalog_debug(); assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert debug['shape_catalog_version'] == SHAPE_CATALOG_VERSION; assert debug['geometry_catalog_version'] >= SHAPE_CATALOG_VERSION"
-
-      - name: Build Minescript bundle
-        shell: pwsh
-        run: |
-          $wheel = Get-ChildItem wheelhouse/*.whl | Select-Object -First 1
-          python tools/build_minescript_bundle.py $wheel.FullName "dist/minescript-miner-windows-${{ steps.release.outputs.tag }}.zip"
-
-      - name: Verify Minescript bundle
-        shell: pwsh
-        run: |
-          Remove-Item -Recurse -Force build/bundle-check -ErrorAction SilentlyContinue
-          python -m zipfile -e "dist/minescript-miner-windows-${{ steps.release.outputs.tag }}.zip" build/bundle-check
-          $env:MINESCRIPT_MINER_NATIVE_LOG = "build/bundle-check/native.log"
-          Get-ChildItem build/bundle-check/Minescript-Miner -Recurse
-          python -I -c "import importlib.machinery, importlib.util, pathlib, sys; root=pathlib.Path('build/bundle-check/Minescript-Miner').resolve(); sys.path[:0] = [str(root), str(root / 'src')]; print(importlib.machinery.EXTENSION_SUFFIXES); print(importlib.util.find_spec('_minescript_miner_native')); import _minescript_miner_native as native; import minescript_miner; from minescript_miner.adapter.shape_catalog import SHAPE_CATALOG_VERSION; debug = minescript_miner.geometry_catalog_debug(); assert native.hello() == minescript_miner.hello() == 'hello from native extension'; assert debug['shape_catalog_version'] == SHAPE_CATALOG_VERSION; assert debug['geometry_catalog_version'] >= SHAPE_CATALOG_VERSION; assert minescript_miner.acquire_target((0.5, 64.5, 0.5), (90.0, 10.0), SHAPE_CATALOG_VERSION, 3, 4.8, [0] * 27, []) is None"
-
-      - name: Upload release artifacts
+      - name: Upload test and load-check reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: minescript-miner-windows-${{ steps.release.outputs.tag }}
+          name: minecraft-miner-reports-${{ matrix.platform }}
           path: |
-            wheelhouse/*.whl
-            dist/minescript-miner-windows-${{ steps.release.outputs.tag }}.zip
-          if-no-files-found: error
+            fabric/build/reports/tests/test/
+            fabric/build/test-results/test/
+            fabric/build/native/Testing/Temporary/LastTest.log
+            fabric/build/reports/benchmark/
+          if-no-files-found: warn
 
   performance:
-    name: Record performance metadata
+    name: Record native performance metadata
     if: startsWith(github.ref, 'refs/tags/')
-    needs: test
+    needs: mod
     runs-on: ubuntu-24.04
-
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
+        uses: actions/checkout@v7
 
       - name: Install profiling dependencies
         run: |
@@ -211,15 +85,19 @@ jobs:
 
       - name: Prepare release tag
         id: release
-        run: echo "tag=$(python tools/release_tag.py "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: echo "tag=$(python tools/release_tag.py "$RELEASE_TAG")" >> "$GITHUB_OUTPUT"
 
       - name: Run Callgrind benchmark
-        run: scripts/run-performance-report.sh "${{ steps.release.outputs.tag }}" build/profile/report
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: scripts/run-performance-report.sh "$RELEASE_TAG" build/profile/report
 
       - name: Upload performance report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
-          name: minescript-miner-performance-${{ steps.release.outputs.tag }}
+          name: minecraft-miner-performance
           path: |
             build/profile/report/performance-report.json
             build/profile/report/benchmark-output.txt
@@ -230,39 +108,38 @@ jobs:
   release:
     name: Publish GitHub release
     if: startsWith(github.ref, 'refs/tags/')
-    needs:
-      - linux-wheel
-      - windows-wheel
-      - performance
+    needs: [mod, performance]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: write
-
     steps:
-      - name: Download release artifacts
+      - name: Download mod artifacts
         uses: actions/download-artifact@v8
         with:
-          pattern: minescript-miner-*
+          pattern: minecraft-miner-*-x86_64
+          path: release-assets
+          merge-multiple: true
+
+      - name: Download performance report
+        uses: actions/download-artifact@v8
+        with:
+          name: minecraft-miner-performance
           path: release-assets
 
       - name: Create release or upload assets
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           mapfile -d '' assets < <(find release-assets -type f -print0)
           if [[ "${#assets[@]}" -eq 0 ]]; then
             echo "No release assets found." >&2
             exit 1
           fi
-
-          printf 'Release asset: %s\n' "${assets[@]}"
-
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
-              --generate-notes \
-              --verify-tag
+            gh release create "$RELEASE_TAG" "${assets[@]}" --generate-notes --verify-tag
           fi

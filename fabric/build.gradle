@@ -1,0 +1,84 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+version = project.mod_version
+group = 'dev.philogex'
+base { archivesName = 'minecraft-miner' }
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+    testImplementation platform("org.junit:junit-bom:${junit_version}")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(25) }
+    withSourcesJar()
+}
+tasks.named('jar') { manifest { attributes 'Implementation-Version': project.version } }
+tasks.withType(JavaCompile).configureEach { options.release = 25 }
+
+def nativeDir = layout.buildDirectory.dir('native')
+def localCmake = file('../.venv/bin/cmake')
+def cmake = providers.gradleProperty('cmake').getOrElse(localCmake.exists() ? localCmake.absolutePath : 'cmake')
+def ctest = new File(cmake).isAbsolute() ? new File(cmake).parent + '/ctest' : 'ctest'
+def nativeName = System.mapLibraryName('miner_jni')
+def osName = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+def nativeOs = osName.contains('linux') ? 'linux' : osName.contains('windows') ? 'windows' : 'macos'
+def nativeArch = System.getProperty('os.arch') in ['amd64', 'x86_64'] ? 'x86_64' : System.getProperty('os.arch')
+
+tasks.register('configureNative', Exec) {
+    inputs.files(fileTree('../native'), fileTree('../third_party/boost'), file('../CMakeLists.txt'))
+    outputs.file(nativeDir.map { it.file('CMakeCache.txt') })
+    environment 'JAVA_HOME', System.getProperty('java.home')
+    commandLine cmake, '-S', file('..').absolutePath, '-B', nativeDir.get().asFile.absolutePath,
+        '-DCMAKE_BUILD_TYPE=Release', '-DMINER_BUILD_JNI=ON', '-DBUILD_TESTING=ON'
+}
+tasks.register('buildNative', Exec) {
+    dependsOn 'configureNative'
+    inputs.files(fileTree('../native'), file('../CMakeLists.txt'))
+    outputs.file(nativeDir.map { it.file(nativeName) })
+    commandLine cmake, '--build', nativeDir.get().asFile.absolutePath, '--config', 'Release', '--parallel', '2'
+}
+tasks.register('nativeTest', Exec) {
+    dependsOn 'buildNative'
+    commandLine ctest, '--test-dir', nativeDir.get().asFile.absolutePath,
+        '--build-config', 'Release', '--output-on-failure', '--no-tests=error'
+}
+tasks.named('processResources') {
+    dependsOn 'buildNative'
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand(version: project.version) }
+    from(nativeDir) {
+        include nativeName
+        into "native/${nativeOs}-${nativeArch}"
+    }
+    from('..') { include 'targets.txt', 'aim_config.txt'; into 'defaults' }
+}
+tasks.named('test') {
+    dependsOn 'buildNative', 'jar'
+    useJUnitPlatform()
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    systemProperty 'miner.native.path', nativeDir.get().file(nativeName).asFile.absolutePath
+    systemProperty 'miner.project.dir', file('..').absolutePath
+    systemProperty 'miner.jar.path', tasks.named('jar').get().archiveFile.get().asFile.absolutePath
+}
+tasks.named('check') { dependsOn 'nativeTest' }
+tasks.register('benchmark', JavaExec) {
+    dependsOn 'jar'
+    // Exercise extraction/loading from the actual mod JAR without Minecraft,
+    // Python, or a separate native-library path on the benchmark classpath.
+    classpath = files(tasks.named('jar').flatMap { it.archiveFile })
+    mainClass = 'dev.philogex.miner.benchmark.InterfaceBenchmark'
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    args file('src/test/resources/reference').absolutePath,
+        layout.buildDirectory.file('reports/benchmark/java.csv').get().asFile.absolutePath,
+        providers.gradleProperty('benchmarkSamples').getOrElse('1000'),
+        providers.gradleProperty('benchmarkWarmup').getOrElse('200')
+}
+jar {
+    archiveClassifier = "${nativeOs}-${nativeArch}"
+    from('../LICENSE') { rename { 'LICENSE_minecraft-miner' } }
+}

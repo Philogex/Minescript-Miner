@@ -4,12 +4,17 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing tag to rebuild and publish (optional)
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -31,6 +36,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - name: Set up Java
         uses: actions/setup-java@v6
@@ -71,12 +78,14 @@ jobs:
 
   performance:
     name: Record native performance metadata
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     needs: mod
     runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - name: Install profiling dependencies
         run: |
@@ -86,7 +95,7 @@ jobs:
       - name: Prepare release tag
         id: release
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: echo "tag=$(python tools/release_tag.py "$RELEASE_TAG")" >> "$GITHUB_OUTPUT"
 
       - name: Run Callgrind benchmark
@@ -107,39 +116,67 @@ jobs:
 
   release:
     name: Publish GitHub release
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     needs: [mod, performance]
     runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: write
     steps:
-      - name: Download mod artifacts
+      - name: Download Linux mod
         uses: actions/download-artifact@v8
         with:
-          pattern: minecraft-miner-*-x86_64
-          path: release-assets
-          merge-multiple: true
+          name: minecraft-miner-linux-x86_64
+          path: release-assets/linux
+
+      - name: Download Windows mod
+        uses: actions/download-artifact@v8
+        with:
+          name: minecraft-miner-windows-x86_64
+          path: release-assets/windows
 
       - name: Download performance report
         uses: actions/download-artifact@v8
         with:
           name: minecraft-miner-performance
-          path: release-assets
+          path: release-assets/performance
 
-      - name: Create release or upload assets
+      - name: Upload release assets and publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
-          mapfile -d '' assets < <(find release-assets -type f -print0)
-          if [[ "${#assets[@]}" -eq 0 ]]; then
-            echo "No release assets found." >&2
+          shopt -s nullglob
+          linux_mods=(release-assets/linux/minecraft-miner-*-linux-x86_64.jar)
+          windows_mods=(release-assets/windows/minecraft-miner-*-windows-x86_64.jar)
+          if [[ "${#linux_mods[@]}" -ne 1 || "${#windows_mods[@]}" -ne 1 ]]; then
+            echo "Expected exactly one Linux and one Windows mod JAR." >&2
             exit 1
           fi
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
-          else
-            gh release create "$RELEASE_TAG" "${assets[@]}" --generate-notes --verify-tag
+          assets=(
+            "${linux_mods[0]}"
+            "${windows_mods[0]}"
+            release-assets/performance/performance-report.json
+            release-assets/performance/benchmark-output.txt
+            release-assets/performance/callgrind-annotate.txt
+            release-assets/performance/callgrind.out
+          )
+          for asset in "${assets[@]}"; do
+            if [[ ! -f "$asset" ]]; then
+              echo "Missing release asset: $asset" >&2
+              exit 1
+            fi
+          done
+
+          if ! release_is_draft="$(gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' 2>/dev/null)"; then
+            gh release create "$RELEASE_TAG" --draft --generate-notes --verify-tag
+            release_is_draft=true
+          fi
+          for asset in "${assets[@]}"; do
+            echo "Uploading $(basename "$asset")"
+            gh release upload "$RELEASE_TAG" "$asset" --clobber
+          done
+          if [[ "$release_is_draft" == true ]]; then
+            gh release edit "$RELEASE_TAG" --draft=false
           fi
